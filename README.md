@@ -4,6 +4,10 @@ arXivKaleid Desktop 是面向黑洞与致密天体强引力成像、偏振和新
 
 本公开仓库只用于发布下载文档和 Windows portable 成品，不包含应用源码。
 
+## 开发方式
+
+本项目主要采用 vibe coding 方式开发。项目维护者负责需求、产品决策、规则制定和验收；Codex 作为主要 coding agent，负责代码实现、测试和文档维护。
+
 ## 下载与校验
 
 从 GitHub Releases 下载同一版本的两个文件：
