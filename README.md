@@ -35,7 +35,7 @@ Get-FileHash -Algorithm SHA256 .\arXivKaleid-<version>-windows-x64.zip
 
 候选抓取不需要 API Key。两轮分析使用你自己的 DeepSeek API Key，可能产生费用；开始分析前应用会显示数据发送告知，只有同意后才会调用模型。
 
-API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和其他运行数据位于 EXE 同级 `runtime/` 目录。应用没有维护者服务器中转或遥测。不要转发已使用过的 portable 目录。
+API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和脱敏诊断日志位于 EXE 同级 `runtime/` 目录。GUI 会显示失败阶段、稳定错误代码、影响、建议和日志关联；日志不上传，应用没有维护者服务器中转或遥测。不要转发已使用过的 portable 目录。
 
 详细数据说明见 [PRIVACY.md](PRIVACY.md)，使用本软件前请阅读 [EULA.txt](EULA.txt)。
 

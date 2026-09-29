@@ -1,6 +1,6 @@
 # 隐私说明
 
-更新日期：2026-09-28
+更新日期：2026-09-30
 
 arXivKaleid Desktop 是在用户 Windows 电脑上运行的 portable 工具。应用没有维护者服务器中转、用户账户系统、广告或遥测。
 
@@ -24,12 +24,15 @@ portable 模式的数据位于 `arXivKaleid.exe` 同级 `runtime/` 目录，包�
 - 候选请求间隔缓存；
 - 当前分析使用的 SQLite 工作库；
 - 已下载的论文 PDF 及提取后的全文工作数据。
+- `runtime/logs/` 下按应用会话生成的脱敏 JSONL 诊断，包括阶段、稳定代码、耗时、计数、关联 ID 和安全网络字段。
+
+诊断日志不保存 API Key、Authorization、Cookie、DPAPI 密文、完整 Prompt、标题、摘要、论文全文、逐页文本、模型请求或原始响应、response ID、curl 原始 stderr、HTTP 原始正文或未知响应头、环境变量全集、命令行全集、traceback locals 或用户绝对路径。未预见异常的 traceback 只保留模块、函数和行号。
 
 DPAPI 密文通常不能在另一台电脑或另一个 Windows 用户下解密。不要转发已使用过的 portable 目录或 `runtime/` 内容。
 
 ## 删除数据
 
-应用没有云端账户或维护者端数据。删除整个 portable 目录会删除本地程序、API Key 密文、PDF、SQLite 和缓存。DeepSeek 端数据的查询或删除请求需按 DeepSeek 账户和当前政策处理。
+应用没有云端账户或维护者端数据。alpha.4 不自动删除历史诊断日志；可在应用关闭后删除 `runtime/logs/` 中不再需要的文件。删除整个 portable 目录会删除本地程序、API Key 密文、PDF、SQLite、缓存和日志。DeepSeek 端数据的查询或删除请求需按 DeepSeek 账户和当前政策处理。
 
 ## 用户责任
 
