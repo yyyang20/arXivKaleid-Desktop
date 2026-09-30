@@ -1,0 +1,178 @@
+{
+  "project_name": "arXivKaleid",
+  "arxiv_categories": [
+    "gr-qc",
+    "astro-ph.HE",
+    "astro-ph.GA"
+  ],
+  "submitted_date_lookback_days": 14,
+  "max_results": 100,
+  "top_n": 5,
+  "round1_max_selected_n": 10,
+  "round1_selection_policy": "top_k_daily_budget",
+  "round1_selection_policy_version": "top_k_daily_budget_v4",
+  "final_max_recommendations": 5,
+  "request_interval_seconds": 3,
+  "request_timeout_seconds": 30,
+  "deepseek": {
+    "round1_model": "deepseek-flash",
+    "round2_model": "deepseek-flash",
+    "base_url": "https://api.deepseek.com/chat/completions",
+    "api_key_file": "config/local_secret.json",
+    "api_key_json_field": "deepseek_api_key",
+    "timeout_seconds": 180,
+    "max_retries": 0,
+    "enable_mock_when_missing_key": false,
+    "round1_max_output_tokens": 128000,
+    "round2_max_output_tokens": 128000,
+    "round1_thinking_mode": "enabled",
+    "round1_reasoning_effort": "high",
+    "round2_thinking_mode": "enabled",
+    "round2_reasoning_effort": "high",
+    "round2_output_transport": "responses_named_tool_auto_v2",
+    "round1_pricing": {
+      "model_name": "deepseek-flash",
+      "official_model_version": "DeepSeek-V4.1-Flash",
+      "currency": "CNY",
+      "unit": "per_million_tokens",
+      "rate_schedule": {
+        "timezone": "Asia/Shanghai",
+        "peak_iso_weekdays": [1, 2, 3, 4, 5],
+        "peak_windows": [
+          {"start": "09:00", "end": "12:00"},
+          {"start": "14:00", "end": "18:00"}
+        ],
+        "peak_rates": {
+          "cache_hit_input_price_per_million": "0.04",
+          "cache_miss_input_price_per_million": "2.0",
+          "output_price_per_million": "8.0"
+        },
+        "off_peak_rates": {
+          "cache_hit_input_price_per_million": "0.02",
+          "cache_miss_input_price_per_million": "1.0",
+          "output_price_per_million": "4.0"
+        }
+      },
+      "source_url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "source_title": "模型与价格 - DeepSeek API Docs",
+      "effective_at": "2026-09-10T12:00:00+08:00",
+      "effective_at_basis": "project_snapshot_activation_after_official_live_page_confirmation",
+      "confirmed_at": "2026-09-10T12:00:00+08:00",
+      "calculation_formula_version": "deepseek_cny_time_window_usage_cost_v2"
+    },
+    "round2_pricing": {
+      "model_name": "deepseek-flash",
+      "official_model_version": "DeepSeek-V4.1-Flash",
+      "currency": "CNY",
+      "unit": "per_million_tokens",
+      "rate_schedule": {
+        "timezone": "Asia/Shanghai",
+        "peak_iso_weekdays": [1, 2, 3, 4, 5],
+        "peak_windows": [
+          {"start": "09:00", "end": "12:00"},
+          {"start": "14:00", "end": "18:00"}
+        ],
+        "peak_rates": {
+          "cache_hit_input_price_per_million": "0.04",
+          "cache_miss_input_price_per_million": "2.0",
+          "output_price_per_million": "8.0"
+        },
+        "off_peak_rates": {
+          "cache_hit_input_price_per_million": "0.02",
+          "cache_miss_input_price_per_million": "1.0",
+          "output_price_per_million": "4.0"
+        }
+      },
+      "source_url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "source_title": "模型与价格 - DeepSeek API Docs",
+      "effective_at": "2026-09-10T12:00:00+08:00",
+      "effective_at_basis": "project_snapshot_activation_after_official_live_page_confirmation",
+      "confirmed_at": "2026-09-10T12:00:00+08:00",
+      "calculation_formula_version": "deepseek_cny_time_window_usage_cost_v2"
+    }
+  },
+  "versions": {
+    "research_profile_version": "profile_v2",
+    "round1_prompt_version": "round1_v20",
+    "round2_prompt_version": "round2_v15"
+  },
+  "limits": {
+    "max_round1_request_tokens": 800000,
+    "max_intro_chars_per_paper": 6000,
+    "max_conclusion_chars_per_paper": 5000,
+    "max_round2_pdf_pages": 60,
+    "max_round2_request_tokens": 800000,
+    "max_feedback_relevant": 3,
+    "max_feedback_irrelevant": 3,
+    "max_feedback_read_later": 2
+  },
+  "automation": {
+    "automation_start_utc": "2026-08-08T22:13:16Z",
+    "schedule_cron": "3 18 * * *",
+    "schedule_timezone": "Asia/Shanghai",
+    "candidate_scan_policy_version": "anchor_updated_desc_page_cap_v1",
+    "max_metadata_pages_per_category": 20,
+    "max_paid_candidates": 100,
+    "arxiv_page_size": 1000,
+    "arxiv_request_interval_seconds": 5,
+    "arxiv_metadata_timeout_seconds": 90,
+    "arxiv_metadata_max_attempts": 2,
+    "arxiv_metadata_retry_backoff_seconds": 60,
+    "withdrawn_pdf_policy_version": "confirm_withdrawn_without_promotion_v2",
+    "expected_batch_cost_cny": "3.00",
+    "absolute_workflow_cost_cny": "3.00",
+    "policy_file": "config/automation_policy.json"
+  },
+  "keywords": [
+    "black hole shadow",
+    "black-hole shadow",
+    "photon ring",
+    "photon sphere",
+    "critical curve",
+    "polarization",
+    "polarized image",
+    "polarimetric image",
+    "EVPA",
+    "Stokes",
+    "accretion disk",
+    "accretion disc",
+    "accretion flow",
+    "ray tracing",
+    "radiative transfer",
+    "polarized radiative transfer",
+    "Kerr",
+    "modified gravity",
+    "compact object",
+    "Event Horizon Telescope",
+    "EHT"
+  ],
+  "negative_keywords": [
+    "cosmological perturbation",
+    "dark energy",
+    "inflation",
+    "pure mathematics",
+    "particle collider",
+    "LIGO data analysis"
+  ],
+  "core_keywords": [
+    "shadow",
+    "polarization",
+    "polarized",
+    "accretion disk",
+    "accretion disc",
+    "ray tracing",
+    "radiative transfer",
+    "photon ring",
+    "EVPA",
+    "Stokes"
+  ],
+  "paths": {
+    "database": "data/arxiv_kaleid.sqlite",
+    "reports_dir": "reports/daily",
+    "logs_dir": "logs",
+    "cache_dir": "cache/arxiv",
+    "pdfs_dir": "data/pdfs",
+    "round1_prompt": "prompts/relevance_round1_v20.txt",
+    "round2_prompt": "prompts/relevance_round2_v15.txt"
+  }
+}

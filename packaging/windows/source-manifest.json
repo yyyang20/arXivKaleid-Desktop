@@ -1,0 +1,16 @@
+[
+  {
+    "component": "QtBase",
+    "version": "6.9.2",
+    "url": "https://download.qt.io/archive/qt/6.9/6.9.2/submodules/qtbase-everywhere-src-6.9.2.tar.xz",
+    "archive": "qtbase-everywhere-src-6.9.2.tar.xz",
+    "sha256": "44be9c9ecfe04129c4dea0a7e1b36ad476c9cc07c292016ac98e7b41514f2440"
+  },
+  {
+    "component": "PySide6 and Shiboken6",
+    "version": "6.9.2",
+    "url": "https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.9.2-src/pyside-setup-everywhere-src-6.9.2.tar.xz",
+    "archive": "pyside-setup-everywhere-src-6.9.2.tar.xz",
+    "sha256": "9ec087465342bdc9dbe492a30e58fdbbc5448655deacf5982a0fe7123f59222d"
+  }
+]

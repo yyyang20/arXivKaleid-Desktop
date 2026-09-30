@@ -1,0 +1,9 @@
+{
+  "version": "8.22.0_2",
+  "architecture": "x64",
+  "url": "https://curl.se/windows/dl-8.22.0_2/curl-8.22.0_2-win64-mingw.zip",
+  "archive": "curl-8.22.0_2-win64-mingw.zip",
+  "sha256": "7c8c6b953b4eb2953d2bdc08cca1d5f09a964e9f86c361693559400c9a6d6db0",
+  "checksum_source": "https://curl.se/windows/dl-8.22.0_2/curl-8.22.0_2-win64-mingw.zip.txt",
+  "license_reference": "https://curl.se/docs/copyright.html"
+}
