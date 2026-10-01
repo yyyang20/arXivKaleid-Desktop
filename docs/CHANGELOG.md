@@ -2,6 +2,14 @@
 
 本文件保留 Desktop 与通用功能的简短历史。代码解耦前的条目来自原项目：当时的发行来源、构建提交、兼容行为和治理测试仅表示历史事实，不代表当前仓库仍有这些入口或测试。现行行为以代码、配置、测试和 [当前业务规范](PROJECT_SPEC.md) 为准；详细历史通过 Git、PR 和 Issue 查询。
 
+## 2026-10-01：Desktop alpha.5 公开发行
+
+- 已公开 [v0.1.0-alpha.5 prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.5)，同步提供 GPL-3.0-only 完整源码、文档及 Windows portable；EULA 为许可说明与使用告知，第三方保留各自许可及实际要求的对应源码。
+- 发行 tag 与最终 portable 构建提交均为 `b06321bd8b8e7b3d4dc3f61016ced09b1eeafce7`；ZIP SHA-256 为 `8cad5043e92741345a40caae800df90f2e24f9a1a0b0a8b4531e33c48795b40c`，仅上传 ZIP 与 `.sha256`。
+- 冻结 [PR #2](https://github.com/yyyang20/arXivKaleid-Desktop/pull/2) 和合并后 main 均通过完整离线测试 108 项、零跳过，包含真实 Windows GUI 与 DPAPI 假值；两次 portable 构建及零模型验证通过。
+- 未登录下载验证公开 ZIP、校验文件、BUILD_INFO、许可证及第三方源码哈希；[tag 源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.5.zip)的 72 个文件逐一与发行提交字节一致。alpha.1 至 alpha.4 的 tag、Release 正文、资产及摘要与任务开始基线完全一致。
+- 本条为发布后文档收口，不重建或替换已发布资产；发行/tag 提交与后续 main 文档提交分别记录。没有真实模型、付费调用或真实 arXiv 验证，未引入 Fluent Widgets。
+
 ## 2026-10-01：Desktop alpha.5 GPL 开源发行准备
 
 - 应用版本升级为 `0.1.0-alpha.5`，自有源码、测试、构建脚本、配置、Prompt 和项目文档采用 GPL-3.0-only；新增标准 LICENSE，EULA 改为许可说明与使用告知。
