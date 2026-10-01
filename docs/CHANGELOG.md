@@ -1,0 +1,173 @@
+# 功能变更记录
+
+本文件保留 Desktop 与通用功能的简短历史。代码解耦前的条目来自原项目：当时的发行来源、构建提交、兼容行为和治理测试仅表示历史事实，不代表当前仓库仍有这些入口或测试。现行行为以代码、配置、测试和 [当前业务规范](PROJECT_SPEC.md) 为准；详细历史通过 Git、PR 和 Issue 查询。
+
+## 2026-10-01：Desktop 根协作规则收尾
+
+- 根协作规则明确项目名称为 `arXivKaleid-Desktop`，移除不存在的 workflow、GitHub-hosted runner 和仓库变量表述，实时核验对象对齐 Git、PR、tag、Release 与 release asset。
+- 保留其余安全、授权、文档更新、测试、构建和发布规则；敏感信息条款使用“发布资产”表述，未改变应用或现有治理测试。
+
+## 2026-10-01：缓存复用测试 SQLite 连接清理
+
+- 显式关闭缓存复用测试中的全文库连接，修复新定位的第三处 SQLite `ResourceWarning`；保留原有事务行为、缓存校验和模型调用断言。
+- 本次仅修改测试资源清理并记录变更，未改变应用源码、数据库 schema、配置或依赖。
+
+## 2026-10-01：解耦测试 SQLite 连接清理
+
+- 为解耦测试中的两处内存 SQLite 连接增加显式关闭，避免连接回收时产生 `ResourceWarning`；保留原有事务行为、schema 校验与断言。
+- 本次仅调整测试资源清理并记录变更，未改变应用源码、数据库 schema、配置或依赖。
+
+## 2026-10-01：Desktop 治理补全
+
+- 根协作规则补齐 Codex 持续后台任务授权、进程级临时环境、Desktop 运行与发行校验边界，以及测试跳过的报告和验收要求；应用正常 QThread 保持原有授权语义。
+- 明确根与 Desktop 子文档分工，补齐版本身份表和公开文档副本的更新路由；运行手册同步可恢复 TEMP/TMP 的验证方式，两层结构文档登记治理测试，并补记此前完成的代码解耦。
+- 新增标准库离线治理测试，核对规则、阅读与更新路由、当前身份、文档链接、发行资料副本和发布检查要求，以内存反例检查缺失身份、断链、越界与副本漂移；完整离线测试及静态检查通过。未改变应用源码、配置、Prompt、依赖或发行版本，未构建或发布成品。
+
+## 2026-10-01：Desktop 文档解耦第一阶段
+
+- 清理现行文档中的 Online 自动化、generation/artifact、错误样本、恢复、Issue 日报发布和跨仓维护要求，纠正已删除模块与治理测试的引用。
+- README 区分源码仓库与 portable 使用说明；业务、运行和结构文档对应当前冻结快照、schema v1 工作库、显式凭据注入、GUI 日报及现有打包资源。
+- 保留已有 Desktop 行为、通用协作、安全与 Release 要求；未新增治理规则，未改变源码、配置、提示词、依赖或发行版本，也未发布成品。
+
+## 2026-10-01：Desktop 代码解耦
+
+- 引入 Desktop 独立配置与预算校验，裁剪核心模块中的 Online 专属入口、策略和 Profile 文件依赖，对齐当前工作库 schema v1 与 portable 资源集合。
+- 保留 alpha.4 的两轮筛选、PDF 门控、模型次数、费用和日报行为，新增合成行为基线、配置与独立源码运行测试；应用版本仍为 `0.1.0-alpha.4`，未发布成品。
+
+## 2026-09-30：Desktop 两层错误诊断
+
+- Desktop GUI 新增阶段、类别级稳定错误代码、影响范围、操作建议及 session/operation/snapshot/fetch/run 关联，正常无候选、零入围、长论文/Token 排除、无合格全文和零推荐继续作为业务 outcome。
+- 新增源码 `.desktop-runtime/logs/` 与 portable `runtime/logs/` 脱敏 JSONL，记录阶段生命周期、耗时、计数和既有安全结构诊断；写盘失败降级到 512 条内存 ring，不改变原业务结果。
+- PDF/全文失败改按实际影响范围判定：已确认单篇且共享状态完整时继续，SQLite、共享组件、runtime 存储或无法确认范围时整批失败关闭；未枚举异常不自动升级。
+- 日报已生成而 GUI Markdown 渲染失败时保持分析成功；发行扫描新增 JSONL 排除，版本升级为 `0.1.0-alpha.4`，筛选、模型次数、自动重试和费用规则不变。
+
+## 2026-09-29：Desktop Release 版本更新说明治理
+
+- 明确每个新的 Desktop GitHub Release 都必须包含面向用户的非空“本次更新”：首个公开版本概括首次能力，后续版本依据冻结提交、Git 差异和变更记录概括相对上版的 1～5 条主要变化。
+- 公开发布检查清单新增发布前非空检查和发布后公开回读；平台、下载、SmartScreen、DeepSeek、费用和 SHA-256 等通用说明不能代替版本更新说明。
+- 依据三个实际公开 ZIP 的构建提交与版本间差异，补齐 alpha.1 首发能力、alpha.2 运行进度反馈和 alpha.3 自包含 Prompt 收敛的公开版本更新说明；Tag 和 Release assets 保持不变。
+
+## 2026-09-28：Windows Desktop alpha.3 公开发行
+
+- [`v0.1.0-alpha.3`](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.3) 当时作为 immutable prerelease 发布到公开仓库，成品从原私人仓库冻结提交 `73acce981bbfac1e15b68e77981aa4b3b2f59831` 重新构建。
+- 公开资产仅包含 `arXivKaleid-0.1.0-alpha.3-windows-x64.zip` 与对应 `.sha256`；ZIP SHA-256 为 `d5a3c78c2112b01ae1fe12172aa28655ee73da264878db0c930237eddac480b0`。
+- 完整离线测试、Desktop portable 零模型自检、资源与隐私扫描、GitHub asset digest 及未登录下载核验均通过；公开隐私说明已同步，既有 alpha.1 和 alpha.2 标签、Release、资产及说明未修改。
+
+## 2026-09-28：两份自包含 Prompt 收敛
+
+- 正常请求改用自包含的 `round1_v20 + round2_v15`，两份 Prompt 吸收相同的普适研究边界，不改变四类标签、Top 10/Top 5、顺序、不补位、模型、费用或 PDF 门控；请求不再注入独立 Research Profile 内容，仅保留 `profile_v2` 兼容身份。
+- Desktop 源码版本升级为 `0.1.0-alpha.3`，承载本次 Prompt/Profile 收敛；当时的 portable 仍包含策略资源，当前资源集合以构建配置为准。
+
+## 2026-09-27：Windows Desktop alpha.2 公开发行
+
+- `v0.1.0-alpha.2` 当时作为 immutable prerelease 发布到公开下载仓库 [`yyyang20/arXivKaleid-Desktop`](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.2)。
+- Release 只包含版本化 Windows x64 portable ZIP 和对应 `.sha256`；成品从当时已验收的干净 `main` 重建，通过完整离线测试、portable 零模型验证、本地与 GitHub asset digest 及未登录下载核验。
+- 既有 `v0.1.0-alpha.1` immutable Release 保持不变，本次 DeepSeek 调用和模型费用均为 0。
+
+## 2026-09-27：Desktop 真实运行进度反馈
+
+- 候选抓取增加 indeterminate 进度，显示真实 UTC 检查日期、动态分类 N/M 和当前日期有效条目数；日期切换时重新计数。
+- 两轮分析增加 Round 1、PDF、全文、Round 2 和日报步骤状态；PDF 与全文 X/Y 来自真实任务结果，合法零结果显示跳过，失败停留在实际阶段。
+- PDF 与全文处理只增加默认关闭的可选观察回调；筛选、门控、网络请求、模型调用、重试和 SQLite 行为不变。
+
+## 2026-09-27：arXiv transport 安全取证辅助函数
+
+- 元数据非 200 路径从同一次 curl 请求附加采集实际目标 IP、HTTP 版本、SSL 校验、固定 timing 和白名单响应头；不启用 verbose，不新增网络请求。
+- 取证使用有界日志和项目内短期响应头文件，未知头、Cookie、stderr、代理值和原始内容均不输出；准备、解析、日志和清理异常全部 fail-open。
+- 抽取 write-out 与响应头解析为纯函数，未改变原请求参数和返回行为。
+
+## 2026-09-26：arXiv 非 200 响应安全诊断
+
+- curl 元数据入口在非 200 响应时追加有界结构化日志，只记录状态、尝试次数、正文长度、前 8 KiB 样本哈希和固定特征标签，不输出响应原文或 stderr。
+- 诊断异常与原 HTTP 处理隔离；请求参数、1000 条分页、超时、间隔、重试、错误码及业务身份保持不变，不新增网络请求或文件。
+- 补充模拟响应、安全边界及请求行为回归测试；诊断只提供后续定位线索，不代表 406 根因已确认或修复。
+
+## 2026-09-26：Windows Desktop 首次公开发行与文档治理收口
+
+- `v0.1.0-alpha.1` 当时作为 prerelease 发布到公开下载仓库 `yyyang20/arXivKaleid-Desktop`，既有 immutable Release 资产保持不变。
+- README 补充 vibe coding 开发方式和人工/Codex 职责，文档路由补齐 Desktop 版本、构建基线和实际 Release 发布职责；未改变 Desktop 功能、业务规则、prompt、profile 或构建产物。
+
+## 2026-09-26：Windows Desktop 公开发布准备
+
+- 新增 portable 使用所需的 README、EULA、隐私、安全说明和发布检查清单；ZIP 留在被忽略的 `release/`。
+- Desktop 每次启动后首次分析前显示 DeepSeek 数据发送、费用、DPAPI 凭据与本地数据告知；默认拒绝，拒绝时不消费快照或调用模型，冻结 EXE 的零模型诊断直接覆盖该拒绝路径。
+- portable 构建按 allowlist 将应用 README、EULA、隐私和安全说明放入 ZIP 根目录，保留第三方声明、许可和对应源码归档；筛选、prompt、profile、PDF 门控和费用规则不变。
+
+## 2026-09-25：Windows Desktop portable 打包
+
+- 新增 Windows x64 PyInstaller one-folder 构建入口，固定构建依赖与官方 curl 校验清单，生成本地 portable ZIP、SHA-256 和提交身份。
+- 分离只读资源与可写 runtime，保留源码 `.desktop-runtime/`；补充冻结模式路径、工作库、两轮 mock 集成、curl 和发行扫描测试。
+- 随包提供 IANA 时区、第三方声明、许可证和 Qt 对应源码；增加全新副本的 GUI、DPAPI 假值、依赖、重启及可选真实 arXiv 零模型验证。
+
+## 2026-09-25：Windows Desktop 第二阶段
+
+- 分析按钮直接消费一次冻结候选快照，复用 Round 1、PDF、60 页全文门控、Round 2 和 usage 审计；Key 显式注入，不额外 self check，每轮最多一次 HTTP attempt，累计预算上限 ¥3.00。
+- 当前工作 SQLite 与 PDF 隔离在 `.desktop-runtime/`，只重置已知工作库及 sidecar；文件锁保护并发，失败不重试、不补位、不查询历史候选。
+- 新增 Desktop Markdown 外壳与 QTextBrowser 渲染，后台阶段信号、消费后按钮状态及对应离线集成测试。
+
+## 2026-09-25：Windows Desktop 第一阶段
+
+- 新增 Desktop `0.1.0-alpha.1` PySide6 GUI，复用 submittedDate 核心抓取最近非空日期，显示批内去重统计并冻结最多 100 篇内存候选。
+- API Key 使用当前 Windows 用户 DPAPI 自动加密保存和恢复；Secret 与请求间隔缓存隔离在被忽略的 `.desktop-runtime/`。
+- 新增后台线程及失败失效边界测试、Desktop 文档与独立固定依赖；当时分析按钮仅显示阶段说明，尚未连接模型、PDF、SQLite 或日报。
+
+## 2026-09-25：清理未使用的目录脚手架
+
+- 移除本地入口创建但从未被读取的 `input_code/`、`input_papers/`，并清理未使用的 `paths.extracted_dir` 配置、校验和测试夹具残留。
+
+## 2026-09-25：仓库卫生与本地产物清理
+
+- 补充根级 `.codex-audit-*/` 和 `.pytest_cache/` 忽略规则，并同步运行产物文档。
+- 清理已确认的 Python 字节码、pytest 缓存、旧审计目录和空临时目录；业务规范、筛选逻辑和运行数据不变。
+
+## 2026-09-25：项目专用 Conda 环境授权例外
+
+- 电脑安全边界新增唯一、受控的项目专用 Conda 环境例外：仅在用户明确授权后，允许维护指定环境及当前任务明确需要的 Python 依赖；`base`、其他环境、系统 Python、PATH、Windows 设置、全局软件和其他项目继续禁止修改。
+- 当时治理测试同步核验默认项目外只读、授权范围、依赖范围、越界重新授权及绝对禁止项，其他项目安全边界保持不变。
+
+## 2026-09-21：V4.1 Flash 模型与价格快照
+
+- Round 1 / Round 2 模型更新为 `deepseek-flash`（DeepSeek-V4.1-Flash），同步当时确认的人民币峰谷价格快照。
+
+## 2026-09-20：arXiv 元数据 curl 传输层修复
+
+- 元数据请求改用系统 `curl --http1.1`，保持现有 URL、User-Agent、`Accept: application/atom+xml`、90 秒超时、5 秒请求间隔、Atom/XML 解析及错误语义。
+
+## 2026-09-18：按需阅读与必要授权治理调整
+
+- `AGENTS.md` 改为按任务影响范围读取文档，取消项目级“最终执行计划”和固定授权口令机制。
+- 保留付费调用、外部状态变更、破坏性操作、技术栈变化及业务规范要求的必要授权和绝对安全边界。
+- 当时治理测试校验文档、身份、安全和授权契约，不再锁定 `AGENTS.md` 的批准哈希。
+
+## 2026-09-11：DeepSeek 思考模式工具兼容修复
+
+- Round 2 保留 Responses、思考强度和唯一命名函数，但移除供应商明确不支持的强制 `tool_choice`；普通文本、空内容、多重或错误函数调用继续失败关闭。
+
+## 2026-09-10：DeepSeek Responses 安全兼容性诊断
+
+- HTTP 400/422 只从最多 8 KiB 的 JSON 错误体提取并脱敏 `code`、`type`、`param` 和短消息；原始正文、请求、提示词、响应和凭据均不保存。
+
+## 2026-09-10：Round 2 Responses 传输
+
+- Round 2 当时改用 DeepSeek Responses API，在保留模型、思考强度、提示词和筛选策略的前提下，强制唯一命名函数并只解析 `function_call.arguments`；Round 1 继续使用 Chat Completions。强制 `tool_choice` 后于 2026-09-11 移除。
+
+## 2026-09-10：Round 2 命名工具输出传输
+
+- Round 2 当时在保留模型、思考模式、提示词和筛选策略的前提下，改由唯一强制命名工具提交结构化参数，不再依赖偶发为空的正式 `content`；每个逻辑调用仍只有一次 HTTP attempt。
+- 缺失、多重或错误工具调用以及供应商安全终止原因以不含正文的错误审计停止。
+
+## 2026-09-08：日报摘要反引号显示修复
+
+- arXiv 摘要中的 LaTeX 双反引号在进入 Markdown 前进行实体编码，避免跨句误形成灰底代码段；日报模板版本、章节和字段顺序保持不变。
+
+## 2026-09-01：需求澄清与严格授权
+
+- 当时要求在写入前消除需求歧义，并以唯一、完整的最终执行计划确定范围。
+- 当时曾要求用户紧邻计划单独回复“授权”才允许写入；该临时机制已由 2026-09-18 的治理调整取消，不构成现行授权规则。
+- 优化按需文档阅读、已有改动处理、确定性工具和安全删除规则，不改变业务行为或电脑安全边界。
+
+## 2026-09-01：项目文档治理与新对话接续
+
+- 新建项目级 `AGENTS.md`，固化一个独立任务对应一个对话、启动必读顺序、完成定义、文档同步和项目目录安全边界。
+- 建立唯一现行 `docs/` 文档体系，将业务规范、运行手册、项目结构和功能记录分离，删除工作树中的失效规范及旧流水账。
+- 当时新增治理测试，校验文档路径、内部链接、当前身份、安全条款和 `AGENTS.md` 归一化 SHA-256。

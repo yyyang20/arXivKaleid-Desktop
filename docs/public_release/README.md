@@ -2,7 +2,7 @@
 
 arXivKaleid Desktop 是面向黑洞与致密天体强引力成像、偏振和新时空解研究的 Windows 论文筛选工具。
 
-本仓库包含 Desktop 应用源码、测试、构建配置和项目文档；Windows portable 成品通过 GitHub Releases 提供。
+本文档说明 Windows portable 的下载和使用方式。
 
 ## 开发方式
 
@@ -15,7 +15,7 @@ arXivKaleid Desktop 是面向黑洞与致密天体强引力成像、偏振和新
 - `arXivKaleid-<version>-windows-x64.zip`
 - `arXivKaleid-<version>-windows-x64.zip.sha256`
 
-GitHub 自动生成的 `Source code` 压缩包包含源码，不是可直接运行的 Windows portable 成品。
+GitHub 自动生成的 `Source code` 压缩包不是可直接运行的 Windows portable 成品。
 
 在 PowerShell 中校验 ZIP：
 
@@ -48,13 +48,3 @@ API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和脱
 应用许可条款见 [EULA.txt](EULA.txt)。第三方组件声明见 `THIRD_PARTY_NOTICES.txt`，完整许可文本和必要源码归档随 portable ZIP 提供。
 
 安全问题报告方式见 [SECURITY.md](SECURITY.md)。不要在公开 Issue 中张贴 API Key、`secret.dat`、SQLite、PDF 或整个 `runtime/` 目录。
-
-## 源码运行与项目文档
-
-在项目根目录、已具备 `requirements-desktop.txt` 依赖的 Windows Python 环境中运行：
-
-```powershell
-python -B -m desktop.app
-```
-
-运行数据位于被 Git 忽略的 `.desktop-runtime/`。依赖、构建与验证方式见 [Desktop 运行手册](docs/desktop/DESKTOP_OPERATIONS.md)；项目说明从 [文档索引](docs/README.md) 进入。

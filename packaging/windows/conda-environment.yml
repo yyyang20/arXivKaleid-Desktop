@@ -1,0 +1,8 @@
+# 仅在用户明确授权后创建；构建脚本不会执行环境安装。
+name: arxivkaleid-desktop
+channels:
+  - https://repo.anaconda.com/pkgs/main
+dependencies:
+  - python=3.13.15
+  - tzdata=2026c
+  - pip=26.2.1

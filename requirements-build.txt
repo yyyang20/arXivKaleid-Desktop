@@ -1,0 +1,8 @@
+# 仅用于 Windows x64 portable 构建；运行依赖仍由原有两个文件管理。
+PyInstaller==6.22.3
+pyinstaller-hooks-contrib==2026.7
+altgraph==0.17.5
+pefile==2024.8.26
+pywin32-ctypes==0.2.3
+packaging==26.3
+setuptools==83.0.0

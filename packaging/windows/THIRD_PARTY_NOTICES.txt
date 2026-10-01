@@ -1,0 +1,41 @@
+arXivKaleid Windows Desktop - Third-party notices
+
+This distribution includes Python, PySide6/Shiboken6, Qt, pypdf, curl,
+IANA time-zone data, PyInstaller runtime components and their dependencies.
+Exact versions and upstream license declarations are in licenses/components.json.
+License texts and copyright notices are in licenses/ and _internal/vendor/curl/.
+These third-party components are provided under their own license terms.
+
+Qt Core/Gui/Widgets/Network and PySide6/Shiboken6 6.9.2 use LGPL version 3.
+Qt libraries and Python bindings are dynamically loaded and remain replaceable
+in _internal/PySide6/ and _internal/shiboken6/. This distribution imposes no
+restriction on modifying these libraries or reverse engineering the combined
+work to debug modifications to them. Keep compatible DLL names, architecture
+and ABI when replacing a library. No signature or checksum blocks replacement
+of Qt or PySide6. The curl checksum check is separate and unrelated to Qt.
+Corresponding upstream QtBase and PySide/Shiboken source archives, including
+their build instructions, are supplied in licenses/sources/. No local changes
+have been made to these upstream libraries. LGPL-3.0 and GPL-3.0 texts and
+third-party notices from these sources accompany the archives.
+
+Qt optional image-format/OpenGL-software/WebEngine/QML plugins are not included.
+QtBase contains third-party code including Unicode data, PCRE2, HarfBuzz,
+FreeType, libpng, zlib, double-conversion, md4c and other permissively licensed
+components; their source notices are preserved under licenses/QtBase/.
+
+Python uses the Python Software Foundation license and historical notices.
+pypdf uses BSD-3-Clause. PyInstaller's license includes the exception permitting
+distribution of frozen applications; its runtime/bootloader notices are included.
+The bundled liblzma from XZ Utils is 0BSD; XZ command-line tools are not shipped.
+OpenSSL uses Apache-2.0. SQLite is public domain. Windows runtime redistributables
+remain governed by the accompanying Microsoft license texts.
+
+curl 8.22.0_2 x64 comes from https://curl.se/windows/ . Its original COPYING,
+build manifest and dependency license notices are retained beside the binary.
+Its CA certificate bundle carries Mozilla's MPL-2.0 notice; the MPL text and
+corresponding certificate data location appear in licenses/QtBase/LICENSES/
+and _internal/vendor/curl/bin/curl-ca-bundle.crt respectively.
+
+IANA tzdata 2026c supplies Asia/Shanghai data, including historical transitions.
+Its public-domain/BSD notices are included. This distribution does not replace
+the user's operating-system time-zone database.
