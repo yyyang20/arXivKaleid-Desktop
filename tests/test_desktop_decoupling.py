@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import ast
-from contextlib import ExitStack
+from contextlib import ExitStack, closing
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -91,7 +91,8 @@ class DesktopDecouplingTests(unittest.TestCase):
                 self.assertEqual(digest(actual), expected)
 
     def test_work_schema_contains_only_desktop_tables_and_rejects_unknown_version(self):
-        with sqlite3.connect(':memory:') as conn:
+        # 连接上下文只管理事务；closing 在事务退出后显式关闭连接，包括异常路径。
+        with closing(sqlite3.connect(':memory:')) as conn, conn:
             main.initialize_database_schema(conn)
             tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             self.assertEqual(tables - {'sqlite_sequence'}, {
@@ -104,7 +105,7 @@ class DesktopDecouplingTests(unittest.TestCase):
             conn.execute('PRAGMA user_version = 999')
             with self.assertRaisesRegex(RuntimeError, 'schema_version'):
                 main.initialize_database_schema(conn)
-        with sqlite3.connect(':memory:') as conn:
+        with closing(sqlite3.connect(':memory:')) as conn, conn:
             round2_fulltext_state.initialize_fulltext_schema(conn)
             round2_fulltext_state.validate_fulltext_schema(conn)
             conn.execute('DROP TABLE round2_input_decisions')
