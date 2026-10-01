@@ -194,6 +194,9 @@ def exercise(application, window, root, synthetic_key):
         assert not opened
         window.open_report_link(QUrl('https://arxiv.org/abs/2610.00001'))
         assert opened == ['https://arxiv.org/abs/2610.00001']
+        opened.clear()
+        window.open_logs_button.clicked.emit()
+        assert opened == [QUrl.fromLocalFile(str(root / 'runtime/logs')).toString()]
     finally:
         gate.set()
         if window.worker is not None:
@@ -217,5 +220,5 @@ def exercise(application, window, root, synthetic_key):
     assert not gc.garbage
     return {'captures': captures, 'qt_platform': application.platformName(),
             'style': application.style().objectName(), 'loaded_libraries': loaded_libraries(root),
-            'autosave': True, 'save_failure': True, 'key_locked': True, 'safe_links': True,
+            'autosave': True, 'save_failure': True, 'key_locked': True, 'safe_links': True, 'log_directory_action': True,
             'lifecycle_cycles': len(samples), 'private_memory_bytes': samples, 'gc_garbage': len(gc.garbage)}

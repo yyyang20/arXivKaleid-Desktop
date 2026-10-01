@@ -218,7 +218,11 @@ def run(*, network=False, visual=False):
             QTimer.singleShot(200, done)
         else:
             report['ok'] = True
-            QTimer.singleShot(500, window.close)
+            def close_diagnostic():
+                window.close()
+                # 生命周期验收会隐藏窗口，不能依赖 lastWindowClosed 自动退出。
+                application.quit()
+            QTimer.singleShot(500, close_diagnostic)
         application.exec()
         diagnostics.close()
         log_files = tuple((root / 'runtime/logs').glob('desktop-*.jsonl'))
