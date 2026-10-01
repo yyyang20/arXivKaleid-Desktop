@@ -4,7 +4,7 @@
 
 ## Portable 路径与资源
 
-Windows 10/11 x64 发行形式为 PyInstaller one-folder ZIP，解压后双击 `arXivKaleid.exe`。application root 是 EXE 所在目录，只读 bundled resource root 是其 `_internal/`，所有运行数据均在 EXE 同级 `runtime/`。源码模式继续使用项目根与 `.desktop-runtime/`。两种模式共用相同配置、策略和两份现行自包含提示词，不复制业务规则。
+Windows 10/11 x64 发行形式为 PyInstaller one-folder ZIP，解压后双击 `arXivKaleid.exe`。application root 是 EXE 所在目录，只读 bundled resource root 是其 `_internal/`，所有运行数据均在 EXE 同级 `runtime/`。源码模式使用项目根与 `.desktop-runtime/`。两种模式使用同一 `config.json` 和两份现行自包含提示词，资源哈希由 Desktop 配置校验，不依赖独立自动化策略文件。
 
 路径由 `sys.frozen`、`sys.executable` 和资源目录确定，不依赖 cwd；拒绝 `..`、越界路径及 symlink/reparse point。运行目录不可写或资源缺失时，GUI 显示固定错误并禁止操作，不回退到 AppData、Documents、home 或注册表。bundled curl 缺失或哈希不符时安全失败，不搜索系统 PATH；源码模式继续使用系统 curl。
 
@@ -27,7 +27,7 @@ portable 的 SQLite、锁、缓存、PDF、诊断日志、DPAPI 密文分别使�
 
 每个日期先通过已有 submittedDate Query API 分页读取三个分类，再只保留 `published` 属于该 UTC 日期的有效记录。按 `(arxiv_id, version)` 批内合并，同版本跨分类只保留一次，不同版本分别保留；沿用已有 `updated DESC` 排序。最近非空日期就是唯一候选日期，不向更早日期凑数。
 
-复用 `main.py` 的 URL、curl HTTP/1.1、Atom 解析、分页、日期回退及合并函数。每页 1000 条，请求间隔 5 秒，单次超时 90 秒；沿用 submittedDate 核心传输默认单次请求，不额外添加自动重试。请求间隔文件只写入 `.desktop-runtime/cache/arxiv/`。
+复用 `main.py` 的 URL、curl HTTP/1.1、Atom 解析、分页、日期回退及合并函数。每页 1000 条，请求间隔 5 秒，单次超时 90 秒；每次请求只有一次 HTTP attempt，不自动重试。请求间隔文件只写入 `.desktop-runtime/cache/arxiv/`。
 
 ## 统计与内存快照
 
@@ -60,7 +60,7 @@ portable 的 SQLite、锁、缓存、PDF、诊断日志、DPAPI 密文分别使�
 - PDF 的 `已处理 X / Y` 以 Round 1 实际入围下载任务为总数，成功、复用或单篇失败得到明确结果后都计为已处理，不表述为成功下载数。
 - 全文的 `已处理 X / Y` 只以成功下载或复用、真正进入全文处理的 PDF 为总数；提取失败和超过 60 页仍属于已处理的明确结果。
 - 零候选、Round 1 零入围、无 PDF、无合格全文或 Round 2 零推荐沿用现行业务语义，并把未执行阶段标记为跳过；真实失败停留在对应阶段。
-- 进度由后台结构化事件提供，GUI 不自行推算业务量。事件不增加 arXiv、PDF 或模型请求，也不改变共享筛选、门控、重试、日报或 SQLite 规则。
+- 进度由后台结构化事件提供，GUI 不自行推算业务量。事件不增加 arXiv、PDF 或模型请求，也不改变核心筛选、门控、重试、日报或 SQLite 规则。
 
 ## 一次性两轮分析
 
@@ -68,9 +68,9 @@ portable 的 SQLite、锁、缓存、PDF、诊断日志、DPAPI 密文分别使�
 
 分析前检查冻结快照、尚未尝试标记和 Key。通过检查后立即消费快照并禁用两个按钮；后台直接按冻结顺序处理相同 `(arxiv_id, version)` 候选，不重新请求 arXiv、不改变日期、不从历史 SQLite 重建候选。
 
-分析复用现行自包含 Prompt、`profile_v2` 兼容身份、模型、严格校验、选择策略、PDF 下载和全文门控函数；不会另行发送 Research Profile 内容。共享业务规则见 [PROJECT_SPEC.md](../PROJECT_SPEC.md)。Round 1 完成状态和入围结果写入当前工作库，PDF 只处理实际入围论文，Round 2 只接受当前 run 的合格全文，不补位或重排。
+分析使用现行自包含 Prompt、`profile_v2` 兼容标识、模型、严格校验、选择策略、PDF 下载和全文门控函数；不会另行发送 Research Profile 内容。核心筛选规则见 [PROJECT_SPEC.md](../PROJECT_SPEC.md)。Round 1 完成状态和入围结果写入当前工作库，PDF 只处理实际入围论文，Round 2 只接受当前 run 的合格全文，不补位或重排。
 
-GUI 当前 Key 显式注入两个客户端，Round 2 可选 override 未提供时保留传统调用行为。Desktop 不执行 DeepSeek self check；每轮最多一次 HTTP attempt，失败不重试。无候选不调用模型，Round 1 零入围或无合格全文不调用 Round 2，两轮均允许零推荐。
+GUI 当前 Key 显式注入两个客户端；Round 2 需要非空 Key override，不读取传统 Secret 文件。Desktop 不执行 DeepSeek self check；每轮最多一次 HTTP attempt，失败不重试。无候选不调用模型，Round 1 零入围或无合格全文不调用 Round 2，两轮均允许零推荐。
 
 请求前使用现有保守 Token 估算、上下文安全余量和峰值价格，Round 2 额外计入结果工具载荷；下一轮预检累计本批已发生费用。单批上限 ¥3.00，usage 或费用无法确认时停止后续调用；实际费用按调用时价格快照落库。
 
@@ -92,6 +92,6 @@ PDF 与全文异常按实际影响范围判断：已进入单篇边界、共享�
 
 ## Desktop 日报
 
-`desktop/report.py` 从当前 run 的 SQLite 读取计数、筛选结果、标签、PDF 页数、门控决定、模型、Token 和费用，复用正式 Round 2 推荐内容区块。薄 Desktop 外壳显示候选日期、两轮输入和结果数量，以及 Round 1 入围详情；不伪造自动化、计划槽位或发布身份。
+`desktop/report.py` 从当前 run 的 SQLite 读取计数、筛选结果、标签、PDF 页数、门控决定、模型、Token 和费用，使用 `rebuild_daily_report.py` 的数据辅助函数及 `generate_round2_report.py` 的 Round 2 推荐区块。Desktop 外壳显示候选日期、两轮输入和结果数量，以及 Round 1 入围详情；没有计划槽位或日报发布身份。
 
 日报通过 `QTextBrowser.setMarkdown()` 渲染；仅允许打开正常的 HTTPS arXiv 摘要和 PDF 链接，本地 PDF 以相对路径信息显示。日报不写入根 `reports/daily/`，没有编辑、导出或历史管理功能。分析及日报生成成功后若仅 GUI Markdown 渲染失败，SQLite run 保持成功，界面明确显示“分析成功、日报展示失败”。

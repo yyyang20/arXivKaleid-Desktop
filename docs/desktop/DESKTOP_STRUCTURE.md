@@ -4,6 +4,7 @@
 |---|---|
 | `desktop/AGENTS.md` | Desktop 局部协作规则 |
 | `desktop/__init__.py` | 包入口和 Desktop 版本 |
+| `desktop/config.py` | Desktop 只读配置契约、预算和 Prompt 资源哈希校验 |
 | `desktop/paths.py` | application/resource/runtime 根、路径安全、时区与 bundled curl 校验 |
 | `desktop/errors.py` | 稳定错误和 outcome、GUI 文案及按实际影响范围判定 paper/system 的纯模型 |
 | `desktop/diagnostics.py` | session/operation/snapshot/fetch/run 关联、脱敏 JSONL、安全 traceback、计时与内存降级 |
@@ -17,7 +18,7 @@
 | `requirements-build.txt` | 固定 PyInstaller 和仅构建阶段依赖 |
 | `packaging/windows/` | 正式 one-folder spec、冻结入口、零模型诊断、curl/source manifest、第三方声明源文件 |
 | `scripts/build_windows_portable.ps1` | 显式 Python 解释器的 Windows 构建入口 |
-| `docs/public_release/` | 公开下载仓库文档、应用 EULA、隐私与安全说明及发布检查清单；不保存 ZIP |
+| `docs/public_release/` | portable 打包 README、应用 EULA、隐私与安全说明的维护源及发布检查清单；不保存 ZIP |
 | `scripts/build_windows_portable.py` | 资源与公开文档 allowlist、vendor 校验、构建、发行扫描、ZIP 和 SHA-256 |
 | `scripts/portable_licenses.py` | 从实际安装包及固定源码收集许可证 |
 | `scripts/validate_windows_portable.py` | 全新副本的脱离开发环境验证和重启 |
@@ -28,6 +29,8 @@
 | `tests/test_desktop_app.py` | 可选 offscreen GUI 状态、首次分析告知拒绝边界、线程及凭据交互 |
 | `tests/test_desktop_analysis.py` | mock HTTP 两轮集成、门控、预算、一次性分析、工作数据隔离和日报事实 |
 | `tests/test_desktop_diagnostics.py` | JSONL schema、关联身份、作用域、线程安全、内存降级和隐私 canary |
+| `tests/test_desktop_config.py` | 当前配置、预算、协议和 Prompt 哈希契约 |
+| `tests/test_desktop_decoupling.py` | alpha.4 行为基线、schema v1、缓存、预算和独立源码运行 |
 
 ## 当前运行数据
 
@@ -52,4 +55,4 @@
 
 Secret 保存过程中可暂存同目录下的随机命名密文 `.tmp` 文件，成功后原子替换；测试临时数据可以使用 `test-temp/`。整个目录被忽略，不进入 Git，也不得进入 portable ZIP；`logs/` 不写入 `_internal/`、AppData、Documents 或 home。
 
-候选快照只存在当前进程内；分析时复制到当前工作库，不跨运行去重。全文仅存于独立全文库，PDF 保留。日报字符串传给 GUI，不写正式报告目录。共享 `run_round2.py` 只新增可选 Key 注入，主库/全文库通过既有连接参数传入。Desktop 未移动或重命名根源码，也未连接 `automation_daily.py`、`cloud_*` 或其他正式状态模块。完整项目结构见 [PROJECT_STRUCTURE.md](../PROJECT_STRUCTURE.md)。
+候选快照只存在当前进程内；分析时复制到当前工作库，不跨运行去重。全文仅存于独立全文库，PDF 保留。日报字符串传给 GUI，不写根 `reports/`。`run_round2.py` 使用显式 Key 注入，主库/全文库通过连接参数传入。根核心模块只保留 Desktop 所需功能，不依赖 Online 模块或资源。完整项目结构见 [PROJECT_STRUCTURE.md](../PROJECT_STRUCTURE.md)。

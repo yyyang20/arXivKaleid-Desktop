@@ -2,7 +2,7 @@
 
 arXivKaleid Desktop 是面向黑洞与致密天体强引力成像、偏振和新时空解研究的 Windows 论文筛选工具。
 
-本公开仓库只用于发布下载文档和 Windows portable 成品，不包含应用源码。
+本文档说明 Windows portable 的下载和使用方式。
 
 ## 开发方式
 
@@ -15,7 +15,7 @@ arXivKaleid Desktop 是面向黑洞与致密天体强引力成像、偏振和新
 - `arXivKaleid-<version>-windows-x64.zip`
 - `arXivKaleid-<version>-windows-x64.zip.sha256`
 
-不要下载 GitHub 自动生成的 `Source code` 压缩包，它们只是本下载仓库的文档快照。
+GitHub 自动生成的 `Source code` 压缩包不是可直接运行的 Windows portable 成品。
 
 在 PowerShell 中校验 ZIP：
 

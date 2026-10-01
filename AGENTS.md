@@ -76,14 +76,13 @@
 - Git提交、推送、PR、Issue、仓库变量、workflow、发布和其他外部写入，必须由用户明确要求，或在执行前逐项说明并取得用户授权。
 - 付费调用必须在调用前明确入口、次数和费用上限并取得用户确认；失败后不得自动重试或重跑。
 - 不得创建、读取或修改 GitHub Secret，也不得通过日志、artifact、SQLite、报告或终端泄露敏感信息。
-- 正式自动、手动回查和受控重做必须遵守 `docs/PROJECT_SPEC.md` 与 `docs/OPERATIONS.md` 的身份、费用和停止条件。
 
 ## 文档与完成要求
 
 - `README.md`：稳定的项目概览和文档入口。
 - `docs/README.md`：文档索引、权威顺序和阅读路线。
 - `docs/PROJECT_SPEC.md`：唯一现行业务规范。
-- `docs/OPERATIONS.md`：当前运行、测试、发布和恢复流程。
+- `docs/OPERATIONS.md`：当前运行、测试和发布流程。
 - `docs/PROJECT_STRUCTURE.md`：当前文件与模块职责。
 - `docs/CHANGELOG.md`：每个完成的独立功能增加一条简短记录；详细历史由 Git、PR 和 Issue 保存。
 
@@ -93,7 +92,7 @@
 2. 更新 `docs/CHANGELOG.md`。
 3. 按 `docs/README.md` 的职责路由检查受影响的文档，只修改真正受影响的文件。
 4. 提示词必须按新版本新增，不得覆盖历史版本。
-5. 模板、策略、schema 或缓存身份变化时，必须同步版本、兼容读取、发布校验和测试。
+5. 模板、策略、schema 或缓存身份变化时，必须同步版本、兼容读取和测试。
 6. 发布每个新的 Desktop Release 时，GitHub Release 必须包含面向用户且非空的“本次更新”，并在发布前后按公开发布检查清单核验。
 
 只有满足以下适用条件才能声明完成：

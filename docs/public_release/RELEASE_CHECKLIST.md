@@ -1,6 +1,6 @@
 # 公开发布检查清单
 
-本清单只用于将私人开发仓库 `yyyang20/arXivKaleid` 中已验收的 Windows portable 成品发布到公开下载仓库 [yyyang20/arXivKaleid-Desktop](https://github.com/yyyang20/arXivKaleid-Desktop)。ZIP 和 `.sha256` 不得进入任何 Git 历史。
+本清单用于将当前 Desktop 仓库中已验收的 Windows portable 成品发布到本仓库 GitHub Releases。ZIP 和 `.sha256` 不得进入 Git 历史。
 
 ## 冻结开发版本
 
@@ -21,12 +21,11 @@
 - [ ] 执行 portable 零模型验证；只在另行授权后才执行真实 arXiv 网络验证。
 - [ ] 本地重新计算 ZIP SHA-256，与 `.zip.sha256` 完全一致。
 
-## 同步公开文档
+## 发行文档核对
 
-- [ ] 公开仓库只同步 `README.md`、`EULA.txt`、`PRIVACY.md`、`SECURITY.md` 和 `THIRD_PARTY_NOTICES.txt`等明确 allowlist 文件。
-- [ ] 前四个文件来自 `docs/public_release/`；第三方声明唯一来源是 `packaging/windows/THIRD_PARTY_NOTICES.txt`。
-- [ ] 公开仓库不同步源码、prompt、profile、私有项目文档、workflow 或运行数据。
-- [ ] 不在本地长期保留第二份仓库；如使用临时检出，必须限定在项目内被忽略的审计目录。
+- [ ] portable 根目录的 `README.md`、`EULA.txt`、`PRIVACY.md`、`SECURITY.md` 来自 `docs/public_release/` 固定 allowlist；根仓库 README 不作为打包 README。
+- [ ] 第三方声明唯一来源是 `packaging/windows/THIRD_PARTY_NOTICES.txt`。
+- [ ] `RELEASE_CHECKLIST.md` 不进入 portable ZIP，发行物不含用户运行数据。
 
 ## 发布 GitHub Release
 
@@ -40,11 +39,11 @@
 - [ ] 发布 Draft 前重新读取其 Release notes，确认“本次更新”存在且非空，再发布。
 - [ ] 发布后重新读取公开 Release，从未登录视角核对正文、“本次更新”、公开可见性、下载链接、Tag 和资产摘要。
 
-## 发布后私人仓库收口
+## 发布后文档收口
 
-- [ ] 公开 Release 及未登录核验成功后，继续在同一公开发布任务中按文档路由更新私人仓库 `docs/CHANGELOG.md`；只有首次发布或稳定下载入口变化时才同时更新根目录 `README.md`。
+- [ ] 公开 Release 及未登录核验成功后，继续在同一公开发布任务中按文档路由更新 `docs/CHANGELOG.md`；只有首次发布或稳定下载入口变化时才同时更新根目录 `README.md`。
 - [ ] 发布后文档收口发生在冻结成品之后，不重建或替换已发布资产，不改写既有 immutable Release，也不拆成新的独立任务。
-- [ ] 公开仓库写操作授权不自动覆盖私人仓库的 Git commit/push；尚未取得后者授权时，先完成本地文档修改和验证，明确报告待提交状态，不得因此省略文档或宣称整个公开发布任务已经完成。
+- [ ] Git commit/push 必须获得相应授权；尚未取得授权时，先完成本地文档修改和验证，明确报告待提交状态，不得因此省略文档或宣称整个公开发布任务已经完成。
 - [ ] 对文档变更执行适用的离线测试和 `git diff --check`，并确认 ZIP、`.sha256`、测试或审计产物没有进入 Git。
 
 ## 失败处理

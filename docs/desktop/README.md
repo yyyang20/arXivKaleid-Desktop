@@ -10,6 +10,6 @@
 | [Desktop 运行手册](DESKTOP_OPERATIONS.md) | 依赖、启动、运行目录与离线验证 |
 | [Desktop 结构](DESKTOP_STRUCTURE.md) | 当前文件及运行数据职责 |
 
-根 [项目文档索引](../README.md) 和 [AGENTS.md](../../AGENTS.md) 继续约束本入口。共享业务规则唯一来源为 [PROJECT_SPEC.md](../PROJECT_SPEC.md)；本目录不复制两轮筛选、PDF、标签或日报规范。Desktop 特有的候选入口规则见本目录规范，正式自动化规则保持不变。
+根 [项目文档索引](../README.md) 和 [AGENTS.md](../../AGENTS.md) 继续约束本入口。核心筛选规则唯一来源为 [PROJECT_SPEC.md](../PROJECT_SPEC.md)；本目录说明 GUI、凭据、候选快照和运行行为，不复制两轮筛选、PDF 或标签规范。
 
 变更统一记录在 [CHANGELOG.md](../CHANGELOG.md)，不另建 Desktop 变更记录。

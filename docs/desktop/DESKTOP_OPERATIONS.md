@@ -8,7 +8,7 @@
 python -B -m desktop.app
 ```
 
-当前使用 PySide6 / Qt `6.9.2`，版本固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。现有 [requirements.txt](../../requirements.txt) 继续用于正式 runner；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
+当前使用 PySide6 / Qt `6.9.2`，版本固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。该文件同时引入 [requirements.txt](../../requirements.txt) 中的 pypdf 核心运行依赖；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
 
 仅在用户已授权且已核实为本项目专用的 Conda 环境中，才可安装 Desktop 依赖：
 
@@ -46,13 +46,13 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 ./scripts/build_windows_portable.ps1 -PythonExe $desktopPython
 ```
 
-构建入口按正式 spec 生成 Windows GUI one-folder；资源 allowlist 仅包含配置、策略和两份现行自包含 Prompt，不包含旧 Profile 文件。curl `8.22.0_2` 来自 curl 官方固定 x64 归档，并核验 manifest 中的 SHA-256 后才运行。时区数据来自专用环境，不依赖系统 IANA 数据。
+构建入口按现有 spec 生成 Windows GUI one-folder；资源 allowlist 仅包含 `config.json` 和两份现行自包含 Prompt，不包含独立自动化策略或 Profile 文件。curl `8.22.0_2` 来自 curl 官方固定 x64 归档，并核验 manifest 中的 SHA-256 后才运行。时区数据来自专用环境，不依赖系统 IANA 数据。
 
 产物为根 `dist/` 下带版本目录、`release/` 下同名 ZIP 和 `.zip.sha256`。`BUILD_INFO.json` 记录代码提交和环境版本。旧干净发行物移入本次 `.desktop-build/build-*/` 留存；已有 `runtime/` 的发行目录拒绝覆盖。构建目录、vendor 下载和输出均被 Git 忽略。所有下载都先校验固定哈希，缓存不符即停止。
 
 发行物包含第三方声明、实际依赖许可证及 QtBase/PySide6 对应上游源码归档，允许按 LGPL 替换动态库；这些归档用于分发合规，用户无需解包。许可证缺失、用户运行文件或本机个人路径进入发行树时，构建失败。ZIP 生成后逐文件重新比对哈希。
 
-发行根目录另外从 `docs/public_release/` 的固定 allowlist 复制 `README.md`、`EULA.txt`、`PRIVACY.md` 和 `SECURITY.md`；`RELEASE_CHECKLIST.md` 只供开发与发布核对，不进入 ZIP。第三方声明继续从 `packaging/windows/THIRD_PARTY_NOTICES.txt` 收集，不维护第二份源文本。
+发行根目录另外从 `docs/public_release/` 的固定 allowlist 复制 `README.md`、`EULA.txt`、`PRIVACY.md` 和 `SECURITY.md`；根仓库 README 不作为打包 README。`RELEASE_CHECKLIST.md` 只供开发与发布核对，不进入 ZIP。第三方声明继续从 `packaging/windows/THIRD_PARTY_NOTICES.txt` 收集，不维护第二份源文本。
 
 ## Portable 零模型验证
 
@@ -64,7 +64,7 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 
 验证器先检查干净发行树，再复制到项目内新的 `.desktop-build/validation-*/`，使用非源码 cwd 和仅包含 Windows System32 的 PATH 启动 EXE。检查资源、Qt GUI/Markdown、进度控件、首次分析告知默认拒绝、拒绝后快照未消费且分析线程未启动、DPAPI 假值、SQLite、pypdf、时区、bundled curl 与重启。`--arxiv` 通过实际 GUI/QThread 抓取候选，不点击分析按钮；诊断进程硬禁用模型入口。结果只写验证副本的 `runtime/` 和项目内验证摘要，不接触真实 Key。已有 runtime 的副本拒绝诊断。
 
-发布前在已冻结 PR 提交上完成构建、验证和原有零费用 workflow；合并后同步干净 main，再用相同入口重建最终本地 ZIP。构建入口只写入项目内被忽略的 `dist/`、`release/` 和 `.desktop-build/`，不自动创建仓库、Release 或上传文件。任何公开 GitHub 写操作必须另行获得授权并按 [公开发布检查清单](../public_release/RELEASE_CHECKLIST.md) 执行。
+发布前在已冻结 PR 提交上完成构建和本地离线验证；合并后同步干净 main，再用相同入口重建最终本地 ZIP。当前仓库没有 GitHub workflow。构建入口只写入项目内被忽略的 `dist/`、`release/` 和 `.desktop-build/`，不自动创建仓库、Release 或上传文件。任何公开 GitHub 写操作必须另行获得授权并按 [公开发布检查清单](../public_release/RELEASE_CHECKLIST.md) 执行。
 
 ## 运行目录与凭据
 
@@ -104,4 +104,4 @@ git status --short
 
 执行前须确认解析后临时路径仍在项目内。新增测试使用 `.codex-validation/` 下的隔离目录，不接触实际 Desktop Secret。GUI 测试自动使用 Qt offscreen；安装 PySide6 后必须实际执行，无 PySide6 时安全跳过 GUI 部分；pipeline 和 Secret 文件边界测试不依赖 Qt。Windows 额外运行真实 DPAPI 往返测试，仅使用合成假值；非 Windows 跳过该项。
 
-普通单元测试的网络全部使用 mock，不访问真实 arXiv、不调用真实 DeepSeek、不下载真实 PDF。分析测试使用真实客户端解析合成 HTTP 响应，核验单次 attempt、冻结顺序、预算、页数门控与日报事实；诊断测试覆盖身份关联、作用域、线程安全、内存降级、绝对路径与敏感内容 canary；GUI 测试覆盖展示失败不改写分析成功。构建扫描必须拒绝 `runtime/`、`logs/`、JSONL、SQLite、PDF 和 Secret。Git/GitHub 收尾继续遵循根 [运行手册](../OPERATIONS.md)，不新增 Desktop workflow。
+普通单元测试的网络全部使用 mock，不访问真实 arXiv、不调用真实 DeepSeek、不下载真实 PDF。分析测试使用真实客户端解析合成 HTTP 响应，核验单次 attempt、冻结顺序、预算、页数门控与日报事实；诊断测试覆盖身份关联、作用域、线程安全、内存降级、绝对路径与敏感内容 canary；GUI 测试覆盖展示失败不改写分析成功。构建扫描必须拒绝 `runtime/`、`logs/`、JSONL、SQLite、PDF 和 Secret。Git/GitHub 收尾遵循根 [运行手册](../OPERATIONS.md)。
