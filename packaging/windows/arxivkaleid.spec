@@ -11,7 +11,7 @@ a = Analysis(
     [str(root / 'packaging/windows/entry.py')],
     pathex=[str(root), str(root / 'packaging/windows')],
     binaries=[], datas=datas, hiddenimports=['pypdf', 'qfluentwidgets', 'qframelesswindow'],
-    excludes=['tkinter', 'unittest', 'pytest', 'setuptools', 'pip', 'pkg_resources', 'PySide6.QtQml', 'PySide6.QtQuick',
+    excludes=['tkinter', 'unittest', 'pytest', 'setuptools', 'pip', 'pkg_resources', 'PySide6.QtNetwork', 'PySide6.QtQml', 'PySide6.QtQuick',
               'PySide6.QtWebEngineCore', 'PySide6.QtWebEngineWidgets'],
     noarchive=False,
 )

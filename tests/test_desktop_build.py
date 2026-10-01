@@ -65,6 +65,7 @@ class DesktopBuildTests(unittest.TestCase):
         for name, content in (('secret.dat', b'fake'), ('data.sqlite-wal', b'fake'),
                               ('paper.pdf', b'fake'), ('diagnostic.jsonl', b'{}\n'),
                               ('runtime/cache/data', b'fake'),
+                              ('tests/helper.py', b'fake'), ('screenshots/initial.png', b'fake'),
                               ('paths.txt', str(ROOT).encode('utf-8'))):
             with self.subTest(name=name):
                 path = self.root / name

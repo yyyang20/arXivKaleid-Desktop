@@ -250,7 +250,7 @@ def verify_legal_resources(folder: Path) -> None:
 
 def verify_tree(folder: Path) -> dict[str, str]:
     """不接触真实 Secret；仅扫描发行 allowlist 产生的文件和字节。"""
-    forbidden = {'runtime', '.git', '.desktop-runtime', '.codex-validation', 'logs', 'reports', 'cache', '__pycache__', 'tests', 'screenshots'}
+    forbidden = {'runtime', '.git', '.desktop-runtime', '.codex-validation', 'logs', 'reports', 'cache', '__pycache__'}
     inventory = {}
     private_paths = [str(ROOT), str(Path.home())]
     patterns = [value.replace('\\', sep).encode(enc) for value in private_paths
@@ -260,6 +260,9 @@ def verify_tree(folder: Path) -> dict[str, str]:
         checked_path(folder, str(relative))
         if any(part.lower() in forbidden for part in relative.parts):
             raise RuntimeError('forbidden_release_path')
+        # 上游许可可能位于源码 tests/；保留这些原文，不将其误判为运行测试库。
+        if relative.parts[0] != 'licenses' and any(part.lower() in {'tests', 'screenshots'} for part in relative.parts):
+            raise RuntimeError('development_artifact_in_release')
         if not path.is_file():
             continue
         if (path.name.lower() in ('secret.dat', 'local_secret.json', 'automation_policy.json',
