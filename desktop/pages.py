@@ -5,7 +5,7 @@
 """独立页面只负责布局；业务操作由主窗口连接。"""
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QFormLayout, QHBoxLayout, QLabel, QStackedWidget, QTextBrowser, QVBoxLayout, QWidget,
+    QFormLayout, QHBoxLayout, QLabel, QSizePolicy, QStackedWidget, QTextBrowser, QVBoxLayout, QWidget,
 )
 from qfluentwidgets import (
     BodyLabel, CardWidget, FluentIcon, PasswordLineEdit, PrimaryPushButton,
@@ -63,7 +63,8 @@ class HomePage(QWidget):
             button.setMinimumHeight(38)
             buttons.addWidget(button, 1)
         fetch.addLayout(buttons)
-        fetch_card.setMinimumHeight(fetch_card.sizeHint().height())
+        # 使用当前字体/DPI 的实时 sizeHint，避免父窗口字体变化后旧高度裁切按钮。
+        fetch_card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         layout.addWidget(fetch_card)
         self.task_panel = TaskPanel()
         layout.addWidget(self.task_panel)
@@ -83,7 +84,8 @@ class HomePage(QWidget):
         self.report = QTextBrowser()
         self.report.setOpenLinks(False)
         self.report.setOpenExternalLinks(False)
-        self.report.setMinimumHeight(150)
+        # 日报始终获取剩余空间；小窗口/高 DPI 允许缩小可滚动正文以保住顶部操作。
+        self.report.setMinimumHeight(70)
         self.report.setStyleSheet(
             "QTextBrowser {background: white; border: none; color: #17243b; padding: 6px;"
             "font-family: 'Microsoft YaHei UI'; font-size: 14px;}"

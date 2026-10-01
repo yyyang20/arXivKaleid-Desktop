@@ -97,7 +97,11 @@ def exercise(application, window, root, synthetic_key):
         pump()
         image = window.grab()
         assert not image.isNull() and image.save(str(output / (name + '.png')))
-        assert window.home_page.report_stack.height() >= 140
+        assert window.home_page.report_stack.height() >= 70
+        card = window.home_page.layout().itemAt(0).widget()
+        assert window.fetch_button.geometry().bottom() < card.height()
+        if window.task_panel.isVisible():
+            assert window.task_panel.geometry().top() > card.geometry().bottom()
         captures.append({'state': name, 'logical_size': [window.width(), window.height()],
                          'pixel_size': [image.width(), image.height()], 'dpr': image.devicePixelRatio(),
                          'report_height': window.home_page.report_stack.height()})

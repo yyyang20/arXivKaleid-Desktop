@@ -459,3 +459,16 @@ class DesktopAppTests(IsolatedDesktopTest):
             open_url.assert_not_called()
             self.window.open_report_link(QUrl("https://arxiv.org/pdf/2609.00001v1"))
             open_url.assert_called_once()
+
+    def test_large_font_small_window_keeps_buttons_and_panels_separate(self):
+        from PySide6.QtGui import QFont
+        window = self.window
+        card = window.home_page.layout().itemAt(0).widget()
+        card.setFont(QFont('Microsoft YaHei UI', 12))
+        window.resize(850, 680)
+        window.show()
+        window.task_panel.begin('fetch')
+        QTest.qWait(100)
+        self.assertLess(window.fetch_button.geometry().bottom(), card.height())
+        self.assertGreater(window.task_panel.geometry().top(), card.geometry().bottom())
+        self.assertGreaterEqual(window.home_page.report_stack.height(), 70)
