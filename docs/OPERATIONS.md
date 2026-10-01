@@ -72,6 +72,8 @@ git status --short
 
 portable 根目录的 README、EULA、隐私与安全说明由 `docs/public_release/` 维护；该目录只保存文本。`RELEASE_CHECKLIST.md` 留在开发文档中，不进入 portable ZIP。第三方声明以 `packaging/windows/THIRD_PARTY_NOTICES.txt` 为唯一源文本。
 
+自有应用采用 GPL-3.0-only，根 LICENSE 的标准全文直接进入 portable。通过 GPLv3 第 6(d) 节提供免费对应源码：portable README 与 Release 正文链接同一版本 tag 的源码归档，包含自有源码、资源、测试、构建脚本和说明；该 tag 提交与 BUILD_INFO.json 一致。QtBase、PySide/Shiboken、pypdf 对应源码随 ZIP 提供，第三方原许可、独立工具/解释器与系统库的边界见 THIRD_PARTY_NOTICES.txt。
+
 根 README 提供项目概览、源码启动和下载入口；打包 README 面向 portable 用户，分别维护。根 EULA、隐私、安全说明和第三方声明是对应维护源的同步副本；源与副本更新遵循 [文档路由](README.md#文档更新规则)，治理测试核对字节一致性。
 
 本地构建只生成项目内被忽略的 `dist/`、`release/` 和 `.desktop-build/` 产物。`dist/` 保存未压缩发行目录，`release/` 保存当前构建或发行候选的 ZIP 和 `.sha256`。正式历史版本由 GitHub Releases 保存。构建器不自动创建仓库、标签或 Release，也不上传文件。每次公开发布必须基于与最新 `origin/main` 一致的干净提交重建 ZIP，按 [公开发布检查清单](public_release/RELEASE_CHECKLIST.md) 核对文件集、构建身份、用户数据排除、portable 验证和 SHA-256。
@@ -83,6 +85,8 @@ portable 根目录的 README、EULA、隐私与安全说明由 `docs/public_rele
 Git commit/push、创建标签或 Release、上传成品都是受控操作，必须在当次获得授权。既有 immutable Release 的标签、ZIP 和校验文件不得修改，修正成品时发布新版本。Release 正文在发布前完成；只有用户明确授权的文案修正任务才可单独编辑已发布正文，并在操作前后对比 Tag 目标及全部 assets 的名称、字节数与 digest，确认发行身份未变。
 
 构建和成品发布基于干净冻结提交；公开 Release 及未登录核验成功后，仍在同一发布任务中按 [文档路由](README.md#文档更新规则) 更新 `docs/CHANGELOG.md`。发布后文档收口不改变冻结成品或公开 Release，不拆成新的独立任务。尚未取得 Git commit/push 授权时，先完成本地文档修改、必要测试和 `git diff --check`，报告待提交状态，不得省略文档或宣称整个发布任务已经完成。
+
+发布前后对比既有历史 tag、Release 正文和所有资产的 id、名称、字节数与 digest，任何变化停止。源码归档须从未登录视角验证文件集及字节与冻结提交对应；新增发行记录通过文档 PR 收口后，分别记录最终 main 与发行 tag SHA，仅允许文档收口导致两者不同。
 
 ## 功能开发与验证
 

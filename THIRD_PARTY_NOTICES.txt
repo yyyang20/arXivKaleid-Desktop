@@ -6,6 +6,11 @@ Exact versions and upstream license declarations are in licenses/components.json
 License texts and copyright notices are in licenses/ and _internal/vendor/curl/.
 These third-party components are provided under their own license terms.
 
+The arXivKaleid application is GPL-3.0-only; see the root LICENSE and EULA.txt.
+Its exact release-tag source archive, resources, tests and build instructions
+are linked in README.md. This does not replace third-party copyright notices
+or the original licenses below.
+
 Qt Core/Gui/Widgets/Network and PySide6/Shiboken6 6.9.2 use LGPL version 3.
 Qt libraries and Python bindings are dynamically loaded and remain replaceable
 in _internal/PySide6/ and _internal/shiboken6/. This distribution imposes no
@@ -26,6 +31,7 @@ components; their source notices are preserved under licenses/QtBase/.
 Python uses the Python Software Foundation license and historical notices.
 pypdf uses BSD-3-Clause. PyInstaller's license includes the exception permitting
 distribution of frozen applications; its runtime/bootloader notices are included.
+The exact pypdf 6.14.2 source archive is supplied in licenses/sources/.
 The bundled liblzma from XZ Utils is 0BSD; XZ command-line tools are not shipped.
 OpenSSL uses Apache-2.0. SQLite is public domain. Windows runtime redistributables
 remain governed by the accompanying Microsoft license texts.
@@ -39,3 +45,24 @@ and _internal/vendor/curl/bin/curl-ca-bundle.crt respectively.
 IANA tzdata 2026c supplies Asia/Shanghai data, including historical transitions.
 Its public-domain/BSD notices are included. This distribution does not replace
 the user's operating-system time-zone database.
+
+Corresponding Source scope for this distribution:
+- Application code and resources: the exact tag archive linked in README.md.
+- Required Qt/PySide/Shiboken and pypdf libraries: matching source archives in
+  licenses/sources/ with the versions and hashes in licenses/components.json.
+- Unmodified CPython interpreter and standard library: an independently licensed
+  general-purpose execution platform, not application-derived code; its PSF and
+  incorporated-code notices are retained. Its standard runtime libraries serve
+  that execution platform, with their accompanying licenses preserved.
+- Microsoft Windows runtime libraries: standard platform/System Libraries;
+  Microsoft licenses remain applicable, not relicensed under the application GPL.
+- curl: a separate unmodified command-line executable communicating through its
+  standard command-line/HTTP interface, distributed as an independent aggregate;
+  its permissive license does not require an additional source distribution.
+- IANA data and CA certificate data: independent data with their original notices
+  and actual data retained; no GPL relicensing of these data is claimed.
+- PyInstaller and build-only packages: general-purpose build tools; the bootloader
+  exception permits distribution of the frozen application under its chosen
+  license. The application build scripts are included in the application source.
+These exclusions do not extend to modified or intimately linked application
+components. Re-evaluate coverage when the shipped components or linkage change.

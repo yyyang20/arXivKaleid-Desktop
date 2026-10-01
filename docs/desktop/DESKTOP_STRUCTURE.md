@@ -22,7 +22,7 @@
 | `scripts/build_windows_portable.ps1` | 显式 Python 解释器的 Windows 构建入口 |
 | `docs/public_release/` | portable 打包 README、应用 EULA、隐私与安全说明的维护源及发布检查清单；不保存 ZIP |
 | `scripts/build_windows_portable.py` | 资源与公开文档 allowlist、vendor 校验、构建、发行扫描、ZIP 和 SHA-256 |
-| `scripts/portable_licenses.py` | 从实际安装包及固定源码收集许可证 |
+| `scripts/portable_licenses.py` | 从实际安装包及固定 gzip/xz 源码收集许可证；原样提供 QtBase/PySide/pypdf 对应源码 |
 | `scripts/validate_windows_portable.py` | 全新副本的脱离开发环境验证和重启 |
 | `tests/test_desktop_portable.py` | source/frozen 路径、链接、可写性、bundled curl 与工作库边界 |
 | `tests/test_desktop_build.py` | checksum、x64、发行数据排除、资源及 manifest 契约 |
@@ -34,6 +34,8 @@
 | `tests/test_desktop_config.py` | 当前配置、预算、协议和 Prompt 哈希契约 |
 | `tests/test_desktop_decoupling.py` | alpha.4 行为基线、schema v1、缓存、预算和独立源码运行 |
 | `tests/test_desktop_governance.py` | 根与局部治理、文档路由、当前身份、链接、发行资料副本与发布清单的只读检查 |
+
+portable 根目录包含直接来自仓库根的 GPLv3 `LICENSE`。应用对应源码入口固定到与 `BUILD_INFO.json` 相同提交的版本 tag；第三方源码归档位于 `licenses/sources/`，身份和 SHA-256 由 `packaging/windows/source-manifest.json` 固定，原许可不改写。
 
 ## 当前运行数据
 

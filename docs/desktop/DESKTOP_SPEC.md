@@ -1,6 +1,6 @@
 # Desktop 规范
 
-当前版本 `0.1.0-alpha.4` 使用 PySide6，包含 API Key 密码输入框、获取最新候选和开始两轮分析两个按钮，以及真实运行进度、候选统计、两层诊断和渲染后的 Markdown 日报。
+当前版本 `0.1.0-alpha.5` 使用 PySide6，包含 API Key 密码输入框、获取最新候选和开始两轮分析两个按钮，以及真实运行进度、候选统计、两层诊断和渲染后的 Markdown 日报。
 
 ## Portable 路径与资源
 
@@ -80,7 +80,7 @@ SQLite 只保存当前 attempt 的内部状态，不是历史数据库。分析�
 
 ## 两层诊断与失败范围
 
-GUI 将系统错误、单篇局部问题和正常业务 outcome 分开显示。HTTP 状态和 curl exit code 只作为结构化 details，不拆分稳定代码；`transient` 与是否允许自动重试独立，alpha.4 不新增自动重试。paper-scope 问题按代码聚合，论文身份只写入本地日志。
+GUI 将系统错误、单篇局部问题和正常业务 outcome 分开显示。HTTP 状态和 curl exit code 只作为结构化 details，不拆分稳定代码；`transient` 与是否允许自动重试独立，当前版本不自动重试。paper-scope 问题按代码聚合，论文身份只写入本地日志。
 
 PDF 与全文异常按实际影响范围判断：已进入单篇边界、共享组件和 SQLite 完整、单篇失败成功持久化时继续后续论文；共享组件初始化、SQLite、runtime 存储或全局状态失败时停止批次；无法确认时使用阶段 `UNEXPECTED` 失败关闭。未枚举异常类型本身不等于系统错误。
 

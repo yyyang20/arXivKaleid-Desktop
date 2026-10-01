@@ -1,3 +1,7 @@
+# Copyright (c) 2026 yyyang20
+# SPDX-License-Identifier: GPL-3.0-only
+# See LICENSE in the project root for the full license text.
+
 """从实际安装包和固定上游源码收集许可证；不得猜测或静默跳过。"""
 import importlib.metadata
 import io
@@ -7,7 +11,31 @@ import shutil
 import sys
 import tarfile
 
-from build_windows_portable import checked_path, download
+from build_windows_portable import checked_path, download, source_archives
+
+
+def collect_source_archives(root: Path, licenses: Path) -> list[dict[str, str]]:
+    """保留固定源码归档，并从 gzip/xz 原文收集对应版权与许可。"""
+    records = []
+    for item in source_archives(root):
+        data = download(item['url'], item['sha256'], checked_path(root, '.desktop-build/vendor', item['archive']))
+        target = checked_path(licenses, 'sources', item['archive'])
+        target.parent.mkdir(exist_ok=True)
+        target.write_bytes(data)
+        with tarfile.open(fileobj=io.BytesIO(data), mode='r:*') as archive:
+            for member in archive:
+                if not member.isfile():
+                    continue
+                relative = Path(*Path(member.name).parts[1:])
+                name = relative.name.lower()
+                if ('LICENSES' in relative.parts or 'license' in name or name.startswith(('copying', 'copyright', 'notice'))
+                        or name == 'qt_attribution.json'):
+                    target = checked_path(licenses, item['component'].split()[0], relative.as_posix())
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(archive.extractfile(member).read())
+        records.append({'name': item['component'], 'version': item['version'], 'license': item['license'],
+                        'source': item['url'], 'sha256': item['sha256']})
+    return records
 
 
 def collect_licenses(root: Path, folder: Path) -> None:
@@ -39,25 +67,7 @@ def collect_licenses(root: Path, folder: Path) -> None:
             target.parent.mkdir(exist_ok=True)
             shutil.copyfile(dist.locate_file(item), target)
         records.append({'name': name, 'version': dist.version, 'license': dist.metadata.get('License-Expression') or dist.metadata.get('License')})
-    sources = json.loads((root / 'packaging/windows/source-manifest.json').read_text(encoding='utf-8'))
-    for item in sources:
-        data = download(item['url'], item['sha256'], checked_path(root, '.desktop-build/vendor', item['archive']))
-        target = licenses / 'sources' / item['archive']
-        target.parent.mkdir(exist_ok=True)
-        target.write_bytes(data)
-        # 保留版权、许可及第三方归属信息；源码包原样提供，无需在用户电脑解包。
-        with tarfile.open(fileobj=io.BytesIO(data), mode='r:xz') as archive:
-            for member in archive:
-                if not member.isfile():
-                    continue
-                relative = Path(*Path(member.name).parts[1:])
-                name = relative.name.lower()
-                if ('LICENSES' in relative.parts or 'license' in name or name.startswith(('copying', 'copyright', 'notice'))
-                        or name == 'qt_attribution.json'):
-                    target = checked_path(licenses, item['component'].split()[0], relative.as_posix())
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_bytes(archive.extractfile(member).read())
-        records.append({'name': item['component'], 'version': item['version'], 'license': 'LGPL-3.0-only; third-party notices included', 'source': item['url'], 'sha256': item['sha256']})
+    records.extend(collect_source_archives(root, licenses))
     # QtBase 的 Mozilla/Unicode 等许可证文本已收集，MPL 全文来自其官方源码。
     for name in ('LGPL-3.0-only.txt', 'GPL-3.0-only.txt', 'MPL-2.0.txt'):
         if not (licenses / 'QtBase/LICENSES' / name).is_file():

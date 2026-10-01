@@ -32,7 +32,7 @@ DPAPI 密文通常不能在另一台电脑或另一个 Windows 用户下解密�
 
 ## 删除数据
 
-应用没有云端账户或维护者端数据。alpha.4 不自动删除历史诊断日志；可在应用关闭后删除 `runtime/logs/` 中不再需要的文件。删除整个 portable 目录会删除本地程序、API Key 密文、PDF、SQLite、缓存和日志。DeepSeek 端数据的查询或删除请求需按 DeepSeek 账户和当前政策处理。
+应用没有云端账户或维护者端数据。当前版本不自动删除历史诊断日志；可在应用关闭后删除 `runtime/logs/` 中不再需要的文件。删除整个 portable 目录会删除本地程序、API Key 密文、PDF、SQLite、缓存和日志。DeepSeek 端数据的查询或删除请求需按 DeepSeek 账户和当前政策处理。
 
 ## 用户责任
 

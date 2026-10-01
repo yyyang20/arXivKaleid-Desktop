@@ -1,3 +1,7 @@
+# Copyright (c) 2026 yyyang20
+# SPDX-License-Identifier: GPL-3.0-only
+# See LICENSE in the project root for the full license text.
+
 """Desktop 面向 GUI 与诊断日志的稳定错误及正常结果模型。"""
 from __future__ import annotations
 

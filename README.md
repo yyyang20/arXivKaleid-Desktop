@@ -4,6 +4,8 @@ arXivKaleid Desktop 是面向黑洞与致密天体强引力成像、偏振和新
 
 本仓库包含 Desktop 应用源码、测试、构建配置和项目文档；Windows portable 成品通过 GitHub Releases 提供。
 
+当前版本为 `0.1.0-alpha.5`，从本版开始同步公开对应源码、GPLv3 许可、项目文档和 Windows portable。
+
 ## 开发方式
 
 本项目主要采用 vibe coding 方式开发。项目维护者负责需求、产品决策、规则制定和验收；Codex 作为主要 coding agent，负责代码实现、测试和文档维护。
@@ -45,7 +47,11 @@ API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和脱
 
 ## 许可与安全
 
-应用许可条款见 [EULA.txt](EULA.txt)。第三方组件声明见 `THIRD_PARTY_NOTICES.txt`，完整许可文本和必要源码归档随 portable ZIP 提供。
+Copyright (c) 2026 yyyang20. 自有应用源码、测试、构建脚本、配置、提示词和项目文档采用 **GPL-3.0-only**，完整文本见 [LICENSE](LICENSE)，许可说明见 [EULA.txt](EULA.txt)。本软件无保证；允许使用、研究、修改和分发，包括商业使用。分发受 GPL 覆盖的衍生版本须继续按 GPLv3 提供相应源码，私人修改不要求公开。
+
+Alpha 5 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.5.zip)包含源码、资源、测试及构建说明；对应 [Windows portable Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.5) 的 `BUILD_INFO.json` 提交与该 tag 一致。不要用浮动 main 代替发行源码。
+
+第三方组件保留各自许可，声明见 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)。完整许可文本及 QtBase、PySide/Shiboken、pypdf 对应源码随 portable ZIP 提供。本版许可不改写 alpha.1 至 alpha.4 的历史发行资料。
 
 安全问题报告方式见 [SECURITY.md](SECURITY.md)。不要在公开 Issue 中张贴 API Key、`secret.dat`、SQLite、PDF 或整个 `runtime/` 目录。
 

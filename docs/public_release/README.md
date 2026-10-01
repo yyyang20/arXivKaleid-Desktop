@@ -4,6 +4,8 @@ arXivKaleid Desktop 是面向黑洞与致密天体强引力成像、偏振和新
 
 本文档说明 Windows portable 的下载和使用方式。
 
+当前版本为 `0.1.0-alpha.5`。
+
 ## 开发方式
 
 本项目主要采用 vibe coding 方式开发。项目维护者负责需求、产品决策、规则制定和验收；Codex 作为主要 coding agent，负责代码实现、测试和文档维护。
@@ -45,6 +47,10 @@ API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和脱
 
 ## 许可与安全
 
-应用许可条款见 [EULA.txt](EULA.txt)。第三方组件声明见 `THIRD_PARTY_NOTICES.txt`，完整许可文本和必要源码归档随 portable ZIP 提供。
+Copyright (c) 2026 yyyang20. 应用采用 **GPL-3.0-only**，完整许可文本见 portable 根目录的 `LICENSE`，说明见 [EULA.txt](EULA.txt)。本软件无保证；允许使用、研究、修改和分发，包括商业使用。分发受 GPL 覆盖的修改版本须按 GPLv3 提供相应源码，私人修改不要求公开。
+
+本版[对应源码下载](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.5.zip)固定到 `v0.1.0-alpha.5`，包含应用源码、配置、Prompt、测试、构建脚本及说明，对应 `BUILD_INFO.json` 中的提交。源码归档用于研究、修改和构建，不是可直接运行的 Windows 成品；发行下载入口为 [Alpha 5 Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.5)。
+
+第三方组件保留各自许可；声明见 `THIRD_PARTY_NOTICES.txt`，许可文本位于 `licenses/`，QtBase、PySide/Shiboken 和 pypdf 对应源码位于 `licenses/sources/`。未修改的通用执行平台、独立工具和系统库的范围说明见第三方声明。alpha.1 至 alpha.4 历史发行资料不变。
 
 安全问题报告方式见 [SECURITY.md](SECURITY.md)。不要在公开 Issue 中张贴 API Key、`secret.dat`、SQLite、PDF 或整个 `runtime/` 目录。
