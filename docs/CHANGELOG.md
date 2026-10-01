@@ -2,6 +2,20 @@
 
 本文件保留 Desktop 与通用功能的简短历史。代码解耦前的条目来自原项目：当时的发行来源、构建提交、兼容行为和治理测试仅表示历史事实，不代表当前仓库仍有这些入口或测试。现行行为以代码、配置、测试和 [当前业务规范](PROJECT_SPEC.md) 为准；详细历史通过 Git、PR 和 Issue 查询。
 
+## 2026-10-02：Desktop alpha.6 portable 构建与隔离验收支持
+
+- 补齐八项固定源码归档、原许可和实际分发组件清单；最小 Qt/插件收口，保留 Fluent 内嵌资源和必要 pywin32 DLL/运行时 hook，不使用 full 或系统字体。
+- 构建要求开发分支干净冻结提交及已核验 main 基线，不要求两个提交相同；记录模块、构建身份、文件哈希和体积组成。正式 Release 仍在合并后的 main/tag 重建核验。
+- 离线故障注入确认后最小修复 portable 后置检查失败仍可能报告成功的路径，增加完整诊断回归测试；冻结验收提供主要 GUI 状态、合成 DPAPI 恢复、实际/模拟 DPI、缺失资源、运行目录拒绝和重复生命周期验证，不调用真实业务网络或模型。
+- 自有许可保持 GPL-3.0-only；第三方材料沿用现有 NOTICE/source manifest/source bundle，Fluent 许可说明适用关系及公开 Release 留待后续核对与授权。
+
+## 2026-10-02：Desktop alpha.6 Fluent GUI 本地实现
+
+- 统一版本升级为 `0.1.0-alpha.6`，使用基础版 PySide6-Fluent-Widgets，拆出首页、历史占位页、设置页及可复用任务区域；版本显示动态读取，API Key 移入设置页并保留 DPAPI、自动保存与分析期间禁用行为。
+- 首页保留两个独立按钮和常驻抓取信息；抓取采用不定进度，分析显示真实五阶段状态，成功后收缩为可展开摘要，失败保留诊断和日志入口，日报继续占主要空间。
+- 候选冻结与一次性分析、模型次数、零自动重试、PDF/全文门控、费用、SQLite、Prompt 和日报业务契约保持不变；新增依赖固定版本，更新 portable 资源与许可收集准备。
+- 完整离线测试 115 项、零跳过，包含 Windows GUI 与 DPAPI 假值；隔离 mock 视觉 QA 覆盖 13 个状态及 DPR 1.25/2.25 两组缩放。未访问真实 arXiv/DeepSeek、未产生模型费用，尚未构建或发布 alpha.6 portable；Fluent 许可确认及第三方对应源码清单补全留作正式发行前置条件。
+
 ## 2026-10-01：Desktop alpha.5 公开发行
 
 - 已公开 [v0.1.0-alpha.5 prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.5)，同步提供 GPL-3.0-only 完整源码、文档及 Windows portable；EULA 为许可说明与使用告知，第三方保留各自许可及实际要求的对应源码。

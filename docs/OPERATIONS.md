@@ -72,13 +72,15 @@ git status --short
 
 portable 根目录的 README、EULA、隐私与安全说明由 `docs/public_release/` 维护；该目录只保存文本。`RELEASE_CHECKLIST.md` 留在开发文档中，不进入 portable ZIP。第三方声明以 `packaging/windows/THIRD_PARTY_NOTICES.txt` 为唯一源文本。
 
-自有应用采用 GPL-3.0-only，根 LICENSE 的标准全文直接进入 portable。通过 GPLv3 第 6(d) 节提供免费对应源码：portable README 与 Release 正文链接同一版本 tag 的源码归档，包含自有源码、资源、测试、构建脚本和说明；该 tag 提交与 BUILD_INFO.json 一致。QtBase、PySide/Shiboken、pypdf 对应源码随 ZIP 提供，第三方原许可、独立工具/解释器与系统库的边界见 THIRD_PARTY_NOTICES.txt。
+自有应用采用 GPL-3.0-only，根 LICENSE 的标准全文直接进入 portable。通过 GPLv3 第 6(d) 节提供免费对应源码：portable README 与 Release 正文链接同一版本 tag 的源码归档，包含自有源码、资源、测试、构建脚本和说明；该 tag 提交与 BUILD_INFO.json 一致。实际分发库的固定源码随 ZIP 提供，包括 QtBase、QtSvg、PySide/Shiboken、pypdf、Fluent、frameless、darkdetect 和 pywin32；第三方原许可、独立工具/解释器与系统库的边界见 THIRD_PARTY_NOTICES.txt。
 
 根 README 提供项目概览、源码启动和下载入口；打包 README 面向 portable 用户，分别维护。根 EULA、隐私、安全说明和第三方声明是对应维护源的同步副本；源与副本更新遵循 [文档路由](README.md#文档更新规则)，治理测试核对字节一致性。
 
 本地构建只生成项目内被忽略的 `dist/`、`release/` 和 `.desktop-build/` 产物。`dist/` 保存未压缩发行目录，`release/` 保存当前构建或发行候选的 ZIP 和 `.sha256`。正式历史版本由 GitHub Releases 保存。构建器不自动创建仓库、标签或 Release，也不上传文件。每次公开发布必须基于与最新 `origin/main` 一致的干净提交重建 ZIP，按 [公开发布检查清单](public_release/RELEASE_CHECKLIST.md) 核对文件集、构建身份、用户数据排除、portable 验证和 SHA-256。
 
 构建和发行扫描拒绝 `runtime/`、`logs/`、JSONL、SQLite、PDF、Secret 与本机路径；运行日志不得写入 `_internal/` 或用户目录。
+
+本地 portable 技术验证可以基于 `codex/` 开发分支的干净冻结提交，其基线来自已核验的 `origin/main`，不要求两个提交相等。`BUILD_INFO.json` 记录分支、基线、冻结提交和技术验证用途；正式公开 Release 仍须在合并后的 main／对应 release tag 重新构建及最终核验。本地提交、构建与外部发布的授权分别处理。
 
 每个新的 Desktop Release 正文必须包含 `## 本次更新`，用面向用户的 1～5 条简短要点说明该版本更新了什么。首个公开版本概括首次提供的主要功能；后续版本只概括相对于上一公开版本的主要新增、修改或修复，依据冻结构建提交、版本间 Git 差异和 `docs/CHANGELOG.md`，不得凭印象编写。平台、下载、SmartScreen、DeepSeek 数据发送与费用、SHA-256 等通用说明必须保留，但不能代替版本更新说明。发布 Draft 前检查该章节存在且非空；发布后重新读取公开 Release，核对正文、Tag、assets、digest 及其他必要说明。
 

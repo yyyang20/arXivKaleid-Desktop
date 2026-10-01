@@ -12,13 +12,17 @@
 
 ## 构建与验证
 
+- [ ] Alpha 6 Fluent wheel 的 GPLv3 与上游商业说明关系已确认；新增 Fluent、frameless、darkdetect、pywin32 及 QtSvg 的许可/版权文本、必要对应源码、版本和哈希 manifest 已完整核验。
+- [ ] 冻结程序实际显示 Fluent SVG 图标、三个页面、运行/收缩/失败详情和 Markdown；验证 DPI/缩放、DPAPI 假值与 pywin32 DLL/hooks，并记录包体积变化。
+- [ ] 已移除 portable README 的发行准备提示；本版 tag/源码与实际发布身份一致，不能把未发布入口当作可用下载。
+
 - [ ] 仅在已授权的 `arxivkaleid-desktop` 专用 Conda 环境中执行构建。
 - [ ] 重新生成 `release/arXivKaleid-<version>-windows-x64.zip` 和对应 `.zip.sha256`。
 - [ ] `BUILD_INFO.json` 记录预期版本、冻结提交、x64 架构且 `working_tree_clean` 为 `true`。
 - [ ] ZIP 根目录包含 `LICENSE`、`README.md`、`EULA.txt`、`PRIVACY.md`、`SECURITY.md` 和 `THIRD_PARTY_NOTICES.txt`，完整第三方许可仍在 `licenses/`。
 - [ ] 应用许可为 `GPL-3.0-only`；LICENSE 与根维护源字节一致，EULA 不增加额外限制。
 - [ ] portable README 的对应源码入口固定到本版 tag，tag 提交与 BUILD_INFO.json 一致，不使用浮动 main。
-- [ ] QtBase、PySide/Shiboken、pypdf 对应源码归档完整；许可、版本及 SHA-256 与源码 manifest 一致，独立工具/执行平台及系统库的排除理由已核对。
+- [ ] QtBase、QtSvg、PySide/Shiboken、pypdf、Fluent、frameless、darkdetect、pywin32 对应源码归档完整；许可、版本及 SHA-256 与源码 manifest 一致，独立工具/执行平台及系统库的排除理由已核对。
 - [ ] 发行扫描未发现 `runtime/`、API Key、`secret.dat`、SQLite、PDF、日志或本机私有路径。
 - [ ] 发行扫描显式拒绝诊断 JSONL；ZIP 与 `_internal/` 均不含运行日志或可写日志目录。
 - [ ] source `.desktop-runtime/logs/` 由 Git ignore 覆盖，`git status --short --ignored` 只把它显示为 ignored。

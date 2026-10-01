@@ -1,0 +1,153 @@
+# Copyright (c) 2026 yyyang20
+# SPDX-License-Identifier: GPL-3.0-only
+# See LICENSE in the project root for the full license text.
+
+"""独立页面只负责布局；业务操作由主窗口连接。"""
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QFormLayout, QHBoxLayout, QLabel, QStackedWidget, QTextBrowser, QVBoxLayout, QWidget,
+)
+from qfluentwidgets import (
+    BodyLabel, CardWidget, FluentIcon, PasswordLineEdit, PrimaryPushButton,
+    ScrollArea, SubtitleLabel, TitleLabel,
+)
+from desktop import __version__
+from desktop.task_panel import TaskPanel, wrapping_label
+
+
+def card(title, parent=None):
+    widget = CardWidget(parent)
+    layout = QVBoxLayout(widget)
+    layout.setContentsMargins(18, 14, 18, 14)
+    layout.setSpacing(10)
+    layout.addWidget(SubtitleLabel(title))
+    return widget, layout
+
+
+class HomePage(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("homePage")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(12)
+        fetch_card, fetch = card("抓取信息")
+        self.statistics = {}
+        form = QFormLayout()
+        for name in ("候选日期（UTC）", "抓取完成时间"):
+            label = wrapping_label("—")
+            self.statistics[name] = label
+            form.addRow(name, label)
+        fetch.addLayout(form)
+        counts = QHBoxLayout()
+        for name in ("原始条目数", "去重后候选数", "本次进入 Round 1 数量"):
+            tile = QWidget()
+            tile.setObjectName("statTile")
+            tile.setMinimumHeight(78)
+            column = QVBoxLayout(tile)
+            caption = wrapping_label("锁定 Round 1 候选" if name == "本次进入 Round 1 数量" else name)
+            caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            column.addWidget(caption)
+            value = wrapping_label("—")
+            value.setObjectName("statValue")
+            value.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            column.addWidget(value)
+            self.statistics[name] = value
+            counts.addWidget(tile, 1)
+        fetch.addLayout(counts)
+        buttons = QHBoxLayout()
+        self.fetch_button = PrimaryPushButton(FluentIcon.DOWNLOAD, "获取最新候选")
+        self.analyze_button = PrimaryPushButton(FluentIcon.PLAY, "开始两轮分析")
+        self.analyze_button.setEnabled(False)
+        for button in (self.fetch_button, self.analyze_button):
+            button.setMinimumHeight(38)
+            buttons.addWidget(button, 1)
+        fetch.addLayout(buttons)
+        fetch_card.setMinimumHeight(fetch_card.sizeHint().height())
+        layout.addWidget(fetch_card)
+        self.task_panel = TaskPanel()
+        layout.addWidget(self.task_panel)
+
+        report_card, report_layout = card("本次日报")
+        self.report_stack = QStackedWidget()
+        empty = QWidget()
+        empty_layout = QVBoxLayout(empty)
+        empty_layout.addStretch()
+        title = SubtitleLabel("暂无日报")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_layout.addWidget(title)
+        hint = BodyLabel("请先获取候选，再开始两轮分析")
+        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_layout.addWidget(hint)
+        empty_layout.addStretch()
+        self.report = QTextBrowser()
+        self.report.setOpenLinks(False)
+        self.report.setOpenExternalLinks(False)
+        self.report.setMinimumHeight(150)
+        self.report.setStyleSheet(
+            "QTextBrowser {background: white; border: none; color: #17243b; padding: 6px;"
+            "font-family: 'Microsoft YaHei UI'; font-size: 14px;}"
+        )
+        self.report_stack.addWidget(empty)
+        self.report_stack.addWidget(self.report)
+        self.report.textChanged.connect(
+            lambda: self.report_stack.setCurrentIndex(1 if not self.report.document().isEmpty() else 0)
+        )
+        report_layout.addWidget(self.report_stack, 1)
+        layout.addWidget(report_card, 1)
+        self.setStyleSheet(
+            "QWidget#statTile {background: #f5f8fc; border: 1px solid #e4ebf4; border-radius: 6px;}"
+            "QLabel#statValue {font-size: 21px; font-weight: 600; color: #17243b;}"
+        )
+
+
+class SettingsPage(ScrollArea):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("settingsPage")
+        self.setWidgetResizable(True)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(18)
+        layout.addWidget(TitleLabel("设置"))
+        key_card, key = card("DeepSeek API Key")
+        self.api_key = PasswordLineEdit()
+        self.api_key.setPlaceholderText("可留空，不影响候选抓取")
+        self.api_key.setAccessibleName("DeepSeek API Key")
+        key.addWidget(self.api_key)
+        key.addWidget(wrapping_label("失去焦点或按回车自动保存；使用当前 Windows 用户 DPAPI 加密。"))
+        self.secret_status = wrapping_label()
+        key.addWidget(self.secret_status)
+        layout.addWidget(key_card)
+        about_card, about = card("关于 arXivKaleid Desktop")
+        self.version_label = SubtitleLabel(f"v{__version__}")
+        about.addWidget(self.version_label)
+        about.addWidget(wrapping_label("面向强引力成像、偏振和新时空解研究的论文筛选工具。"))
+        about.addWidget(wrapping_label(
+            "两轮分析使用你自己的 DeepSeek API，可能产生费用。\n"
+            "没有维护者服务器中转或遥测；本地运行数据与凭据由你管理。\n"
+            "自有应用：GPL-3.0-only。使用与数据说明见随附 EULA.txt / PRIVACY.md。"
+        ))
+        layout.addWidget(about_card)
+        layout.addStretch()
+        self.setWidget(content)
+        self.setStyleSheet("QScrollArea#settingsPage {background: transparent; border: none;}")
+
+
+class HistoryPage(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("historyPage")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.addWidget(TitleLabel("历史"))
+        layout.addStretch()
+        title = SubtitleLabel("历史功能尚未开放")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+        message = wrapping_label("本版仅提供页面占位。当前候选和日报只在本次会话展示。")
+        message.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(message)
+        layout.addStretch()

@@ -86,7 +86,10 @@ class DesktopBuildTests(unittest.TestCase):
 
     def test_desktop_requirements_include_pdf_runtime_with_fixed_versions(self):
         self.assertEqual(builder.pinned_requirements('requirements-desktop.txt'),
-                         {'pypdf': '6.14.2', 'PySide6': '6.9.2'})
+                         {'pypdf': '6.14.2', 'PySide6': '6.9.2',
+                          'PySide6-Fluent-Widgets': '1.11.3',
+                          'PySideSix-Frameless-Window': '0.8.2',
+                          'darkdetect': '0.8.0', 'pywin32': '312'})
         (self.root / 'requirements.txt').write_text('-r other.txt\n', encoding='utf-8')
         (self.root / 'other.txt').write_text('-r requirements.txt\n', encoding='utf-8')
         with self.assertRaisesRegex(RuntimeError, 'cycle'):
@@ -124,7 +127,8 @@ class DesktopBuildTests(unittest.TestCase):
 
     def test_source_manifest_rejects_version_license_and_inventory_drift(self):
         items = builder.source_archives()
-        self.assertEqual({i['component'] for i in items}, {'QtBase', 'PySide6 and Shiboken6', 'pypdf'})
+        self.assertEqual({i['component'] for i in items}, {'QtBase', 'PySide6 and Shiboken6', 'pypdf',
+                         'QtSvg', 'PySide6-Fluent-Widgets', 'PySideSix-Frameless-Window', 'darkdetect', 'pywin32'})
         self.assertEqual(next(i['license'] for i in items if i['component'] == 'pypdf'), 'BSD-3-Clause')
         for name in ('requirements.txt', 'requirements-desktop.txt'):
             (self.root / name).write_bytes((ROOT / name).read_bytes())
@@ -195,3 +199,33 @@ class DesktopBuildTests(unittest.TestCase):
         self.assertTrue(manifest['url'].startswith('https://curl.se/windows/'))
         self.assertEqual(len(manifest['sha256']), 64)
         self.assertIn(manifest['version'], manifest['archive'])
+
+    def test_new_wheel_license_layouts_preserve_notices_without_collision(self):
+        from types import SimpleNamespace
+        dist = SimpleNamespace(files=[
+            'fluent.dist-info/LICENSE',
+            'win32.dist-info/licenses/com/License.txt',
+            'win32.dist-info/licenses/pythonwin/License.txt',
+            'win32.dist-info/METADATA', 'fluent/__init__.py',
+        ])
+        self.assertEqual([p.as_posix() for _, p in license_collector.wheel_license_files(dist)],
+                         ['LICENSE', 'com/License.txt', 'pythonwin/License.txt'])
+
+    def test_fluent_spec_keeps_svg_dependencies_without_full_extras(self):
+        text = (ROOT / 'packaging/windows/arxivkaleid.spec').read_text(encoding='utf-8')
+        for name in ('Qt6Svg.dll', 'Qt6SvgWidgets.dll', 'Qt6Xml.dll', 'qsvgicon.dll'):
+            self.assertIn(name, text)
+        for name in ('Qt6Network.dll', 'qsvg.dll', 'qoffscreen.dll'):
+            self.assertNotIn(name, text)
+        self.assertNotIn('[full]', (ROOT / 'requirements-desktop.txt').read_text())
+
+    def test_frozen_identity_requires_clean_descendant_not_equal_main(self):
+        with patch.object(builder.subprocess, 'check_output', side_effect=['', 'baseline', 'feature', 'codex/test']), \
+                patch.object(builder.subprocess, 'run') as run:
+            run.return_value.returncode = 0
+            identity = builder.frozen_identity()
+            self.assertEqual(identity['commit'], 'feature')
+            self.assertEqual(identity['baseline_commit'], 'baseline')
+        with patch.object(builder.subprocess, 'check_output', return_value=' M tracked.py'):
+            with self.assertRaisesRegex(RuntimeError, 'clean_frozen'):
+                builder.frozen_identity()
