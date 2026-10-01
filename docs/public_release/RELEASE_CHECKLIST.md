@@ -12,13 +12,17 @@
 
 ## 构建与验证
 
+- [ ] Alpha 6 Fluent 1.11.3 许可原文、版权、wheel/sdist 元数据和上游说明已核对，商业用途措辞歧义已记录；不因商业许可或措辞本身推定必须购买许可或改变应用 GPL-3.0-only。仅发现与本次实际分发直接相关且现有 LICENSE/NOTICE/对应源码方案无法解决的具体发行权利缺口时停止 Release；新增组件的原许可、版权、版本和源码哈希已核验。
+- [ ] 冻结程序实际显示 Fluent SVG 图标、三个页面、运行/收缩/失败详情和 Markdown；验证 DPI/缩放、DPAPI 假值与 pywin32 DLL/hooks，并记录包体积变化。
+- [ ] 已移除 portable README 的发行准备提示；本版 tag/源码与实际发布身份一致，不能把未发布入口当作可用下载。
+
 - [ ] 仅在已授权的 `arxivkaleid-desktop` 专用 Conda 环境中执行构建。
 - [ ] 重新生成 `release/arXivKaleid-<version>-windows-x64.zip` 和对应 `.zip.sha256`。
 - [ ] `BUILD_INFO.json` 记录预期版本、冻结提交、x64 架构且 `working_tree_clean` 为 `true`。
 - [ ] ZIP 根目录包含 `LICENSE`、`README.md`、`EULA.txt`、`PRIVACY.md`、`SECURITY.md` 和 `THIRD_PARTY_NOTICES.txt`，完整第三方许可仍在 `licenses/`。
 - [ ] 应用许可为 `GPL-3.0-only`；LICENSE 与根维护源字节一致，EULA 不增加额外限制。
 - [ ] portable README 的对应源码入口固定到本版 tag，tag 提交与 BUILD_INFO.json 一致，不使用浮动 main。
-- [ ] QtBase、PySide/Shiboken、pypdf 对应源码归档完整；许可、版本及 SHA-256 与源码 manifest 一致，独立工具/执行平台及系统库的排除理由已核对。
+- [ ] QtBase、QtSvg、PySide/Shiboken、pypdf、Fluent、frameless、darkdetect、pywin32 对应源码归档完整；许可、版本及 SHA-256 与源码 manifest 一致，独立工具/执行平台及系统库的排除理由已核对。
 - [ ] 发行扫描未发现 `runtime/`、API Key、`secret.dat`、SQLite、PDF、日志或本机私有路径。
 - [ ] 发行扫描显式拒绝诊断 JSONL；ZIP 与 `_internal/` 均不含运行日志或可写日志目录。
 - [ ] source `.desktop-runtime/logs/` 由 Git ignore 覆盖，`git status --short --ignored` 只把它显示为 ignored。
@@ -36,7 +40,7 @@
 ## 发布 GitHub Release
 
 - [ ] 已获得当次 GitHub 写操作授权，并重新只读核对目标仓库、标签和现有 Release。
-- [ ] 保存并对比 alpha.1 至 alpha.4 历史 tag、Release 正文、资产 id/名称/字节数/digest 基线，既有历史发行保持不变。
+- [ ] 保存并对比全部既有历史 tag、Release 正文、资产 id/名称/字节数/digest 基线，既有历史发行保持不变。
 - [ ] 目标公开仓库已启用 immutable releases 和 private vulnerability reporting。
 - [ ] 先创建 Draft Release，alpha/beta 版本标记为 prerelease。
 - [ ] 只上传带版本号的 ZIP 和对应 `.zip.sha256`，不上传使用过的 portable 目录。
@@ -55,6 +59,16 @@
 - [ ] Git commit/push 必须获得相应授权；尚未取得授权时，先完成本地文档修改和验证，明确报告待提交状态，不得因此省略文档或宣称整个公开发布任务已经完成。
 - [ ] 对文档变更执行适用的离线测试和 `git diff --check`，并确认 ZIP、`.sha256`、测试或审计产物没有进入 Git。
 - [ ] 分别记录最终 main 与发行 tag SHA；两者的差异只包含发布后文档收口，已发布资产保持不变。
+
+## 本地历史 portable 收口
+
+- [ ] 已按 [运行手册](../OPERATIONS.md#本地历史-portable-收口) 将精确旧文件删除纳入当次授权；构建、验证和失败阶段不得提前清理，已授权时不重复确认。
+- [ ] 正式新版本 Release 成功发布，新资产、tag、BUILD_INFO、公开源码及远端资产核验全部通过。
+- [ ] 从未登录视角下载全部待清理版本的正式 ZIP 和 `.sha256`，核对名称、字节数、GitHub digest、实际 SHA-256、校验内容及 tag/BUILD_INFO，确认历史资产完整且历史发行保持不变。
+- [ ] 明确列出准确文件名，核验绝对路径、目录链接与项目边界，逐文件删除，不使用通配符或递归删除；未知版本、非 portable 文件和未明确确认的本地技术构建均保留并停止清理。
+- [ ] 本地 `release/` 只保留当前最新正式版本的 ZIP 和 `.sha256`；旧正式版本由 GitHub Releases 作为历史存档。记录最终文件列表。
+- [ ] 不删除或修改 GitHub 历史 Release、tag、源码或资产，不清理 `.desktop-build/`、源码材料、审计材料、运行数据或其他文件。
+- [ ] 任一测试、构建、发行身份、远端核验或历史资产完整性异常时停止后续发布或删除，不绕过。
 
 ## 失败处理
 

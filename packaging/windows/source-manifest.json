@@ -22,5 +22,46 @@
     "url": "https://files.pythonhosted.org/packages/03/72/7dfd5ff1c9c37de97a731701f51af091325f123d9d4270361c9c69e4431f/pypdf-6.14.2.tar.gz",
     "archive": "pypdf-6.14.2.tar.gz",
     "sha256": "7873f502fe4385e79539b21d872392dc0c4e3714327c15881cbc7fbfd1f95b25"
+  },
+  {
+    "component": "QtSvg",
+    "version": "6.9.2",
+    "license": "LGPL-3.0-only",
+    "url": "https://download.qt.io/archive/qt/6.9/6.9.2/submodules/qtsvg-everywhere-src-6.9.2.tar.xz",
+    "archive": "qtsvg-everywhere-src-6.9.2.tar.xz",
+    "sha256": "d984cab8f26334aa1c15e5b8f0cd9f1b7c0c1289fe0b68c1c84ab469b75605a5"
+  },
+  {
+    "component": "PySide6-Fluent-Widgets",
+    "version": "1.11.3",
+    "license": "GPL-3.0-only",
+    "url": "https://files.pythonhosted.org/packages/be/fa/7ccdf706cf06aa07be142d52606f10c84a0800f9c890faffc097a635c6b1/pyside6_fluent_widgets-1.11.3.tar.gz",
+    "archive": "pyside6_fluent_widgets-1.11.3.tar.gz",
+    "sha256": "bfb86a12e0d88edf1a1b4327b79e84767771ba0d2a294c4cb1fe170e026ebc16"
+  },
+  {
+    "component": "PySideSix-Frameless-Window",
+    "version": "0.8.2",
+    "license": "LGPL-3.0-only",
+    "url": "https://files.pythonhosted.org/packages/37/3c/7a564b422b5dd42dcfcf30cff308565ffedd1c6f117433b80854857d48a1/pysidesix_frameless_window-0.8.2.tar.gz",
+    "archive": "pysidesix_frameless_window-0.8.2.tar.gz",
+    "sha256": "3cbbf8afd390da9ea43fc97d4a3a42c536aaf08d244a722b114eff0054b7ff0c"
+  },
+  {
+    "component": "darkdetect",
+    "version": "0.8.0",
+    "license": "BSD-3-Clause",
+    "url": "https://files.pythonhosted.org/packages/45/77/7575be73bf12dee231d0c6e60ce7fb7a7be4fcd58823374fc59a6e48262e/darkdetect-0.8.0.tar.gz",
+    "archive": "darkdetect-0.8.0.tar.gz",
+    "sha256": "b5428e1170263eb5dea44c25dc3895edd75e6f52300986353cd63533fe7df8b1"
+  },
+  {
+    "component": "pywin32",
+    "version": "312",
+    "license": "PSF-2.0",
+    "url": "https://codeload.github.com/mhammond/pywin32/tar.gz/2a277cb5552756c2b4d42b524dc36d25e0bb6354",
+    "archive": "pywin32-312-2a277cb5552756c2b4d42b524dc36d25e0bb6354.tar.gz",
+    "sha256": "c5900d127ffd1b4594080925e343725f8b896423d57e96f66863f443e9098da6",
+    "commit": "2a277cb5552756c2b4d42b524dc36d25e0bb6354"
   }
 ]

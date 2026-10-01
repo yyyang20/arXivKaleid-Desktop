@@ -1,5 +1,26 @@
 arXivKaleid Windows Desktop - Third-party notices
 
+Alpha 6 distribution license audit:
+PySide6-Fluent-Widgets 1.11.3 (basic, not full) declares GPLv3 in its wheel
+metadata and supplies the same original GPLv3 LICENSE in its wheel and sdist.
+Copyright (c) 2021 zhiyiYo; original notices and fixed source are retained.
+The versioned upstream README also describes non-commercial GPLv3 and a
+commercial license: https://pypi.org/project/PySide6-Fluent-Widgets/1.11.3/ .
+This wording is recorded as an ambiguity; its presence alone is not treated
+as a requirement for this GPL-3.0-only application to purchase a commercial
+license or change its license. This distribution retains the original
+LICENSE, notices and exact Corresponding Source; it adds no non-commercial
+application restriction and grants no separate rights to proprietary editions.
+PySideSix-Frameless-Window 0.8.2 declares LGPLv3; darkdetect 0.8.0 declares
+BSD-3-Clause; pywin32 312 declares PSF and retains incorporated-code notices.
+Fluent uses QtSvg/SvgWidgets/Xml 6.9.2 and the SVG icon plugin. The current
+runtime includes Core/Gui/Widgets/Svg/SvgWidgets/Xml; Network, WebEngine, QML,
+the offscreen platform and optional SVG image-format plugin are not included.
+Matching QtSvg, Fluent, frameless, darkdetect and pywin32 source archives,
+original license texts and fixed hashes are collected with the existing
+source manifest/source bundle mechanism. Actual component scope is recorded
+in licenses/components.json and BUILD_INFO.json; no full extra is installed.
+
 This distribution includes Python, PySide6/Shiboken6, Qt, pypdf, curl,
 IANA time-zone data, PyInstaller runtime components and their dependencies.
 Exact versions and upstream license declarations are in licenses/components.json.
@@ -11,19 +32,19 @@ Its exact release-tag source archive, resources, tests and build instructions
 are linked in README.md. This does not replace third-party copyright notices
 or the original licenses below.
 
-Qt Core/Gui/Widgets/Network and PySide6/Shiboken6 6.9.2 use LGPL version 3.
+Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml and PySide6/Shiboken6 6.9.2 use LGPL version 3.
 Qt libraries and Python bindings are dynamically loaded and remain replaceable
 in _internal/PySide6/ and _internal/shiboken6/. This distribution imposes no
 restriction on modifying these libraries or reverse engineering the combined
 work to debug modifications to them. Keep compatible DLL names, architecture
 and ABI when replacing a library. No signature or checksum blocks replacement
 of Qt or PySide6. The curl checksum check is separate and unrelated to Qt.
-Corresponding upstream QtBase and PySide/Shiboken source archives, including
+Corresponding upstream QtBase, QtSvg and PySide/Shiboken source archives, including
 their build instructions, are supplied in licenses/sources/. No local changes
 have been made to these upstream libraries. LGPL-3.0 and GPL-3.0 texts and
 third-party notices from these sources accompany the archives.
 
-Qt optional image-format/OpenGL-software/WebEngine/QML plugins are not included.
+Other optional image-format/OpenGL-software/WebEngine/QML plugins are not included.
 QtBase contains third-party code including Unicode data, PCRE2, HarfBuzz,
 FreeType, libpng, zlib, double-conversion, md4c and other permissively licensed
 components; their source notices are preserved under licenses/QtBase/.
@@ -33,7 +54,7 @@ pypdf uses BSD-3-Clause. PyInstaller's license includes the exception permitting
 distribution of frozen applications; its runtime/bootloader notices are included.
 The exact pypdf 6.14.2 source archive is supplied in licenses/sources/.
 The bundled liblzma from XZ Utils is 0BSD; XZ command-line tools are not shipped.
-OpenSSL uses Apache-2.0. SQLite is public domain. Windows runtime redistributables
+Where bundled, OpenSSL uses Apache-2.0 and SQLite is public domain. Windows runtime redistributables
 remain governed by the accompanying Microsoft license texts.
 
 curl 8.22.0_2 x64 comes from https://curl.se/windows/ . Its original COPYING,
@@ -48,7 +69,8 @@ the user's operating-system time-zone database.
 
 Corresponding Source scope for this distribution:
 - Application code and resources: the exact tag archive linked in README.md.
-- Required Qt/PySide/Shiboken and pypdf libraries: matching source archives in
+- Required Qt/PySide/Shiboken, pypdf, Fluent, frameless, darkdetect and pywin32:
+  matching source archives in
   licenses/sources/ with the versions and hashes in licenses/components.json.
 - Unmodified CPython interpreter and standard library: an independently licensed
   general-purpose execution platform, not application-derived code; its PSF and
@@ -64,5 +86,23 @@ Corresponding Source scope for this distribution:
 - PyInstaller and build-only packages: general-purpose build tools; the bootloader
   exception permits distribution of the frozen application under its chosen
   license. The application build scripts are included in the application source.
+PyInstaller hooks-contrib runtime hooks, when present in the frozen executable,
+retain their original Apache-2.0 terms and the upstream license document.
+No blanket copy of the build environment is performed.
+
+Reference material organization (not a legal conclusion or permission grant):
+- Fluent-M3U8 v0.11.0: GPL application LICENSE and README QFluentWidgets attribution.
+  https://github.com/zhiyiYo/Fluent-M3U8/tree/v0.11.0
+- SugarSubstitute v0.27.0: GPL application, third_party/NOTICE.md, manifest.toml
+  and original license directory; these do not establish complete Python coverage.
+  https://github.com/Artificial-Sweetener/SugarSubstitute/tree/v0.27.0/third_party
+arXivKaleid retains its existing notice, original-license and fixed-source layout;
+it does not copy another project's omissions or add a non-commercial application
+restriction. Fixed upstream LICENSE texts are preserved without alteration.
+
+Local technical builds are identified by their frozen development-branch commit.
+Formal builds are identified as public-release and rebuilt from clean merged
+main, with the application tag/source commit matching BUILD_INFO.json.
+
 These exclusions do not extend to modified or intimately linked application
 components. Re-evaluate coverage when the shipped components or linkage change.

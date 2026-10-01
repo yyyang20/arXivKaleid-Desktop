@@ -7,7 +7,11 @@ import sys
 
 if "--portable-check" in sys.argv:
     from portable_check import run
-    raise SystemExit(run(network="--arxiv" in sys.argv))
+    raise SystemExit(run(network="--arxiv" in sys.argv, visual="--visual-qa" in sys.argv))
+
+if "--portable-recovery-check" in sys.argv:
+    from portable_check import run_recovery
+    raise SystemExit(run_recovery())
 
 from desktop.app import main
 

@@ -243,7 +243,10 @@ class DesktopPipelineTests(IsolatedDesktopTest):
                     imports.update(alias.name.split(".")[0] for alias in node.names)
                 elif isinstance(node, ast.ImportFrom):
                     imports.add(node.module.split(".")[0])
-            self.assertFalse(imports - allowed, source.name)
+            # Fluent 只允许进入 GUI 模块，候选/分析/凭据等业务模块继续独立于界面。
+            gui_modules = {"app.py", "pages.py", "task_panel.py"}
+            module_allowed = allowed | ({"qfluentwidgets"} if source.name in gui_modules else set())
+            self.assertFalse(imports - module_allowed, source.name)
 
 
 if __name__ == "__main__":

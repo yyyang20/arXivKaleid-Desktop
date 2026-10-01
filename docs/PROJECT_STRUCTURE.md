@@ -13,7 +13,7 @@
 | `THIRD_PARTY_NOTICES.txt` | 仓库用户可见的第三方声明；源文本位于 `packaging/windows/` |
 | `config.json` | Desktop 配置身份、模型、Prompt、筛选策略、Token、费用和资源哈希；不包含 API Key |
 | `requirements.txt` | 固定 pypdf 核心运行依赖 |
-| `requirements-desktop.txt` | 引入核心运行依赖并固定 PySide6 |
+| `requirements-desktop.txt` | 核心 PDF、PySide6、基础 Fluent 与 Windows 必要依赖固定版本，不使用 full |
 | `requirements-build.txt` | 固定 PyInstaller 及仅构建阶段依赖 |
 | `desktop/` | GUI、候选快照、DPAPI、配置、诊断、进度、一次性分析和 Markdown 日报；详见 [Desktop 结构](desktop/DESKTOP_STRUCTURE.md) |
 | `main.py` | arXiv URL、curl 传输、Atom 解析、排序合并、Desktop 主库 schema 与筛选保存核心函数；无 CLI 启动入口 |
@@ -28,7 +28,7 @@
 | `rebuild_daily_report.py` | 当前 run 的 Round 1 论文和全文门控事实读取辅助函数 |
 | `generate_round2_report.py` | 当前 Round 2 结果验证、页数与推荐区块渲染辅助函数 |
 | `packaging/windows/` | one-folder spec、冻结入口、portable 自检和 vendor/许可证元数据 |
-| `scripts/` | 本地 Windows portable 构建、许可证收集和零模型验证入口 |
+| `scripts/` | 本地 Windows portable 构建、许可证收集、零模型验证及隔离离线 GUI 视觉 QA 入口 |
 
 根目录保留核心函数模块供 Desktop 调用；应用启动入口为 `python -B -m desktop.app`。当前仓库没有 Online 自动化、云端状态、恢复、错误样本或 Issue 日报发布模块，也没有 GitHub workflow。
 
@@ -83,6 +83,7 @@ docs/
 | `test_desktop_diagnostics.py` | JSONL、身份关联、作用域、线程安全、内存降级和隐私 canary |
 | `test_desktop_portable.py` | source/frozen 路径、链接、可写性、bundled curl 和工作库边界 |
 | `test_desktop_build.py` | checksum、x64、资源 allowlist、固定依赖、LICENSE/文档复制、源码版本/许可/归档校验及发行数据排除 |
+| `test_portable_diagnostic.py` | 独立进程完整诊断路径、Windows 合成 DPAPI、后置失败与已用 runtime 拒绝 |
 | `test_desktop_governance.py` | 文档入口、安全与授权、阅读和更新路由、身份表、链接、发行资料副本及发布检查要求；内存反例验证 |
 
 治理测试只读检查维护文件，不启动应用或读取运行数据；构建测试验证打包复制和发行扫描，两者职责不同。发布清单的静态检查不能代替实际成品或 GitHub 发布核验。新增功能必须新增或更新对应测试，文档不以固定测试数量描述当前状态。
@@ -94,6 +95,7 @@ docs/
 - 工作库、锁、PDF、DPAPI 密文、请求缓存和会话日志的具体路径及职责见 [Desktop 当前运行数据](desktop/DESKTOP_STRUCTURE.md#当前运行数据)；SQLite 数据边界见 [当前业务规范](PROJECT_SPEC.md#sqlite-工作数据)。
 - 候选快照只在内存中冻结；日报字符串传给 GUI，不写根 `reports/`，不形成跨运行历史数据库。
 - `build/`、`dist/`、`release/`、`.desktop-build/`、`.codex-validation/`、`.codex-audit-*/`、Python 缓存及运行数据被 Git 忽略。
+- `release/` 在构建和验证期间保留候选及旧成品；正式发布和远端核验成功后只保留最新正式 ZIP 与 `.sha256`，历史正式版本存于 GitHub Releases。授权、核验和精确清理边界见 [本地历史 portable 收口](OPERATIONS.md#本地历史-portable-收口)，不清理其他忽略材料。
 - `.gitignore` 仍保护旧 `config/local_secret.json`、`data/` 数据库、PDF、`reports/` 和日志等路径；这些忽略规则不表示旧运行入口仍然存在。
 
 SQLite、PDF、报告、日志、缓存、审计目录和未跟踪文件不得因普通代码或文档任务被删除。下载或生成临时审计内容只能使用项目内明确的忽略目录。路径配置使用相对路径，代码写入前验证解析后的目标仍在规定根目录内。

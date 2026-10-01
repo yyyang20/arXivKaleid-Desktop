@@ -19,17 +19,18 @@ from desktop.secrets import SecretError
 from test_desktop_pipeline import DAY, IsolatedDesktopTest, paper
 
 
-HAS_QT = importlib.util.find_spec("PySide6") is not None
+HAS_QT = (importlib.util.find_spec("PySide6") is not None
+          and importlib.util.find_spec("qfluentwidgets") is not None)
 if HAS_QT:
     # 仅当前测试进程使用 offscreen，不修改用户或系统环境。
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
-    from PySide6.QtCore import QThread
+    from PySide6.QtCore import QCoreApplication, QEvent, QThread, Qt
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QLineEdit
     from desktop import app
 
 
-@unittest.skipUnless(HAS_QT, "Desktop GUI optional dependency PySide6 is absent")
+@unittest.skipUnless(HAS_QT, "Desktop GUI dependencies PySide6 / qfluentwidgets are absent")
 class DesktopAppTests(IsolatedDesktopTest):
     @classmethod
     def setUpClass(cls):
@@ -48,6 +49,7 @@ class DesktopAppTests(IsolatedDesktopTest):
             self.application.processEvents()
         self.window.close()
         self.window.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         self.application.processEvents()
 
     def wait_until(self, predicate):
@@ -68,6 +70,87 @@ class DesktopAppTests(IsolatedDesktopTest):
             label.text().startswith("○")
             for label in self.window.analysis_steps.values()
         ))
+        self.assertTrue(self.window.task_panel.isHidden())
+        self.assertIs(self.window.pages.currentWidget(), self.window.home_page)
+
+    def test_pages_and_versions_use_the_single_source_without_history_storage(self):
+        from desktop import __version__
+        self.assertEqual(self.window.pages.count(), 3)
+        self.assertIn(f"v{__version__}", self.window.windowTitle())
+        self.assertIn(f"v{__version__}", self.window.version_header.text())
+        self.assertEqual(self.window.settings_page.version_label.text(), f"v{__version__}")
+        self.assertTrue(self.window.settings_page.isAncestorOf(self.window.api_key))
+        self.assertFalse(self.window.home_page.isAncestorOf(self.window.api_key))
+        self.window.switch_page(self.window.history_page)
+        self.assertIs(self.window.pages.currentWidget(), self.window.history_page)
+        self.window.navigation.widget("settingsPage").click()
+        self.assertIs(self.window.pages.currentWidget(), self.window.settings_page)
+        self.window.navigation.widget("homePage").click()
+        self.assertIs(self.window.pages.currentWidget(), self.window.home_page)
+        self.assertIsNone(self.window.snapshot)
+        self.assert_no_analysis()
+
+    def test_fetch_success_collapses_and_expands_only_real_snapshot_details(self):
+        self.window.show()
+        with patch("desktop.app.fetch_latest_candidates", return_value=self.result):
+            self.window.start_fetch()
+            self.assertTrue(self.window.task_panel.expanded)
+            self.assertFalse(self.window.task_panel.toggle.isEnabled())
+            self.wait_until(lambda: self.window.worker is None)
+        self.assertFalse(self.window.task_panel.expanded)
+        self.assertFalse(self.window.task_panel.isHidden())
+        self.window.task_panel.toggle.click()
+        self.assertTrue(self.window.task_panel.expanded)
+        details = self.window.task_panel.fetch_details.text()
+        self.assertIn("原始 2 条 → 去重 1 条", details)
+        self.assertIn("尚未分析", details)
+        self.assertNotIn(".json", details)
+        self.assertNotIn("费用", details)
+
+    def test_analysis_locks_key_on_settings_page_then_collapses_success(self):
+        self.prepare_analysis()
+        gate = threading.Event()
+        self.addCleanup(gate.set)
+
+        def analyze(_attempt, _key, progress):
+            progress(ProgressEvent(task_type="analysis", stage="pdf", state="running",
+                                   message="已处理 2 / 3", processed=2, total=3))
+            gate.wait(3)
+            return app.AnalysisResult(7, "# 测试日报", 0, operation_id="synthetic-operation")
+
+        with patch.object(app.AnalysisAttempt, "run", analyze):
+            self.window.start_analysis()
+            self.window.switch_page(self.window.settings_page)
+            self.assertFalse(self.window.api_key.isEnabled())
+            self.assertFalse(self.window.api_key.viewButton.isEnabled())
+            self.wait_until(lambda: "2 / 3" in self.window.analysis_progress_text.text())
+            self.assertTrue(self.window.task_panel.expanded)
+            self.assertNotIn("%", self.window.analysis_progress_text.text())
+            gate.set()
+            self.wait_until(lambda: self.window.worker is None)
+        self.assertTrue(self.window.api_key.isEnabled())
+        self.assertFalse(self.window.task_panel.expanded)
+        self.window.task_panel.set_expanded(True)
+        text = self.window.task_panel.analysis_details.text()
+        self.assertIn("已处理 2 / 3", text)
+        self.assertNotIn("成功下载", text)
+        self.assertIn("run ID：7", text)
+        self.assertIn("synthetic-operation", text)
+        self.assertEqual(self.window.home_page.report_stack.currentIndex(), 1)
+
+    def test_expanded_details_and_logs_do_not_overlap_at_minimum_size(self):
+        self.window.show()
+        self.window.resize(850, 680)
+        self.window.task_panel.begin("fetch")
+        self.window.task_panel.show_snapshot(self.result, app.pipeline.CATEGORIES)
+        self.window.task_panel.finish()
+        self.window.task_panel.set_expanded(True)
+        self.application.processEvents()
+        panel = self.window.task_panel
+        self.assertLessEqual(panel.details_scroll.geometry().bottom(), panel.open_logs_button.geometry().top())
+        self.assertGreaterEqual(self.window.home_page.report_stack.height(), 150)
+        self.assertLessEqual(panel.open_logs_button.geometry().bottom(), panel.height())
+        self.assertGreaterEqual(self.window.statistics["原始条目数"].height(), 24)
 
     def test_startup_write_failure_is_fixed_gui_error_without_fallback(self):
         with patch.object(app.paths, "prepare_runtime", side_effect=PermissionError("private-user-path")), patch.object(app, "QApplication") as application, patch.object(app, "DesktopWindow", return_value=self.window):
@@ -75,6 +158,8 @@ class DesktopAppTests(IsolatedDesktopTest):
             self.assertEqual(app.main(), 0)
         self.assertIn("可写位置", self.window.status.text())
         self.assertNotIn("private", self.window.status.text())
+        self.assertTrue(self.window.task_panel.expanded)
+        self.assertIn("AKD-STARTUP-RUNTIME_NOT_WRITABLE", self.window.diagnostic_text.text())
         self.assertFalse(self.window.fetch_button.isEnabled())
         self.assertFalse(self.window.analyze_button.isEnabled())
         self.assertFalse(self.window.api_key.isEnabled())
@@ -144,6 +229,19 @@ class DesktopAppTests(IsolatedDesktopTest):
         finally:
             second.close()
             second.deleteLater()
+
+    def test_settings_key_enter_saves_once_and_navigation_keeps_the_value(self):
+        self.window.show()
+        self.window.navigation.widget("settingsPage").click()
+        self.application.processEvents()
+        self.window.api_key.setFocus()
+        QTest.keyClicks(self.window.api_key, "fake-key-only")
+        QTest.keyClick(self.window.api_key, Qt.Key.Key_Return)
+        self.store.save.assert_called_once_with("fake-key-only")
+        self.window.navigation.widget("homePage").click()
+        self.window.navigation.widget("settingsPage").click()
+        self.assertEqual(self.window.api_key.text(), "fake-key-only")
+        self.store.save.assert_called_once()
 
     def test_secret_errors_are_safe_and_do_not_disable_fetch(self):
         self.store.save.side_effect = SecretError("synthetic-private-secret")
@@ -324,6 +422,8 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.assertTrue(self.window.fetch_button.isEnabled())
         self.assertFalse(self.window.analyze_button.isEnabled())
         self.assertNotIn("private", self.window.status.text())
+        self.assertTrue(self.window.task_panel.expanded)
+        self.assertIn("AKD-PREPARE-WORKSPACE_FAILED", self.window.diagnostic_text.text())
 
     def test_markdown_render_failure_preserves_analysis_success_semantics(self):
         self.prepare_analysis()
@@ -359,3 +459,16 @@ class DesktopAppTests(IsolatedDesktopTest):
             open_url.assert_not_called()
             self.window.open_report_link(QUrl("https://arxiv.org/pdf/2609.00001v1"))
             open_url.assert_called_once()
+
+    def test_large_font_small_window_keeps_buttons_and_panels_separate(self):
+        from PySide6.QtGui import QFont
+        window = self.window
+        card = window.home_page.layout().itemAt(0).widget()
+        card.setFont(QFont('Microsoft YaHei UI', 12))
+        window.resize(850, 680)
+        window.show()
+        window.task_panel.begin('fetch')
+        QTest.qWait(100)
+        self.assertLess(window.fetch_button.geometry().bottom(), card.height())
+        self.assertGreater(window.task_panel.geometry().top(), card.geometry().bottom())
+        self.assertGreaterEqual(window.home_page.report_stack.height(), 70)

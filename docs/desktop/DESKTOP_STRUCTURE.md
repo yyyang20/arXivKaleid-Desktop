@@ -10,20 +10,25 @@
 | `desktop/paths.py` | application/resource/runtime 根、路径安全、时区与 bundled curl 校验 |
 | `desktop/errors.py` | 稳定错误和 outcome、GUI 文案及按实际影响范围判定 paper/system 的纯模型 |
 | `desktop/diagnostics.py` | session/operation/snapshot/fetch/run 关联、脱敏 JSONL、安全 traceback、计时与内存降级 |
-| `desktop/app.py` | QApplication、密码框、首次分析告知、按钮、统计、QThread 生命周期、busy 进度条和分析步骤状态 |
+| `desktop/app.py` | QApplication、主窗口导航与业务连接、首次告知、Key 保存、现有 Fetch/Analysis QThread 和生命周期 |
+| `desktop/pages.py` | 首页、设置页、历史占位页；抓取信息卡、密码框、About 和 Markdown/空态布局 |
+| `desktop/task_panel.py` | 可复用任务状态组件；运行展开、成功收缩、失败诊断、真实事件与快照/结果详情 |
 | `desktop/analysis.py` | 一次性快照分析、工作库重置和锁、两轮/PDF/全文编排、累计费用预检、结构化进度与安全结果 |
 | `desktop/progress.py` | 抓取与分析共用的不可变结构化进度事件及不影响业务流程的安全派发 |
 | `desktop/report.py` | 当前 run 的 SQLite 事实与 Desktop Markdown 外壳，复用 Round 2 推荐区块 |
 | `desktop/pipeline.py` | 固定候选规则、现有 submittedDate 核心调用、真实日期/分类进度、runtime 路径约束和只读内存快照 |
 | `desktop/secrets.py` | ctypes DPAPI、密文原子保存与恢复，独立于 Qt |
-| `requirements-desktop.txt` | 已验证的固定 PySide6 依赖 |
+| `requirements-desktop.txt` | 固定 PySide6、基础 Fluent、frameless、darkdetect 和 Windows pywin32 依赖 |
 | `requirements-build.txt` | 固定 PyInstaller 和仅构建阶段依赖 |
 | `packaging/windows/` | 正式 one-folder spec、冻结入口、零模型诊断、curl/source manifest、第三方声明源文件 |
 | `scripts/build_windows_portable.ps1` | 显式 Python 解释器的 Windows 构建入口 |
 | `docs/public_release/` | portable 打包 README、应用 EULA、隐私与安全说明的维护源及发布检查清单；不保存 ZIP |
 | `scripts/build_windows_portable.py` | 资源与公开文档 allowlist、vendor 校验、构建、发行扫描、ZIP 和 SHA-256 |
-| `scripts/portable_licenses.py` | 从实际安装包及固定 gzip/xz 源码收集许可证；原样提供 QtBase/PySide/pypdf 对应源码 |
+| `scripts/portable_licenses.py` | 从实际分发组件及固定 gzip/xz 源码收集原许可，保留八项源码归档与哈希 |
 | `scripts/validate_windows_portable.py` | 全新副本的脱离开发环境验证和重启 |
+| `scripts/visual_qa_desktop.py` | 禁止网络/模型、内存假 Key、合成业务事件驱动的真实 Qt 截图；产物仅在项目忽略目录 |
+| `packaging/windows/portable_visual.py` | 冻结诊断专用合成 QThread 状态、真实截图、DLL 来源和窗口生命周期验证，不进入正式业务流程 |
+| `tests/test_portable_diagnostic.py` | Windows 合成 DPAPI 的独立进程完整诊断路径、后置检查失败与已用 runtime 拒绝回归 |
 | `tests/test_desktop_portable.py` | source/frozen 路径、链接、可写性、bundled curl 与工作库边界 |
 | `tests/test_desktop_build.py` | checksum、x64、发行数据排除、资源及 manifest 契约 |
 | `tests/test_desktop_pipeline.py` | 假 Atom 集成、日期边界、计数、排序、冻结及禁止分析入口 |

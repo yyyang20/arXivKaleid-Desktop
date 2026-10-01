@@ -8,10 +8,12 @@ import sys
 from datetime import date, datetime, timezone
 
 from PySide6.QtCore import QThread, Signal, Slot, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QFont
 from PySide6.QtWidgets import (
-    QApplication, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
-    QMessageBox, QProgressBar, QPushButton, QTextBrowser, QVBoxLayout, QWidget,
+    QApplication, QHBoxLayout, QMessageBox, QStackedWidget, QVBoxLayout, QWidget,
+)
+from qfluentwidgets import (
+    FluentIcon, NavigationInterface, SubtitleLabel, Theme, setTheme, setThemeColor,
 )
 
 from desktop import __version__
@@ -24,6 +26,8 @@ from desktop.analysis import AnalysisAttempt, AnalysisError, AnalysisResult
 from desktop.diagnostics import DesktopDiagnostics
 from desktop.errors import DesktopIssue, DesktopOutcome, make_issue
 from desktop.progress import ProgressEvent
+from desktop.pages import HomePage, HistoryPage, SettingsPage
+from desktop.task_panel import ANALYSIS_STAGES, STAGE_SYMBOLS
 
 
 ANALYSIS_NOTICE = (
@@ -33,19 +37,6 @@ ANALYSIS_NOTICE = (
     "应用没有维护者服务器中转或遥测。\n\n"
     "是否同意并继续？详情见随附 PRIVACY.md。"
 )
-
-ANALYSIS_STAGES = (
-    ("round1", "Round 1"),
-    ("pdf", "PDF 下载"),
-    ("fulltext", "全文提取"),
-    ("round2", "Round 2"),
-    ("report", "日报"),
-)
-STAGE_SYMBOLS = {
-    "pending": "○", "running": "▶", "completed": "✓",
-    "skipped": "—", "outcome": "—", "failed": "✕",
-}
-
 
 class FetchWorker(QThread):
     """工作线程只计算结果；finished 连接的窗口槽在 GUI 线程执行。"""
@@ -117,72 +108,67 @@ class DesktopWindow(QWidget):
         self.snapshot: CandidateSnapshot | None = None
         self.worker: FetchWorker | AnalysisWorker | None = None
         self.analysis_notice_accepted = False
-        self.setWindowTitle(f"arXivKaleid Desktop {__version__}")
-        self.resize(820, 760)
+        # 不使用 Fluent 的默认配置持久化，避免向 cwd 写入额外设置文件。
+        setTheme(Theme.LIGHT, save=False)
+        setThemeColor("#1677ff", save=False)
+        self.setFont(QFont("Microsoft YaHei UI", 10))
+        self.setWindowTitle(f"arXivKaleid Desktop v{__version__}")
+        self.resize(1060, 820)
+        self.setMinimumSize(850, 680)
+        self.setObjectName("desktopWindow")
+        self.setStyleSheet("QWidget#desktopWindow {background: #f0f4f9;}")
         layout = QVBoxLayout(self)
-        form = QFormLayout()
-        self.api_key = QLineEdit()
-        self.api_key.setEchoMode(QLineEdit.EchoMode.Password)
-        self.api_key.setPlaceholderText("可留空，不影响候选抓取")
-        form.addRow("DeepSeek API Key", self.api_key)
-        layout.addLayout(form)
-        self.secret_status = QLabel("")
-        self.secret_status.setWordWrap(True)
-        layout.addWidget(self.secret_status)
-        buttons = QHBoxLayout()
-        self.fetch_button = QPushButton("获取最新候选")
-        self.analyze_button = QPushButton("开始两轮分析")
-        self.analyze_button.setEnabled(False)
-        buttons.addWidget(self.fetch_button)
-        buttons.addWidget(self.analyze_button)
-        layout.addLayout(buttons)
-        self.status = QLabel("尚未获取候选")
-        self.status.setWordWrap(True)
-        layout.addWidget(self.status)
-        layout.addWidget(QLabel("候选抓取进度"))
-        self.fetch_progress = QProgressBar()
-        self.fetch_progress.setTextVisible(False)
-        self.fetch_progress.setRange(0, 1)
-        self.fetch_progress.setValue(0)
-        layout.addWidget(self.fetch_progress)
-        self.fetch_progress_text = QLabel("尚未开始抓取")
-        self.fetch_progress_text.setWordWrap(True)
-        layout.addWidget(self.fetch_progress_text)
-        statistics = QFormLayout()
-        self.statistics: dict[str, QLabel] = {}
-        for name in ("候选日期（UTC）", "抓取完成时间", "原始条目数", "去重后候选数", "本次进入 Round 1 数量"):
-            label = QLabel("—")
-            self.statistics[name] = label
-            statistics.addRow(name, label)
-        layout.addLayout(statistics)
-        layout.addWidget(QLabel("两阶段分析进度"))
-        self.analysis_steps: dict[str, QLabel] = {}
-        for stage, title in ANALYSIS_STAGES:
-            label = QLabel()
-            self.analysis_steps[stage] = label
-            layout.addWidget(label)
-        self.analysis_progress_text = QLabel("尚未开始分析")
-        self.analysis_progress_text.setWordWrap(True)
-        layout.addWidget(self.analysis_progress_text)
-        layout.addWidget(QLabel("诊断信息"))
-        self.diagnostic_text = QLabel("尚无诊断信息")
-        self.diagnostic_text.setWordWrap(True)
-        self.diagnostic_text.setTextInteractionFlags(
-            self.diagnostic_text.textInteractionFlags()
+        layout.setContentsMargins(0, 12, 0, 0)
+        self.version_header = SubtitleLabel(f"arXivKaleid   v{__version__}")
+        self.version_header.setContentsMargins(20, 0, 20, 0)
+        layout.addWidget(self.version_header)
+        row = QHBoxLayout()
+        row.setSpacing(0)
+        self.navigation = NavigationInterface(
+            self, showMenuButton=False, showReturnButton=False, collapsible=False,
         )
-        layout.addWidget(self.diagnostic_text)
-        self.open_logs_button = QPushButton("打开日志目录")
+        self.navigation.setExpandWidth(154)
+        self.navigation.setMinimumExpandWidth(0)
+        self.navigation.setAcrylicEnabled(False)
+        self.navigation.setIndicatorAnimationEnabled(False)
+        self.pages = QStackedWidget()
+        self.home_page = HomePage()
+        self.history_page = HistoryPage()
+        self.settings_page = SettingsPage()
+        for page, icon, title in (
+            (self.home_page, FluentIcon.HOME, "首页"),
+            (self.history_page, FluentIcon.HISTORY, "历史"),
+            (self.settings_page, FluentIcon.SETTING, "设置"),
+        ):
+            self.pages.addWidget(page)
+            self.navigation.addItem(
+                page.objectName(), icon, title,
+                onClick=lambda _triggered, p=page: self.switch_page(p),
+            )
+        row.addWidget(self.navigation)
+        row.addWidget(self.pages, 1)
+        layout.addLayout(row, 1)
+        self.navigation.expand(useAni=False)
+        self.switch_page(self.home_page)
+        # 保留稳定的窗口控件入口，供现有回归测试及 portable 自检使用。
+        self.api_key = self.settings_page.api_key
+        self.secret_status = self.settings_page.secret_status
+        self.fetch_button = self.home_page.fetch_button
+        self.analyze_button = self.home_page.analyze_button
+        self.statistics = self.home_page.statistics
+        self.task_panel = self.home_page.task_panel
+        for name in (
+            "status", "fetch_progress", "fetch_progress_text", "analysis_steps",
+            "analysis_progress_text", "diagnostic_text", "open_logs_button",
+        ):
+            setattr(self, name, getattr(self.task_panel, name))
         self.open_logs_button.setEnabled(
             bool(self.diagnostics and self.diagnostics.persistent)
         )
         self.open_logs_button.clicked.connect(self.open_log_directory)
-        layout.addWidget(self.open_logs_button)
         self.reset_analysis_progress()
-        self.report = QTextBrowser()
-        self.report.setOpenLinks(False)
-        self.report.setOpenExternalLinks(False)
+        self.report = self.home_page.report
         self.report.anchorClicked.connect(self.open_report_link)
-        layout.addWidget(self.report, 1)
         try:
             self.api_key.setText(self.secret_store.load())
         except SecretError:
@@ -200,9 +186,19 @@ class DesktopWindow(QWidget):
         if self.diagnostics and not self.diagnostics.persistent:
             self.diagnostic_text.setText("诊断仅保留在当前会话；本地日志不可写。")
 
+    def switch_page(self, page: QWidget) -> None:
+        self.pages.setCurrentWidget(page)
+        self.navigation.setCurrentItem(page.objectName())
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "task_panel"):
+            self.task_panel.fit_to_window()
+
     def reset_analysis_progress(self) -> None:
         for stage, title in ANALYSIS_STAGES:
             self.analysis_steps[stage].setText(f"{STAGE_SYMBOLS['pending']} {title}")
+            self.analysis_steps[stage].setStyleSheet("color: #778396;")
         self.analysis_progress_text.setText("尚未开始分析")
 
     def refresh_diagnostic_availability(self) -> None:
@@ -236,6 +232,12 @@ class DesktopWindow(QWidget):
         if identity:
             lines.append("　".join(identity))
         self.diagnostic_text.setText("\n".join(lines))
+        if issue.stage in self.analysis_steps and self.task_panel.kind == "analysis":
+            self.analysis_steps[issue.stage].setText(f"✕ {dict(ANALYSIS_STAGES)[issue.stage]}")
+            self.analysis_steps[issue.stage].setStyleSheet("color: #a4262c;")
+        if issue.code.startswith("AKD-KEY-"):
+            self.status.setText(issue.reason)
+        self.task_panel.reveal_issue()
 
     def show_outcome(self, result: DesktopOutcome, *, operation_id: str | None = None) -> None:
         text = f"阶段：{result.stage}　代码：{result.code}\n范围：正常业务结果\n{result.summary}"
@@ -250,10 +252,11 @@ class DesktopWindow(QWidget):
         """所有控件更新都留在窗口所属的 GUI 线程。"""
         if not isinstance(event, ProgressEvent):
             return
+        self.task_panel.observe(event)
         self.refresh_diagnostic_availability()
         if event.task_type == "fetch":
             self.fetch_progress_text.setText(event.message)
-            self.status.setText(event.message)
+            self.status.setText("运行进度：正在获取候选")
             if event.state == "running":
                 self.fetch_progress.setRange(0, 0)
             else:
@@ -263,7 +266,7 @@ class DesktopWindow(QWidget):
         if event.task_type != "analysis":
             return
         self.analysis_progress_text.setText(event.message)
-        self.status.setText(event.message)
+        self.status.setText("运行进度：两轮分析")
         if event.stage in self.analysis_steps and event.state in STAGE_SYMBOLS:
             title = dict(ANALYSIS_STAGES)[event.stage]
             self.analysis_steps[event.stage].setText(
@@ -299,6 +302,8 @@ class DesktopWindow(QWidget):
         # 先使旧快照失效，再启动网络工作；API Key 不参与候选管线。
         self.snapshot = None
         self.report.clear()
+        self.switch_page(self.home_page)
+        self.task_panel.begin("fetch")
         self.reset_analysis_progress()
         self.analyze_button.setEnabled(False)
         self.fetch_button.setEnabled(False)
@@ -329,6 +334,7 @@ class DesktopWindow(QWidget):
                 self.show_outcome(worker.outcome, operation_id=worker.operation_id)
             elif worker.issue is not None:
                 self.status.setText(worker.issue.reason)
+                self.fetch_progress_text.setText(worker.issue.reason)
                 self.show_issue(worker.issue, operation_id=worker.operation_id)
             else:
                 self.status.setText("本次无法取得候选。")
@@ -342,9 +348,15 @@ class DesktopWindow(QWidget):
             )
             for label, value in zip(self.statistics.values(), values):
                 label.setText(value)
-            self.status.setText("候选已获取并锁定。")
+            self.status.setText(f"候选获取完成 · 锁定 {snapshot.round1_count} 篇")
+            self.fetch_progress_text.setText(
+                f"原始 {snapshot.raw_count} 条 → 去重 {snapshot.unique_count} 条 → "
+                f"锁定 Round 1 候选 {snapshot.round1_count} 篇"
+            )
             self.fetch_progress.setRange(0, 1)
             self.fetch_progress.setValue(1)
+            self.task_panel.show_snapshot(snapshot, pipeline.CATEGORIES)
+        self.task_panel.finish(failed=worker.issue is not None)
         self.analyze_button.setEnabled(self.snapshot is not None and not self.snapshot.analysis_attempted)
         self.fetch_button.setEnabled(True)
         self.refresh_diagnostic_availability()
@@ -388,6 +400,7 @@ class DesktopWindow(QWidget):
             self.secret_status.setText("请输入 API Key 后再开始分析。")
             issue = make_issue("AKD-KEY-EMPTY")
             self.show_issue(issue)
+            self.switch_page(self.settings_page)
             if self.diagnostics:
                 self.diagnostics.issue(
                     operation_id=self.diagnostics.operation_id(),
@@ -399,9 +412,12 @@ class DesktopWindow(QWidget):
         if not self.confirm_analysis_notice():
             return
         if not self.save_key():
+            self.switch_page(self.settings_page)
             return
         # 在启动线程前消费快照；任何失败都不恢复旧快照的分析资格。
         attempt = AnalysisAttempt(self.snapshot, self.diagnostics)
+        self.switch_page(self.home_page)
+        self.task_panel.begin("analysis")
         self.fetch_button.setEnabled(False)
         self.analyze_button.setEnabled(False)
         self.api_key.setEnabled(False)
@@ -419,6 +435,7 @@ class DesktopWindow(QWidget):
         if not isinstance(worker, AnalysisWorker):
             return
         if worker.result is not None:
+            self.task_panel.show_result(worker.result)
             try:
                 self.report.setMarkdown(worker.result.markdown)
             except Exception as exc:
@@ -438,6 +455,7 @@ class DesktopWindow(QWidget):
                     issue, operation_id=worker.result.operation_id,
                     run_id=worker.result.run_id,
                 )
+                self.task_panel.finish(failed=True)
             else:
                 self.status.setText(
                     f"分析完成\n最终推荐 {worker.result.recommendation_count} 篇"
@@ -456,15 +474,18 @@ class DesktopWindow(QWidget):
                 elif self.diagnostics:
                     summary.append("诊断仅保留在当前会话")
                 self.diagnostic_text.setText("\n".join(summary))
+                self.task_panel.finish()
         else:
             if worker.issue is not None:
                 self.status.setText(worker.issue.reason)
+                self.analysis_progress_text.setText(worker.issue.reason)
                 self.show_issue(
                     worker.issue, operation_id=worker.attempt.operation_id,
                     run_id=worker.attempt.run_id,
                 )
             else:
                 self.status.setText("分析失败，已停止。")
+            self.task_panel.finish(failed=True)
         self.fetch_button.setEnabled(True)
         self.analyze_button.setEnabled(False)
         self.api_key.setEnabled(True)
@@ -492,6 +513,7 @@ class DesktopWindow(QWidget):
             event.ignore()
             return
         if not self.save_key():
+            self.switch_page(self.settings_page)
             event.ignore()
             return
         event.accept()

@@ -42,6 +42,12 @@ REQUIRED_RELEASE_FILES = (
     'licenses/QtBase/LICENSES/LGPL-3.0-only.txt',
     'licenses/QtBase/LICENSES/GPL-3.0-only.txt',
     'licenses/QtBase/LICENSES/MPL-2.0.txt', 'licenses/components.json',
+    *('_internal/PySide6/Qt6' + module + '.dll' for module in
+      ('Core', 'Gui', 'Widgets', 'Svg', 'SvgWidgets', 'Xml')),
+    '_internal/PySide6/plugins/platforms/qwindows.dll',
+    '_internal/PySide6/plugins/iconengines/qsvgicon.dll',
+    '_internal/PySide6/plugins/styles/qmodernwindowsstyle.dll',
+    '_internal/pywin32_system32/pywintypes313.dll',
     *('_internal/' + p for p in RESOURCES),
 )
 
@@ -175,6 +181,11 @@ def source_archives(root: Path = ROOT) -> list[dict[str, str]]:
         'QtBase': (pins['PySide6'], 'LGPL-3.0-only'),
         'PySide6 and Shiboken6': (pins['PySide6'], 'LGPL-3.0-only'),
         'pypdf': (pins['pypdf'], 'BSD-3-Clause'),
+        'QtSvg': (pins['PySide6'], 'LGPL-3.0-only'),
+        'PySide6-Fluent-Widgets': (pins['PySide6-Fluent-Widgets'], 'GPL-3.0-only'),
+        'PySideSix-Frameless-Window': (pins['PySideSix-Frameless-Window'], 'LGPL-3.0-only'),
+        'darkdetect': (pins['darkdetect'], 'BSD-3-Clause'),
+        'pywin32': (pins['pywin32'], 'PSF-2.0'),
     }
     items = json.loads(checked_path(root, 'packaging/windows/source-manifest.json').read_text(encoding='utf-8'))
     if not isinstance(items, list) or len(items) != len(expected):
@@ -189,8 +200,44 @@ def source_archives(root: Path = ROOT) -> list[dict[str, str]]:
         if not isinstance(item.get('sha256'), str) or not re.fullmatch(r'[0-9a-f]{64}', item['sha256']):
             raise RuntimeError('source_checksum_invalid')
         checked_path(root, '.desktop-build/vendor', item['archive'])
+        if not item['url'].startswith('https://') or not item['archive'].endswith(('.tar.gz', '.tar.xz')):
+            raise RuntimeError('source_location_invalid')
         seen.add(component)
     return items
+
+
+def frozen_identity() -> dict:
+    """区分正式 main 构建与开发验证；两者均要求干净冻结身份。"""
+    def git(*args):
+        return subprocess.check_output(['git', *args], cwd=ROOT, text=True).strip()
+    if git('status', '--porcelain'):
+        raise RuntimeError('clean_frozen_commit_required')
+    baseline = git('rev-parse', 'origin/main')
+    if subprocess.run(['git', 'merge-base', '--is-ancestor', baseline, 'HEAD'], cwd=ROOT).returncode:
+        raise RuntimeError('build_baseline_not_ancestor')
+    commit = git('rev-parse', 'HEAD')
+    branch = git('branch', '--show-current')
+    # main 不能沿用开发分支的宽松后代条件，正式成品必须等于已核验基线。
+    if branch == 'main' and commit != baseline:
+        raise RuntimeError('release_main_not_equal_origin')
+    return {'commit': commit, 'branch': branch,
+            'baseline_commit': baseline, 'working_tree_clean': True,
+            'purpose': 'public-release' if branch == 'main' else 'local-portable-technical-validation'}
+
+
+def inspect_python_archive(executable: Path) -> dict:
+    """检查冻结 Python 载荷；测试脚本不会因压缩藏过普通文件扫描。"""
+    from PyInstaller.archive.readers import CArchiveReader
+    archive = CArchiveReader(str(executable))
+    pyz = archive.open_embedded_archive('PYZ.pyz')
+    modules = sorted(pyz.toc)
+    if any(n == 'tests' or n.startswith(('tests.', 'unittest', 'pytest', 'scripts.visual_qa',
+                                       'scipy', 'PIL', 'colorthief')) for n in modules):
+        raise RuntimeError('development_or_full_module_in_release')
+    for required in ('qfluentwidgets._rc.resource', 'qframelesswindow', 'darkdetect', 'portable_visual'):
+        if required not in modules:
+            raise RuntimeError('frozen_module_missing:' + required)
+    return {'modules': modules, 'runtime_scripts': sorted(n for n in archive.toc if n.startswith('pyi_rth_'))}
 
 
 def verify_legal_resources(folder: Path) -> None:
@@ -218,11 +265,15 @@ def verify_tree(folder: Path) -> dict[str, str]:
         checked_path(folder, str(relative))
         if any(part.lower() in forbidden for part in relative.parts):
             raise RuntimeError('forbidden_release_path')
+        # 上游许可可能位于源码 tests/；保留这些原文，不将其误判为运行测试库。
+        if relative.parts[0] != 'licenses' and any(part.lower() in {'tests', 'screenshots'} for part in relative.parts):
+            raise RuntimeError('development_artifact_in_release')
         if not path.is_file():
             continue
         if (path.name.lower() in ('secret.dat', 'local_secret.json', 'automation_policy.json',
                                   'research_profile.json', 'research_profile.md',
                                   'daily_report_template.py', 'selection_nature.py')
+                or path.name.lower() in {'visual_qa_desktop.py', 'qa.json'}
                 or '.sqlite' in path.name.lower()
                 or path.suffix.lower() in {'.pdf', '.jsonl'}):
             raise RuntimeError('forbidden_release_file')
@@ -244,6 +295,7 @@ def verify_tree(folder: Path) -> dict[str, str]:
 
 
 def main() -> None:
+    frozen = frozen_identity()
     if sys.platform != 'win32' or struct.calcsize('P') != 8 or platform.machine().lower() not in ('amd64', 'x86_64'):
         raise RuntimeError('windows_x64_required')
     if Path(sys.prefix).name != 'arxivkaleid-desktop' or sys.version_info[:2] != (3, 13):
@@ -274,16 +326,32 @@ def main() -> None:
         raise RuntimeError('pyinstaller_failed; inspect ' + str(job / 'pyinstaller.log'))
     print('PyInstaller completed:', job.name, flush=True)
     folder = job / 'dist/arXivKaleid'
+    module_inventory = inspect_python_archive(folder / 'arXivKaleid.exe')
+    (job / 'module-inventory.json').write_text(json.dumps(module_inventory, indent=2), encoding='utf-8')
     copy_public_documents(folder)
     from portable_licenses import collect_licenses
-    collect_licenses(ROOT, folder)
-    identity = {'version': __version__, 'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
-                'working_tree_clean': not subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip(),
+    collect_licenses(ROOT, folder, module_inventory)
+    if frozen_identity() != frozen:
+        raise RuntimeError('frozen_identity_changed_during_build')
+    identity = {'version': __version__, **frozen,
                 'python': platform.python_version(), 'architecture': 'x64',
-                'dependencies': {n: importlib.metadata.version(n) for n in ('PySide6', 'pypdf', 'PyInstaller')}, 'tzdata': '2026c'}
+                'dependencies': {n: importlib.metadata.version(n) for n in
+                                 (*pinned_requirements('requirements-desktop.txt'), 'PyInstaller',
+                                  'pyinstaller-hooks-contrib', 'shiboken6', 'PySide6_Essentials', 'PySide6_Addons')},
+                'qt_modules': ['Core', 'Gui', 'Widgets', 'Svg', 'SvgWidgets', 'Xml'], 'tzdata': '2026c'}
     (folder / 'BUILD_INFO.json').write_text(json.dumps(identity, indent=2), encoding='utf-8')
     inventory = verify_tree(folder)
     (job / 'inventory.json').write_text(json.dumps(inventory, indent=2), encoding='utf-8')
+    groups = {}
+    for name in inventory:
+        group = ('source_archives' if name.startswith('licenses/sources/') else
+                 'licenses' if name.startswith('licenses/') else
+                 'qt' if name.startswith(('_internal/PySide6/', '_internal/shiboken6/')) else
+                 'curl' if name.startswith('_internal/vendor/curl/') else
+                 'pywin32' if 'pywin' in name.lower() or Path(name).name.startswith('win32') else
+                 'python_runtime' if name.startswith('_internal/') else 'application_and_documents')
+        groups[group] = groups.get(group, 0) + (folder / name).stat().st_size
+    (job / 'size-report.json').write_text(json.dumps(groups, indent=2), encoding='utf-8')
     dist = checked_path(ROOT, 'dist', NAME)
     release = checked_path(ROOT, 'release')
     dist.parent.mkdir(exist_ok=True)

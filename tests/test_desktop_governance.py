@@ -136,6 +136,42 @@ def mirror_errors(sources: dict[str, bytes], copies: dict[str, bytes]) -> list[s
     return [name for name, value in sources.items() if copies.get(name) != value]
 
 
+def portable_cleanup_errors(operations: str, checklist: str, agents: str) -> list[str]:
+    """只读发布契约；静态检查不执行网络核验或删除。"""
+    contracts = {
+        'operations': (operations, {
+            'stage': ('构建、验证和失败阶段不得清理',),
+            'authorization': ('对应删除授权', '已明确授权时不重复确认'),
+            'remote': ('正式新版本 Release 成功发布', '未登录视角下载',
+                       'GitHub digest', '实际 SHA-256', 'tag/BUILD_INFO',
+                       '历史版本资产完整且与发布前基线一致'),
+            'scope': ('`release/` 只保留当前最新正式版本的 ZIP 和 `.sha256`',
+                      '逐文件删除，不使用通配符或递归删除', '技术构建例外'),
+            'preserve': ('不删除或修改 GitHub 历史 Release、tag、源码或资产',
+                         '不清理 `.desktop-build/`、源码材料、审计材料、运行数据'),
+            'failure': ('异常均停止后续发布或删除',),
+        }),
+        'checklist': (checklist, {
+            'stage': ('构建、验证和失败阶段不得提前清理',),
+            'authorization': ('纳入当次授权',),
+            'remote': ('Release 成功发布', '远端资产核验全部通过',
+                       '未登录视角下载', '历史资产完整', 'GitHub digest', 'tag/BUILD_INFO'),
+            'scope': ('`release/` 只保留当前最新正式版本的 ZIP 和 `.sha256`',
+                      '逐文件删除，不使用通配符或递归删除'),
+            'preserve': ('不删除或修改 GitHub 历史 Release、tag、源码或资产',
+                         '不清理 `.desktop-build/`、源码材料、审计材料、运行数据'),
+            'failure': ('异常时停止后续发布或删除',),
+        }),
+        'agents': (agents, {
+            'entry': ('已授权的本地历史 portable 收口', '新旧远端资产核验通过后',
+                      '`docs/OPERATIONS.md`', '构建和验证阶段不得提前清理',
+                      '例外只覆盖 `release/`', '不扩大到其他运行或审计材料'),
+        }),
+    }
+    return [f'{document}:{rule}' for document, (text, rules) in contracts.items()
+            for rule, fragments in rules.items() if any(s not in text for s in fragments)]
+
+
 class DesktopGovernanceTests(unittest.TestCase):
     def assert_fragments(self, text, fragments):
         for fragment in fragments:
@@ -321,8 +357,13 @@ class DesktopGovernanceTests(unittest.TestCase):
         license_text = read_utf8('LICENSE')
         self.assert_fragments(license_text, ('GNU GENERAL PUBLIC LICENSE', 'Version 3, 29 June 2007',
                                             'Free Software Foundation', 'END OF TERMS AND CONDITIONS'))
-        for relative in ('README.md', 'docs/public_release/README.md'):
-            self.assert_fragments(read_utf8(relative), ('GPL-3.0-only', source_url, '无保证'))
+        # main 的开发版本可以领先已发布版本；portable 准备稿仍绑定目标 tag。
+        root_readme = read_utf8('README.md')
+        self.assert_fragments(root_readme, ('GPL-3.0-only', '无保证', 'archive/refs/tags/'))
+        if source_url not in root_readme:
+            self.assertIn('尚未公开发布', root_readme)
+        self.assert_fragments(read_utf8('docs/public_release/README.md'),
+                              ('GPL-3.0-only', source_url, '无保证'))
         eula = read_utf8('docs/public_release/EULA.txt')
         self.assert_fragments(eula, ('GPL-3.0-only', '不是额外的使用许可条件', '包括商业使用和收费分发',
                                      '提供相应源码', '权利终止和恢复仅按 GPLv3'))
@@ -366,6 +407,36 @@ class DesktopGovernanceTests(unittest.TestCase):
         self.assert_fragments(section(changelog, '2026-10-01：Desktop 代码解耦'), (
             '独立配置与预算校验', 'schema v1', '独立源码运行测试', '未发布成品',
         ))
+
+    def test_release_cleanup_is_required_after_verified_publication_only(self):
+        operations = section(read_utf8('docs/OPERATIONS.md'), 'Desktop 公开发布')
+        checklist = section(read_utf8('docs/public_release/RELEASE_CHECKLIST.md'),
+                            '本地历史 portable 收口')
+        agents = section(read_utf8('AGENTS.md'), '项目内修改')
+        self.assertEqual(portable_cleanup_errors(operations, checklist, agents), [])
+        self.assertIn('历史 portable 删除例外', section(read_utf8('docs/OPERATIONS.md'), '项目内产物'))
+        for path in ('docs/PROJECT_STRUCTURE.md', 'docs/desktop/DESKTOP_OPERATIONS.md'):
+            self.assertIn('OPERATIONS.md#本地历史-portable-收口', read_utf8(path))
+
+    def test_cleanup_missing_gate_or_expanded_scope_is_detected_in_memory(self):
+        documents = [section(read_utf8('docs/OPERATIONS.md'), 'Desktop 公开发布'),
+                     section(read_utf8('docs/public_release/RELEASE_CHECKLIST.md'),
+                             '本地历史 portable 收口'),
+                     section(read_utf8('AGENTS.md'), '项目内修改')]
+        # 反例只修改内存文本，绝不删除发行物或调用 GitHub。
+        mutations = (
+            (0, '构建、验证和失败阶段不得清理', 'operations:stage'),
+            (0, '历史版本资产完整且与发布前基线一致', 'operations:remote'),
+            (1, '纳入当次授权', 'checklist:authorization'),
+            (1, '异常时停止后续发布或删除', 'checklist:failure'),
+            (1, '不清理 `.desktop-build/`、源码材料、审计材料、运行数据', 'checklist:preserve'),
+            (2, '例外只覆盖 `release/`', 'agents:entry'),
+        )
+        for index, removed, expected in mutations:
+            changed = documents.copy()
+            changed[index] = changed[index].replace(removed, '错误规则')
+            with self.subTest(rule=expected):
+                self.assertIn(expected, portable_cleanup_errors(*changed))
 
     def test_missing_or_wrong_identity_is_detected_in_memory(self):
         text = '## 当前身份\n\n| Desktop 版本 | `1.0` |\n'
