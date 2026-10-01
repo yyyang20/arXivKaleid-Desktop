@@ -2,6 +2,15 @@
 
 本文件保留 Desktop 与通用功能的简短历史。代码解耦前的条目来自原项目：当时的发行来源、构建提交、兼容行为和治理测试仅表示历史事实，不代表当前仓库仍有这些入口或测试。现行行为以代码、配置、测试和 [当前业务规范](PROJECT_SPEC.md) 为准；详细历史通过 Git、PR 和 Issue 查询。
 
+## 2026-10-02：Desktop alpha.6 公开发行
+
+- 已公开 [v0.1.0-alpha.6 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.6)，仅上传 Windows x64 ZIP 与校验文件；发行 tag 和 BUILD_INFO 提交均为 `83a58b1abb03235924b96e8d3227f75ca0831436`，用途为 public-release。
+- 正式 ZIP 为 118,577,625 字节，SHA-256 为 `14b2c6095fda1c0159289eac30e90a7f05ad25d3178a87eaeb62aca76839b02e`；匿名下载成品及校验文件通过，77 个公开源码文件与发行提交逐字节一致。
+- [PR #4](https://github.com/yyyang20/arXivKaleid-Desktop/pull/4) 冻结提交及正式 main 均通过 123 项离线测试、零跳过，包含 Windows GUI 与合成 DPAPI；正式 main 重新构建并通过原生 DPR 1.5 和模拟 1.0/1.25/1.5/2.0、每组 13 个 GUI 状态、凭据恢复及三次独立重启验收。同机隔离未覆盖第二台干净 Windows。
+- 核验八项固定对应源码及 216 项原许可文本；Fluent 1.11.3 原始 LICENSE 与包声明已核对，商业措辞歧义记录在 NOTICE，未发现当前材料无法解决的具体发行权利缺口，自有 GPL-3.0-only 不变。
+- Alpha 1～5 历史 tag、Release 正文及资产身份与基线一致；Alpha 4 的原私人源码构建身份按其原 Release 正文核验，Alpha 4/5 正式成品公开下载和校验通过。按新收口规则，发布任务在全部核验通过及已获授权后仅清理 release/ 的旧 ZIP/校验文件，其他材料保留。
+- 本条为发布后文档收口，不重建或替换已发布资产；最终 main 与发行 tag 分别记录。未访问真实业务 arXiv/PDF/DeepSeek，模型调用与费用均为 0。
+
 ## 2026-10-02：正式构建身份与本地历史 portable 收口规则
 
 - 正式 main 构建必须等于已核验的 origin/main，BUILD_INFO 区分 public-release 与开发分支技术验证；增加身份拒绝测试。

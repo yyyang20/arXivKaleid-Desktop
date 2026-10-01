@@ -1,6 +1,6 @@
 # Desktop 文档入口
 
-当前版本为 `0.1.0-alpha.6`，使用基础版 PySide6-Fluent-Widgets，提供首页、历史占位和设置页。首页保留候选抓取、两轮分析独立入口、可收缩的真实运行进度、Markdown 日报和安全诊断；Key 与 About 位于设置页。核心业务行为保持不变。本版处于本地 portable 技术验证阶段，尚未正式 Release，验证与发行准备事项见运行手册。
+当前版本为 `0.1.0-alpha.6`，使用基础版 PySide6-Fluent-Widgets，提供首页、历史占位和设置页。首页保留候选抓取、两轮分析独立入口、可收缩的真实运行进度、Markdown 日报和安全诊断；Key 与 About 位于设置页。核心业务行为保持不变。本版已公开 [Windows x64 portable 预发布版](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.6)，运行与验证方式见运行手册。
 
 每次启动后首次开始分析前必须显示模型数据发送、费用、DPAPI 凭据与本地运行数据告知；用户拒绝时不消费快照、不调用模型。
 
