@@ -18,6 +18,19 @@ import uuid
 from build_windows_portable import ROOT, NAME, checked_path, verify_tree, frozen_identity, inspect_python_archive
 
 
+def verify_capture_display(visual, *, native_screen=None, target_dpr=None):
+    """核验全部截图的屏幕与倍率，拒绝跨屏或部分截图倍率漂移。"""
+    screen = visual['screen']
+    captures = visual['captures']
+    assert captures and all(c['screen'] == screen for c in captures), 'capture_screen_changed'
+    if native_screen is not None:
+        assert screen == native_screen, 'validation_screen_changed'
+    actual_dpr = captures[0]['dpr']
+    expected = actual_dpr if target_dpr is None else target_dpr
+    assert all(abs(c['dpr'] - expected) < 0.03 for c in captures), 'simulated_dpr_mismatch'
+    return screen, actual_dpr
+
+
 def close_own_window(process):
     user32 = ctypes.WinDLL('user32', use_last_error=True)
     callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
@@ -78,11 +91,13 @@ def main():
         report = json.loads(report_path.read_text(encoding='utf-8')) if report_path.exists() else {'ok': False}
         if result.returncode or not report.get('ok') or report.get('failure_type'):
             raise RuntimeError('portable_validation_failed:' + mode + ':' + str(report.get('failure_type')))
-        actual_dpr = report['visual_qa']['captures'][0]['dpr']
+        # 各模式及全部截图必须来自同一主屏，不能将跨屏变化误当作模拟倍率。
+        actual_screen, actual_dpr = verify_capture_display(
+            report['visual_qa'], native_screen=None if native_dpr is None else native_screen,
+            target_dpr=target_dpr)
         if native_dpr is None:
             native_dpr = actual_dpr
-        if target_dpr is not None:
-            assert abs(actual_dpr - target_dpr) < 0.03, 'simulated_dpr_mismatch'
+            native_screen = actual_screen
         # 新进程先明确断言合成 DPAPI 恢复，随后验证普通入口重复启动/关闭。
         recovery = subprocess.run([str(copy / 'arXivKaleid.exe'), '--portable-recovery-check'],
                                   cwd=work, env=env, timeout=30, creationflags=0x08000000)

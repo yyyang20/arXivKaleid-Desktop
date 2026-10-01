@@ -80,6 +80,13 @@ def exercise(application, window, root, synthetic_key):
     output.mkdir()
     gate = threading.Event()
     captures = []
+    # 多显示器原生 DPI 不同；诊断窗口固定到主屏，避免启动位置改变倍率基线。
+    # 只移动本次隔离窗口，不修改 Windows 显示设置或正式应用的窗口行为。
+    screen = application.primaryScreen()
+    window.windowHandle().setScreen(screen)
+    origin = screen.availableGeometry().topLeft()
+    window.move(origin.x() + 40, origin.y() + 40)
+    window.resize(1060, 820)
 
     def pump(seconds=0.18):
         end = time.monotonic() + seconds
@@ -104,6 +111,7 @@ def exercise(application, window, root, synthetic_key):
             assert window.task_panel.geometry().top() > card.geometry().bottom()
         captures.append({'state': name, 'logical_size': [window.width(), window.height()],
                          'pixel_size': [image.width(), image.height()], 'dpr': image.devicePixelRatio(),
+                         'screen': window.screen().name(),
                          'report_height': window.home_page.report_stack.height()})
 
     def fetch(day, progress, **kwargs):
@@ -223,6 +231,7 @@ def exercise(application, window, root, synthetic_key):
     assert samples[-1] - samples[3] < 32 * 1024 * 1024, 'portable_window_memory_growth'
     assert not gc.garbage
     return {'captures': captures, 'qt_platform': application.platformName(),
+            'screen': screen.name(),
             'style': application.style().objectName(), 'loaded_libraries': loaded_libraries(root),
             'autosave': True, 'save_failure': True, 'key_locked': True, 'safe_links': True, 'log_directory_action': True,
             'lifecycle_cycles': len(samples), 'private_memory_bytes': samples, 'gc_garbage': len(gc.garbage)}

@@ -78,6 +78,8 @@ Alpha 6 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windo
 
 当前机器真实 DPI 验证不设置缩放变量，记录 Qt 实测 DPR；其他 100/125/150/200% 倍率仅通过子进程 `QT_SCALE_FACTOR` 模拟，以真实 DPR 换算并校验实测结果。`validation.json` 分别标记 native/simulated；不修改全局显示设置、注册表或永久环境变量。同机隔离不能代替干净第二台 Windows 的兼容性覆盖。
 
+多显示器下隔离诊断窗口固定到现有主屏，并记录每张截图的屏幕名称；各模式必须使用同一屏幕，避免不同原生 DPI 导致倍率换算错误。只移动诊断窗口，不改变正式 GUI 启动位置或系统显示设置。
+
 Qt `QDomDocument.setContent` 弃用提示暂为非阻塞已知问题，以冻结 SVG 显示为验收依据。测试退出 GC 告警通过冻结程序重复窗口释放、私有内存采样、进程退出与锁释放验证；不为消除 warning 大范围重构，实际泄漏/崩溃/挂起时停止验收。窗口模式可能不输出 stderr，不能据日志为空宣称告警已消失。
 
 发布前在已冻结 PR 提交上完成构建和本地离线验证；合并后同步干净 main，再用相同入口重建最终本地 ZIP。当前仓库没有 GitHub workflow。构建入口只写入项目内被忽略的 `dist/`、`release/` 和 `.desktop-build/`，不自动创建仓库、Release 或上传文件。任何公开 GitHub 写操作必须另行获得授权并按 [公开发布检查清单](../public_release/RELEASE_CHECKLIST.md) 执行。

@@ -24,6 +24,10 @@ license_spec = importlib.util.spec_from_file_location('portable_license_tests', 
 license_collector = importlib.util.module_from_spec(license_spec)
 with patch.dict(sys.modules, {'build_windows_portable': builder}):
     license_spec.loader.exec_module(license_collector)
+validation_spec = importlib.util.spec_from_file_location('portable_validation_tests', ROOT / 'scripts/validate_windows_portable.py')
+validator = importlib.util.module_from_spec(validation_spec)
+with patch.dict(sys.modules, {'build_windows_portable': builder}):
+    validation_spec.loader.exec_module(validator)
 
 
 class DesktopBuildTests(unittest.TestCase):
@@ -246,3 +250,23 @@ class DesktopBuildTests(unittest.TestCase):
                 else:
                     with self.assertRaisesRegex(RuntimeError, 'release_main_not_equal_origin'):
                         builder.frozen_identity()
+
+    def test_dpi_audit_rejects_cross_monitor_and_wrong_scale_captures(self):
+        def report(dpr, screen='primary'):
+            return {'screen': screen, 'captures': [{'screen': screen, 'dpr': dpr} for _ in range(2)]}
+        for dpr in (1.0, 1.25, 1.5, 2.0):
+            self.assertEqual(validator.verify_capture_display(report(dpr), native_screen='primary',
+                                                             target_dpr=dpr), ('primary', dpr))
+        # 复现 125% 基线换算到 150% 屏幕后得到 180% 的实际故障。
+        with self.assertRaisesRegex(AssertionError, 'dpr_mismatch'):
+            validator.verify_capture_display(report(1.8), native_screen='primary', target_dpr=1.5)
+        with self.assertRaisesRegex(AssertionError, 'validation_screen_changed'):
+            validator.verify_capture_display(report(1.5, 'secondary'), native_screen='primary', target_dpr=1.5)
+        changed = report(1.5)
+        changed['captures'][1]['screen'] = 'secondary'
+        with self.assertRaisesRegex(AssertionError, 'capture_screen_changed'):
+            validator.verify_capture_display(changed, target_dpr=1.5)
+        changed = report(1.5)
+        changed['captures'][1]['dpr'] = 1.8
+        with self.assertRaisesRegex(AssertionError, 'dpr_mismatch'):
+            validator.verify_capture_display(changed, target_dpr=1.5)
