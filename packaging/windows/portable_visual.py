@@ -55,6 +55,7 @@ def loaded_libraries(root):
         if path.is_relative_to(root):
             records.append(path.relative_to(root).as_posix())
         elif not path.is_relative_to(windows):
+            (root / 'runtime/work/external-library-name.txt').write_text(path.name, encoding='utf-8')
             raise RuntimeError('external_library_loaded:' + path.name)
     return sorted(records)
 

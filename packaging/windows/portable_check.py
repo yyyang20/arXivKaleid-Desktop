@@ -230,5 +230,12 @@ def run(*, network=False, visual=False):
         # 后置日志等检查失败也必须失败关闭；早期通过不能覆盖最终失败。
         report['ok'] = False
         report['failure_type'] = type(exc).__name__
+        # 只记录源码位置，绝不写底层消息、局部变量或绝对路径。
+        trace = exc.__traceback__
+        report['failure_sites'] = []
+        while trace is not None:
+            report['failure_sites'].append({'module': Path(trace.tb_frame.f_code.co_filename).name,
+                                           'function': trace.tb_frame.f_code.co_name, 'line': trace.tb_lineno})
+            trace = trace.tb_next
     paths.runtime_path(pipeline.PROJECT_ROOT, 'work/portable-check.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     return 0 if report['ok'] else 1
