@@ -1,6 +1,6 @@
 # 运行与发布手册
 
-本文档只描述 Desktop 当前有效的运行、测试和发布流程。核心筛选规则见 [当前业务规范](PROJECT_SPEC.md)，源码启动、依赖、本机构建和 portable 验证见 [Desktop 运行手册](desktop/DESKTOP_OPERATIONS.md)。
+本文档维护 Desktop 当前有效的开发、验证和公开发布流程。核心筛选规则见 [当前业务规范](PROJECT_SPEC.md)，源码启动、依赖、本机构建和 portable 验证细节见 [Desktop 运行手册](desktop/DESKTOP_OPERATIONS.md)。文档分工与更新路由以 [文档索引](README.md) 为准。
 
 ## 实时核验原则
 
@@ -8,7 +8,7 @@
 
 ## Desktop 候选传输与安全诊断
 
-候选抓取由 `desktop/pipeline.py` 调用 `main.fetch_arxiv_metadata()`，使用 submittedDate 查询、curl HTTP/1.1、1000 条分页、90 秒单次超时和 5 秒请求间隔。Desktop 使用一次 HTTP attempt，不自动重试；失败后旧候选失效，分析不可继续。完整候选规则见 [Desktop 规范](desktop/DESKTOP_SPEC.md#候选抓取)。
+候选抓取由 `desktop/pipeline.py` 调用 `main.fetch_arxiv_metadata()`；查询、分页、超时、间隔与快照失效规则见 [Desktop 规范](desktop/DESKTOP_SPEC.md#候选抓取)。本节维护同次请求的安全诊断边界。
 
 抓取入口将同次请求的结构化证据交给 Desktop 诊断记录器：可解析的非 200 响应记录安全正文特征，200 与非 200 都可记录 transport 证据。它们进入源码 `.desktop-runtime/logs/` 或 portable `runtime/logs/` 下的会话 JSONL，不新增网络请求，不保存响应原文。
 
@@ -62,7 +62,9 @@ git status --short
 - 配置中的 Prompt 文本 SHA-256 与对应资源一致。
 - 测试、报告、数据库、日志、PDF 和 Secret 没有进入 Git。
 
-当前仓库没有 GitHub workflow，也没有独立文档治理测试；现有配置、解耦和构建测试验证其各自契约。
+当前仓库没有 GitHub workflow。`tests/test_desktop_governance.py` 使用 JSON 与 AST 只读核对文档、安全与授权契约、阅读和更新路由、当前身份、内部链接、发行资料副本及发布检查要求；不启动应用、不读取用户运行数据、不调用网络或模型。配置、解耦和构建测试继续验证各自契约。治理测试包含在完整发现与 `test_desktop*.py` 发现中，也可按 Desktop 运行手册单独执行。
+
+记录测试跳过的原因和未覆盖范围；GUI、Windows DPAPI 及发行验收按根 `AGENTS.md` 执行。普通文档与治理测试修改不要求重新构建 portable，实际发行仍须完成冻结成品验证。
 
 ## Desktop 公开发布
 
@@ -70,7 +72,7 @@ git status --short
 
 portable 根目录的 README、EULA、隐私与安全说明由 `docs/public_release/` 维护；该目录只保存文本。`RELEASE_CHECKLIST.md` 留在开发文档中，不进入 portable ZIP。第三方声明以 `packaging/windows/THIRD_PARTY_NOTICES.txt` 为唯一源文本。
 
-根 README 提供项目概览、源码启动和下载入口；打包 README 面向 portable 用户。根目录也提供 EULA、隐私和安全说明。
+根 README 提供项目概览、源码启动和下载入口；打包 README 面向 portable 用户，分别维护。根 EULA、隐私、安全说明和第三方声明是对应维护源的同步副本；源与副本更新遵循 [文档路由](README.md#文档更新规则)，治理测试核对字节一致性。
 
 本地构建只生成项目内被忽略的 `dist/`、`release/` 和 `.desktop-build/` 产物。`dist/` 保存未压缩发行目录，`release/` 保存当前构建或发行候选的 ZIP 和 `.sha256`。正式历史版本由 GitHub Releases 保存。构建器不自动创建仓库、标签或 Release，也不上传文件。每次公开发布必须基于与最新 `origin/main` 一致的干净提交重建 ZIP，按 [公开发布检查清单](public_release/RELEASE_CHECKLIST.md) 核对文件集、构建身份、用户数据排除、portable 验证和 SHA-256。
 

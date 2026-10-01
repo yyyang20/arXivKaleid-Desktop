@@ -1,5 +1,7 @@
 # Desktop 运行与验证
 
+本文档维护源码启动、依赖、本机构建、portable 验证及运行排错细节。开发与公开发布流程见根 [运行手册](../OPERATIONS.md)，安全、授权和完成要求以根 [AGENTS.md](../../AGENTS.md) 为准，阅读与更新路由见 [文档索引](../README.md)。
+
 ## 源码启动
 
 在项目根目录、已经具备依赖的 Windows Python 环境中运行：
@@ -88,20 +90,33 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 
 ## 离线验证
 
-在项目根目录运行；临时目录只作用于当前 PowerShell 进程，不修改用户或系统设置：
+在项目根目录及已有匹配依赖的环境中运行；临时目录只作用于当前 PowerShell 进程及其子进程，结束后恢复原值，不修改用户或系统的持久设置。先使用已有路径检查函数确认临时目录仍在项目内且没有目录链接：
 
 ```powershell
-$desktopTestTemp = Join-Path (Get-Location) '.desktop-runtime/test-temp'
+python -X utf8 -B -c "from pathlib import Path; from desktop.paths import checked_path; print(checked_path(Path.cwd(), '.codex-validation', 'test-temp'))"
+if ($LASTEXITCODE -ne 0) { throw 'Test temporary path is unsafe.' }
+$desktopTestTemp = Join-Path (Get-Location) '.codex-validation/test-temp'
 New-Item -ItemType Directory -Force -Path $desktopTestTemp | Out-Null
-$env:TEMP = $desktopTestTemp
-$env:TMP = $desktopTestTemp
-python -B -m unittest discover -s tests -v
-python -B -m unittest discover -s tests -p 'test_desktop*.py' -v
+$desktopOldTemp = $env:TEMP
+$desktopOldTmp = $env:TMP
+try {
+    $env:TEMP = $desktopTestTemp
+    $env:TMP = $desktopTestTemp
+    python -X utf8 -B -m unittest discover -s tests -p 'test_desktop_governance.py' -v
+    if ($LASTEXITCODE -ne 0) { throw 'Desktop governance tests failed.' }
+    python -X utf8 -B -m unittest discover -s tests -v
+    if ($LASTEXITCODE -ne 0) { throw 'Offline tests failed.' }
+} finally {
+    $env:TEMP = $desktopOldTemp
+    $env:TMP = $desktopOldTmp
+}
 git check-ignore -v .desktop-runtime/logs/diagnostic-test.jsonl
 git diff --check
 git status --short
 ```
 
-执行前须确认解析后临时路径仍在项目内。新增测试使用 `.codex-validation/` 下的隔离目录，不接触实际 Desktop Secret。GUI 测试自动使用 Qt offscreen；安装 PySide6 后必须实际执行，无 PySide6 时安全跳过 GUI 部分；pipeline 和 Secret 文件边界测试不依赖 Qt。Windows 额外运行真实 DPAPI 往返测试，仅使用合成假值；非 Windows 跳过该项。
+完整发现包含 Desktop 子集；只检查 Desktop 时可将完整发现命令替换为 `python -X utf8 -B -m unittest discover -s tests -p 'test_desktop*.py' -v`，两种发现均包含治理测试。
+
+新增测试使用 `.codex-validation/` 下的隔离目录，不接触实际 Desktop Secret。治理测试只读文档、JSON 配置及源码 AST；检查文档与发行资料契约，不启动应用或读取运行数据。GUI 测试自动使用 Qt offscreen；有 PySide6 时必须实际执行，无 PySide6 时安全跳过 GUI 部分；pipeline 和 Secret 文件边界测试不依赖 Qt。Windows 额外运行真实 DPAPI 往返测试，仅使用合成假值；非 Windows 跳过该项。所有跳过须报告原因和未覆盖范围，涉及 GUI、DPAPI 或 Windows 发行的任务不能以跳过代替对应验收。
 
 普通单元测试的网络全部使用 mock，不访问真实 arXiv、不调用真实 DeepSeek、不下载真实 PDF。分析测试使用真实客户端解析合成 HTTP 响应，核验单次 attempt、冻结顺序、预算、页数门控与日报事实；诊断测试覆盖身份关联、作用域、线程安全、内存降级、绝对路径与敏感内容 canary；GUI 测试覆盖展示失败不改写分析成功。构建扫描必须拒绝 `runtime/`、`logs/`、JSONL、SQLite、PDF 和 Secret。Git/GitHub 收尾遵循根 [运行手册](../OPERATIONS.md)。

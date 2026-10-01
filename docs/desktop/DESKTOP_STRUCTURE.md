@@ -1,5 +1,7 @@
 # Desktop 文件结构
 
+本文档维护 Desktop 包内文件及 runtime 数据细节；整体目录与核心模块职责见根 [项目结构](../PROJECT_STRUCTURE.md)，分工以 [文档索引](../README.md) 为准。
+
 | 路径 | 当前职责 |
 |---|---|
 | `desktop/AGENTS.md` | Desktop 局部协作规则 |
@@ -31,6 +33,7 @@
 | `tests/test_desktop_diagnostics.py` | JSONL schema、关联身份、作用域、线程安全、内存降级和隐私 canary |
 | `tests/test_desktop_config.py` | 当前配置、预算、协议和 Prompt 哈希契约 |
 | `tests/test_desktop_decoupling.py` | alpha.4 行为基线、schema v1、缓存、预算和独立源码运行 |
+| `tests/test_desktop_governance.py` | 根与局部治理、文档路由、当前身份、链接、发行资料副本与发布清单的只读检查 |
 
 ## 当前运行数据
 

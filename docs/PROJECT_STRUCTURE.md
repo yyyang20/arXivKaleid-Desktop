@@ -1,6 +1,6 @@
 # 项目结构
 
-本文档说明 arXivKaleid Desktop 当前文件分布和职责。核心筛选规则见 [当前业务规范](PROJECT_SPEC.md)，运行流程见 [运行与发布手册](OPERATIONS.md)。
+本文档维护 arXivKaleid Desktop 整体目录与核心模块职责；包内文件和 runtime 数据细节见 [Desktop 结构](desktop/DESKTOP_STRUCTURE.md)。核心筛选规则见 [当前业务规范](PROJECT_SPEC.md)，开发与发布流程见 [运行与发布手册](OPERATIONS.md)，文档分工见 [文档索引](README.md)。
 
 ## 根目录与核心模块
 
@@ -8,7 +8,7 @@
 |---|---|
 | `AGENTS.md` | 项目级长期协作、安全、按需阅读和必要授权规则 |
 | `README.md` | 项目概览、源码启动、下载和文档入口 |
-| `EULA.txt`、`PRIVACY.md`、`SECURITY.md` | 仓库用户可见的应用许可、隐私与安全说明 |
+| `EULA.txt`、`PRIVACY.md`、`SECURITY.md` | 仓库用户可见的应用许可、隐私与安全说明；与 `docs/public_release/` 维护源保持字节一致 |
 | `THIRD_PARTY_NOTICES.txt` | 仓库用户可见的第三方声明；源文本位于 `packaging/windows/` |
 | `config.json` | Desktop 配置身份、模型、Prompt、筛选策略、Token、费用和资源哈希；不包含 API Key |
 | `requirements.txt` | 固定 pypdf 核心运行依赖 |
@@ -82,16 +82,15 @@ docs/
 | `test_desktop_diagnostics.py` | JSONL、身份关联、作用域、线程安全、内存降级和隐私 canary |
 | `test_desktop_portable.py` | source/frozen 路径、链接、可写性、bundled curl 和工作库边界 |
 | `test_desktop_build.py` | checksum、x64、资源 allowlist、固定依赖、打包文档复制及发行数据排除 |
+| `test_desktop_governance.py` | 文档入口、安全与授权、阅读和更新路由、身份表、链接、发行资料副本及发布检查要求；内存反例验证 |
 
-当前没有独立文档治理或公开发布治理测试；构建测试验证文档复制契约，不验证全部文档内容。新增功能必须新增或更新对应测试，文档不以固定测试数量描述当前状态。
+治理测试只读检查维护文件，不启动应用或读取运行数据；构建测试验证打包复制和发行扫描，两者职责不同。发布清单的静态检查不能代替实际成品或 GitHub 发布核验。新增功能必须新增或更新对应测试，文档不以固定测试数量描述当前状态。
 
 ## 运行数据与忽略内容
 
 源码运行数据位于 `.desktop-runtime/`，portable 对应 EXE 同级 `runtime/`；详细目录见 [Desktop 当前运行数据](desktop/DESKTOP_STRUCTURE.md#当前运行数据)。
 
-- `work/arxiv_kaleid.sqlite` 保存当前 attempt 的论文、运行、筛选、审计、缓存、完成状态、usage、费用、PDF 状态和阶段耗时，主库 schema 为 v1。
-- `work/round2_inputs.sqlite` 保存实际页数、逐页全文和 Round 2 输入门控决定。
-- `work/analysis.lock` 保护工作库；PDF、DPAPI 密文、请求缓存和会话日志各自保存在 runtime 对应目录。
+- 工作库、锁、PDF、DPAPI 密文、请求缓存和会话日志的具体路径及职责见 [Desktop 当前运行数据](desktop/DESKTOP_STRUCTURE.md#当前运行数据)；SQLite 数据边界见 [当前业务规范](PROJECT_SPEC.md#sqlite-工作数据)。
 - 候选快照只在内存中冻结；日报字符串传给 GUI，不写根 `reports/`，不形成跨运行历史数据库。
 - `build/`、`dist/`、`release/`、`.desktop-build/`、`.codex-validation/`、`.codex-audit-*/`、Python 缓存及运行数据被 Git 忽略。
 - `.gitignore` 仍保护旧 `config/local_secret.json`、`data/` 数据库、PDF、`reports/` 和日志等路径；这些忽略规则不表示旧运行入口仍然存在。

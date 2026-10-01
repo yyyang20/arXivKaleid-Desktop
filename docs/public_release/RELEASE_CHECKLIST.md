@@ -7,6 +7,7 @@
 - [ ] 本地分支为 `main`，HEAD 与最新 `origin/main` 一致，工作树干净。
 - [ ] Desktop 版本号、README、Desktop 文档和 CHANGELOG 一致。
 - [ ] 完整离线测试、Desktop 测试、Python AST 检查和 `git diff --check` 通过。
+- [ ] 已核对测试跳过原因和未覆盖范围；GUI、Windows DPAPI 测试在具备依赖的 Windows 环境实际执行，治理静态检查不代替成品验证。
 - [ ] 本次构建不读取真实 Secret、不调用 DeepSeek、不产生模型费用。
 
 ## 构建与验证
@@ -25,6 +26,7 @@
 
 - [ ] portable 根目录的 `README.md`、`EULA.txt`、`PRIVACY.md`、`SECURITY.md` 来自 `docs/public_release/` 固定 allowlist；根仓库 README 不作为打包 README。
 - [ ] 第三方声明唯一来源是 `packaging/windows/THIRD_PARTY_NOTICES.txt`。
+- [ ] 根 EULA、PRIVACY、SECURITY 与 `docs/public_release/` 维护源保持字节一致，根第三方声明与 packaging 维护源一致；两份用途不同的 README 分别核对。
 - [ ] `RELEASE_CHECKLIST.md` 不进入 portable ZIP，发行物不含用户运行数据。
 
 ## 发布 GitHub Release
