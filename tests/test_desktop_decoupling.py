@@ -120,7 +120,8 @@ class DesktopDecouplingTests(unittest.TestCase):
             conn = case.connect()
             config, _paths, profile, prompt = run_round2.read_round2_context(case.root)
             fulltext_path = case.root / '.desktop-runtime/work/round2_inputs.sqlite'
-            with sqlite3.connect(fulltext_path) as fulltext:
+            # 保留事务上下文，并在构建输入结束后关闭全文库连接，避免回收时告警。
+            with closing(sqlite3.connect(fulltext_path)) as fulltext, fulltext:
                 fulltext.row_factory = sqlite3.Row
                 bundle = run_round2.build_round2_input_bundle(
                     conn, config, profile, prompt, run_id=result.run_id,
