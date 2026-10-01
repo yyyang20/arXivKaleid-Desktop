@@ -8,6 +8,7 @@
 |---|---|
 | `AGENTS.md` | 项目级长期协作、安全、按需阅读和必要授权规则 |
 | `README.md` | 项目概览、源码启动、下载和文档入口 |
+| `LICENSE` | 标准 GPLv3 全文唯一维护源；自有应用采用 GPL-3.0-only，构建时直接复制到 portable 根目录 |
 | `EULA.txt`、`PRIVACY.md`、`SECURITY.md` | 仓库用户可见的应用许可、隐私与安全说明；与 `docs/public_release/` 维护源保持字节一致 |
 | `THIRD_PARTY_NOTICES.txt` | 仓库用户可见的第三方声明；源文本位于 `packaging/windows/` |
 | `config.json` | Desktop 配置身份、模型、Prompt、筛选策略、Token、费用和资源哈希；不包含 API Key |
@@ -55,7 +56,7 @@ docs/
 
 `docs/` 保存当前有效说明和简短变更记录，不保存旧规范副本。历史内容通过 Git 查询。
 
-`docs/public_release/` 保存 portable 根目录四份应用文档的维护源和发布检查清单，只保存文本，不保存 ZIP 或运行数据。`RELEASE_CHECKLIST.md` 不进入 ZIP。第三方声明以 `packaging/windows/THIRD_PARTY_NOTICES.txt` 为唯一源文本。根 README 与打包 README 分别面向源码仓库读者和 portable 用户。
+`docs/public_release/` 保存 portable 根目录四份应用文档的维护源和发布检查清单，只保存文本，不保存 ZIP 或运行数据。`RELEASE_CHECKLIST.md` 不进入 ZIP。根 LICENSE 直接打包，不在该目录重复维护。第三方声明以 `packaging/windows/THIRD_PARTY_NOTICES.txt` 为唯一源文本。根 README 与打包 README 分别面向源码仓库读者和 portable 用户。
 
 ## 配置和提示词
 
@@ -81,7 +82,7 @@ docs/
 | `test_desktop_app.py` | offscreen GUI、告知拒绝、线程、凭据交互和日报展示失败 |
 | `test_desktop_diagnostics.py` | JSONL、身份关联、作用域、线程安全、内存降级和隐私 canary |
 | `test_desktop_portable.py` | source/frozen 路径、链接、可写性、bundled curl 和工作库边界 |
-| `test_desktop_build.py` | checksum、x64、资源 allowlist、固定依赖、打包文档复制及发行数据排除 |
+| `test_desktop_build.py` | checksum、x64、资源 allowlist、固定依赖、LICENSE/文档复制、源码版本/许可/归档校验及发行数据排除 |
 | `test_desktop_governance.py` | 文档入口、安全与授权、阅读和更新路由、身份表、链接、发行资料副本及发布检查要求；内存反例验证 |
 
 治理测试只读检查维护文件，不启动应用或读取运行数据；构建测试验证打包复制和发行扫描，两者职责不同。发布清单的静态检查不能代替实际成品或 GitHub 发布核验。新增功能必须新增或更新对应测试，文档不以固定测试数量描述当前状态。

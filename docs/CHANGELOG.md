@@ -2,6 +2,12 @@
 
 本文件保留 Desktop 与通用功能的简短历史。代码解耦前的条目来自原项目：当时的发行来源、构建提交、兼容行为和治理测试仅表示历史事实，不代表当前仓库仍有这些入口或测试。现行行为以代码、配置、测试和 [当前业务规范](PROJECT_SPEC.md) 为准；详细历史通过 Git、PR 和 Issue 查询。
 
+## 2026-10-01：Desktop alpha.5 GPL 开源发行准备
+
+- 应用版本升级为 `0.1.0-alpha.5`，自有源码、测试、构建脚本、配置、Prompt 和项目文档采用 GPL-3.0-only；新增标准 LICENSE，EULA 改为许可说明与使用告知。
+- portable 增加应用 LICENSE 与精确版本 tag 的源码入口，保留第三方许可与 Qt/PySide 对应源码，补充 pypdf 固定源码归档及 gzip/xz 收集和发行校验。
+- 保留筛选、GUI、模型次数、费用、配置和 Prompt 字节；未引入 Fluent Widgets。实际公开发行记录在发布验收后补记，alpha.1 至 alpha.4 历史发行保持原状。
+
 ## 2026-10-01：Desktop 根协作规则收尾
 
 - 根协作规则明确项目名称为 `arXivKaleid-Desktop`，移除不存在的 workflow、GitHub-hosted runner 和仓库变量表述，实时核验对象对齐 Git、PR、tag、Release 与 release asset。

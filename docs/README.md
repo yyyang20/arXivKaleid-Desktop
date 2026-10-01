@@ -16,6 +16,8 @@ Windows portable 的打包 README、用户协议、隐私和安全说明集中�
 
 `docs/public_release/` 是 EULA、PRIVACY、SECURITY 的唯一维护源；修改后同步根目录 `EULA.txt`、`PRIVACY.md`、`SECURITY.md`，保持字节一致。第三方声明的唯一维护源是 `packaging/windows/THIRD_PARTY_NOTICES.txt`，根目录同名文件为同步副本。根仓库 README 与 portable README 面向不同读者，分别维护，不要求内容相同。
 
+应用 GPL-3.0-only 许可证唯一维护源是根目录 `LICENSE`，构建时直接复制到 portable 根目录，不另建许可证副本。许可范围、无保证、对应源码和第三方覆盖说明分别由 README、EULA、第三方声明及发布检查清单维护。
+
 ## 新任务阅读顺序
 
 每个新的独立任务开始前必须依次阅读：
@@ -49,6 +51,7 @@ Windows portable 的打包 README、用户协议、隐私和安全说明集中�
 | 实际 GitHub Release 发布 | `CHANGELOG.md`；首次发布或稳定下载入口变化时同时更新根目录 `README.md` |
 | Windows portable 打包说明、EULA、隐私或安全政策 | `public_release/` 维护源；同步根目录 `EULA.txt`、`PRIVACY.md`、`SECURITY.md`，并检查相关 Desktop 运行文档；两份 README 分别维护 |
 | 第三方声明 | `packaging/windows/THIRD_PARTY_NOTICES.txt` 维护源与根目录同名副本；分发组件改变时检查公开发布资料 |
+| 应用许可证或对应源码分发 | 根 `LICENSE`、两份 README、EULA、第三方声明、构建/源码 manifest 与 `public_release/RELEASE_CHECKLIST.md`；检查运行和结构文档 |
 | 提示词、模板、策略或 schema 身份变化 | 规范、配置、兼容校验、发行校验和测试 |
 
 按文档职责检查所有受影响的相关文档，但只修改真正受影响的文件。禁止为了制造“已同步”的痕迹而加入重复或无意义内容。

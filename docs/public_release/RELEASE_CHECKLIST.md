@@ -15,7 +15,10 @@
 - [ ] 仅在已授权的 `arxivkaleid-desktop` 专用 Conda 环境中执行构建。
 - [ ] 重新生成 `release/arXivKaleid-<version>-windows-x64.zip` 和对应 `.zip.sha256`。
 - [ ] `BUILD_INFO.json` 记录预期版本、冻结提交、x64 架构且 `working_tree_clean` 为 `true`。
-- [ ] ZIP 根目录包含 `README.md`、`EULA.txt`、`PRIVACY.md`、`SECURITY.md` 和 `THIRD_PARTY_NOTICES.txt`，完整第三方许可仍在 `licenses/`。
+- [ ] ZIP 根目录包含 `LICENSE`、`README.md`、`EULA.txt`、`PRIVACY.md`、`SECURITY.md` 和 `THIRD_PARTY_NOTICES.txt`，完整第三方许可仍在 `licenses/`。
+- [ ] 应用许可为 `GPL-3.0-only`；LICENSE 与根维护源字节一致，EULA 不增加额外限制。
+- [ ] portable README 的对应源码入口固定到本版 tag，tag 提交与 BUILD_INFO.json 一致，不使用浮动 main。
+- [ ] QtBase、PySide/Shiboken、pypdf 对应源码归档完整；许可、版本及 SHA-256 与源码 manifest 一致，独立工具/执行平台及系统库的排除理由已核对。
 - [ ] 发行扫描未发现 `runtime/`、API Key、`secret.dat`、SQLite、PDF、日志或本机私有路径。
 - [ ] 发行扫描显式拒绝诊断 JSONL；ZIP 与 `_internal/` 均不含运行日志或可写日志目录。
 - [ ] source `.desktop-runtime/logs/` 由 Git ignore 覆盖，`git status --short --ignored` 只把它显示为 ignored。
@@ -26,20 +29,24 @@
 
 - [ ] portable 根目录的 `README.md`、`EULA.txt`、`PRIVACY.md`、`SECURITY.md` 来自 `docs/public_release/` 固定 allowlist；根仓库 README 不作为打包 README。
 - [ ] 第三方声明唯一来源是 `packaging/windows/THIRD_PARTY_NOTICES.txt`。
+- [ ] 应用 LICENSE 唯一来源是仓库根目录，不在 docs/public_release/ 重复维护。
 - [ ] 根 EULA、PRIVACY、SECURITY 与 `docs/public_release/` 维护源保持字节一致，根第三方声明与 packaging 维护源一致；两份用途不同的 README 分别核对。
 - [ ] `RELEASE_CHECKLIST.md` 不进入 portable ZIP，发行物不含用户运行数据。
 
 ## 发布 GitHub Release
 
 - [ ] 已获得当次 GitHub 写操作授权，并重新只读核对目标仓库、标签和现有 Release。
+- [ ] 保存并对比 alpha.1 至 alpha.4 历史 tag、Release 正文、资产 id/名称/字节数/digest 基线，既有历史发行保持不变。
 - [ ] 目标公开仓库已启用 immutable releases 和 private vulnerability reporting。
 - [ ] 先创建 Draft Release，alpha/beta 版本标记为 prerelease。
 - [ ] 只上传带版本号的 ZIP 和对应 `.zip.sha256`，不上传使用过的 portable 目录。
 - [ ] 发布前核对 GitHub 返回的 asset 文件名、字节数和 SHA-256 digest。
 - [ ] Release notes 包含非空的 `## 本次更新`：首个公开版本概括首次提供的主要功能，后续版本依据冻结提交、Git 差异和 `CHANGELOG` 用 1～5 条概括相对上一公开版本的主要新增、修改或修复。
 - [ ] Release notes 另行保留平台、下载、未签名/SmartScreen 限制、DeepSeek 数据发送与费用、SHA-256 等适用的通用说明；这些说明不能代替“本次更新”。
+- [ ] Release notes 包含 GPL-3.0-only 及精确 tag 对应源码下载入口；免费源码包含应用、配置、Prompt、测试、构建脚本及说明。
 - [ ] 发布 Draft 前重新读取其 Release notes，确认“本次更新”存在且非空，再发布。
 - [ ] 发布后重新读取公开 Release，从未登录视角核对正文、“本次更新”、公开可见性、下载链接、Tag 和资产摘要。
+- [ ] 未登录下载源码并逐文件与发行冻结提交核对，同时重新计算公开 ZIP SHA-256，不能仅凭页面或静态测试宣称源码和成品一致。
 
 ## 发布后文档收口
 
@@ -47,6 +54,7 @@
 - [ ] 发布后文档收口发生在冻结成品之后，不重建或替换已发布资产，不改写既有 immutable Release，也不拆成新的独立任务。
 - [ ] Git commit/push 必须获得相应授权；尚未取得授权时，先完成本地文档修改和验证，明确报告待提交状态，不得因此省略文档或宣称整个公开发布任务已经完成。
 - [ ] 对文档变更执行适用的离线测试和 `git diff --check`，并确认 ZIP、`.sha256`、测试或审计产物没有进入 Git。
+- [ ] 分别记录最终 main 与发行 tag SHA；两者的差异只包含发布后文档收口，已发布资产保持不变。
 
 ## 失败处理
 

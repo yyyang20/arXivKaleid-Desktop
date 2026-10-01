@@ -1,3 +1,7 @@
+# Copyright (c) 2026 yyyang20
+# SPDX-License-Identifier: GPL-3.0-only
+# See LICENSE in the project root for the full license text.
+
 """仅用于全新发行副本的零模型费用诊断，不接受用户 Key。"""
 import io
 import json

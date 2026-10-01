@@ -1,3 +1,7 @@
+# Copyright (c) 2026 yyyang20
+# SPDX-License-Identifier: GPL-3.0-only
+# See LICENSE in the project root for the full license text.
+
 """在项目内全新副本验证冻结程序，移除开发环境 PATH，不读取用户数据。"""
 import argparse
 import ctypes

@@ -31,9 +31,9 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 
 ## Portable 用户
 
-解压 `arXivKaleid-0.1.0-alpha.4-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。输入自己的 DeepSeek API Key，获取候选，再执行分析；界面显示真实阶段进度、稳定诊断代码和 Markdown 日报。
+解压 `arXivKaleid-0.1.0-alpha.5-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。输入自己的 DeepSeek API Key，获取候选，再执行分析；界面显示真实阶段进度、稳定诊断代码和 Markdown 日报。
 
-所有用户数据都在 EXE 同级 `runtime/`，诊断日志位于 `runtime/logs/`。删除整个 portable 目录相当于卸载并删除运行数据；alpha.4 不自动轮换或删除旧日志。不要把包含个人 `runtime/` 的已使用目录重新发给其他人，应发送构建生成的干净 ZIP。DPAPI 绑定 Windows 用户与电脑，复制文件夹给另一个用户/电脑后，旧 `secret.dat` 通常无法解密，需要重新输入 Key。
+所有用户数据都在 EXE 同级 `runtime/`，诊断日志位于 `runtime/logs/`。删除整个 portable 目录相当于卸载并删除运行数据；当前版本不自动轮换或删除旧日志。不要把包含个人 `runtime/` 的已使用目录重新发给其他人，应发送构建生成的干净 ZIP。DPAPI 绑定 Windows 用户与电脑，复制文件夹给另一个用户/电脑后，旧 `secret.dat` 通常无法解密，需要重新输入 Key。
 
 第一版只支持 Windows 10/11 x64，未代码签名，可能触发 SmartScreen；不绕过系统安全机制。没有安装器、自动更新或 ARM64 版本。
 
@@ -52,9 +52,11 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 
 产物为根 `dist/` 下带版本目录、`release/` 下同名 ZIP 和 `.zip.sha256`。`BUILD_INFO.json` 记录代码提交和环境版本。旧干净发行物移入本次 `.desktop-build/build-*/` 留存；已有 `runtime/` 的发行目录拒绝覆盖。构建目录、vendor 下载和输出均被 Git 忽略。所有下载都先校验固定哈希，缓存不符即停止。
 
-发行物包含第三方声明、实际依赖许可证及 QtBase/PySide6 对应上游源码归档，允许按 LGPL 替换动态库；这些归档用于分发合规，用户无需解包。许可证缺失、用户运行文件或本机个人路径进入发行树时，构建失败。ZIP 生成后逐文件重新比对哈希。
+发行物包含 GPL-3.0-only 应用 LICENSE、第三方声明、实际依赖许可证及 QtBase/PySide6/pypdf 对应上游源码归档，允许按 LGPL 替换动态库；这些归档用于分发合规，用户无需解包。源码 manifest 显式记录各组件许可，版本与固定运行依赖一致；gzip/xz 归档原样保留并核验 SHA-256。许可证缺失、源码入口/归档哈希不符、用户运行文件或本机个人路径进入发行树时，构建失败。ZIP 生成后逐文件重新比对哈希。
 
 发行根目录另外从 `docs/public_release/` 的固定 allowlist 复制 `README.md`、`EULA.txt`、`PRIVACY.md` 和 `SECURITY.md`；根仓库 README 不作为打包 README。`RELEASE_CHECKLIST.md` 只供开发与发布核对，不进入 ZIP。第三方声明继续从 `packaging/windows/THIRD_PARTY_NOTICES.txt` 收集，不维护第二份源文本。
+
+根目录 LICENSE 是应用许可唯一源，单独复制到 portable 根目录。应用对应源码通过 README 与 Release 正文指向同一版本 tag 的免费源码归档提供，包含配置、Prompt 和构建说明；源码 tag 的提交必须等于 BUILD_INFO.json 的冻结提交。第三方源码覆盖、独立执行平台/工具与系统库的排除理由见 THIRD_PARTY_NOTICES.txt；不能仅因某组件随包分发就要求全部构建环境源码。
 
 ## Portable 零模型验证
 

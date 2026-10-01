@@ -1,3 +1,7 @@
+# Copyright (c) 2026 yyyang20
+# SPDX-License-Identifier: GPL-3.0-only
+# See LICENSE in the project root for the full license text.
+
 """Desktop 的只读配置契约；预算和资源身份不依赖在线自动化策略。"""
 from __future__ import annotations
 

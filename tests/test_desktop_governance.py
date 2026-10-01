@@ -1,3 +1,7 @@
+# Copyright (c) 2026 yyyang20
+# SPDX-License-Identifier: GPL-3.0-only
+# See LICENSE in the project root for the full license text.
+
 from __future__ import annotations
 
 import ast
@@ -10,7 +14,7 @@ from urllib.parse import unquote, urlsplit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_DOCUMENTS = (
-    'AGENTS.md', 'desktop/AGENTS.md', 'README.md',
+    'AGENTS.md', 'desktop/AGENTS.md', 'README.md', 'LICENSE',
     'docs/README.md', 'docs/PROJECT_SPEC.md', 'docs/OPERATIONS.md',
     'docs/PROJECT_STRUCTURE.md', 'docs/CHANGELOG.md',
     'docs/desktop/README.md', 'docs/desktop/DESKTOP_SPEC.md',
@@ -310,6 +314,24 @@ class DesktopGovernanceTests(unittest.TestCase):
         # 使用原始字节比较，换行或编码漂移也必须被发现。
         copies = {name: read_bytes(name) for name in sources}
         self.assertEqual(mirror_errors(sources, copies), [])
+
+    def test_gpl_only_scope_and_exact_release_source_entry(self):
+        version = literal_constant('desktop/__init__.py', '__version__')
+        source_url = f'https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v{version}.zip'
+        license_text = read_utf8('LICENSE')
+        self.assert_fragments(license_text, ('GNU GENERAL PUBLIC LICENSE', 'Version 3, 29 June 2007',
+                                            'Free Software Foundation', 'END OF TERMS AND CONDITIONS'))
+        for relative in ('README.md', 'docs/public_release/README.md'):
+            self.assert_fragments(read_utf8(relative), ('GPL-3.0-only', source_url, '无保证'))
+        eula = read_utf8('docs/public_release/EULA.txt')
+        self.assert_fragments(eula, ('GPL-3.0-only', '不是额外的使用许可条件', '包括商业使用和收费分发',
+                                     '提供相应源码', '权利终止和恢复仅按 GPLv3'))
+        for restriction in ('不可转让', '不得出售', '不授予应用源码', '使用本软件表示你接受本协议'):
+            self.assertNotIn(restriction, eula)
+        self.assert_fragments(read_utf8('docs/public_release/RELEASE_CHECKLIST.md'),
+                              ('GPL-3.0-only', '对应源码', '未登录下载源码', '历史发行保持不变'))
+        self.assert_fragments(read_utf8('packaging/windows/THIRD_PARTY_NOTICES.txt'),
+                              ('Corresponding Source scope', 'pypdf 6.14.2', 'System Libraries'))
 
     def test_release_checklist_preserves_identity_and_public_readback(self):
         checklist = read_utf8('docs/public_release/RELEASE_CHECKLIST.md')

@@ -1,3 +1,7 @@
+# Copyright (c) 2026 yyyang20
+# SPDX-License-Identifier: GPL-3.0-only
+# See LICENSE in the project root for the full license text.
+
 """可审计的 Windows x64 one-folder 构建；无安装、模型调用或发布操作。"""
 from __future__ import annotations
 
@@ -24,6 +28,7 @@ from desktop.paths import checked_path
 from desktop.config import load_config
 
 NAME = f'arXivKaleid-{__version__}-windows-x64'
+SOURCE_URL = f'https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v{__version__}.zip'
 RESOURCES = (
     'config.json',
     'prompts/relevance_round1_v20.txt',
@@ -33,7 +38,7 @@ PUBLIC_DOCUMENTS = ('README.md', 'EULA.txt', 'PRIVACY.md', 'SECURITY.md')
 REQUIRED_RELEASE_FILES = (
     'arXivKaleid.exe', '_internal/python313.dll',
     '_internal/vendor/curl/bin/curl.exe', '_internal/zoneinfo/Asia/Shanghai',
-    *PUBLIC_DOCUMENTS, 'THIRD_PARTY_NOTICES.txt',
+    *PUBLIC_DOCUMENTS, 'LICENSE', 'BUILD_INFO.json', 'THIRD_PARTY_NOTICES.txt',
     'licenses/QtBase/LICENSES/LGPL-3.0-only.txt',
     'licenses/QtBase/LICENSES/GPL-3.0-only.txt',
     'licenses/QtBase/LICENSES/MPL-2.0.txt', 'licenses/components.json',
@@ -156,6 +161,49 @@ def copy_public_documents(folder: Path) -> None:
         if not source.is_file():
             raise RuntimeError('public_document_missing:' + name)
         shutil.copyfile(source, checked_path(folder, name))
+    # 应用许可证只有根目录这一份维护源，不从第三方目录或副本推断。
+    license_source = checked_path(ROOT, 'LICENSE')
+    if not license_source.is_file():
+        raise RuntimeError('application_license_missing')
+    shutil.copyfile(license_source, checked_path(folder, 'LICENSE'))
+
+
+def source_archives(root: Path = ROOT) -> list[dict[str, str]]:
+    """将对应源码绑定到固定运行依赖；许可和版本不符时停止发行。"""
+    pins = pinned_requirements('requirements-desktop.txt', root=root)
+    expected = {
+        'QtBase': (pins['PySide6'], 'LGPL-3.0-only'),
+        'PySide6 and Shiboken6': (pins['PySide6'], 'LGPL-3.0-only'),
+        'pypdf': (pins['pypdf'], 'BSD-3-Clause'),
+    }
+    items = json.loads(checked_path(root, 'packaging/windows/source-manifest.json').read_text(encoding='utf-8'))
+    if not isinstance(items, list) or len(items) != len(expected):
+        raise RuntimeError('source_inventory_invalid')
+    seen = set()
+    for item in items:
+        component = item.get('component') if isinstance(item, dict) else None
+        if component not in expected or component in seen:
+            raise RuntimeError('source_component_invalid')
+        if (item.get('version'), item.get('license')) != expected[component]:
+            raise RuntimeError('source_version_or_license_mismatch')
+        if not isinstance(item.get('sha256'), str) or not re.fullmatch(r'[0-9a-f]{64}', item['sha256']):
+            raise RuntimeError('source_checksum_invalid')
+        checked_path(root, '.desktop-build/vendor', item['archive'])
+        seen.add(component)
+    return items
+
+
+def verify_legal_resources(folder: Path) -> None:
+    """核验实际发行物的应用许可证、源码入口和第三方源码字节。"""
+    if checked_path(folder, 'LICENSE').read_bytes() != checked_path(ROOT, 'LICENSE').read_bytes():
+        raise RuntimeError('application_license_mismatch')
+    if SOURCE_URL not in checked_path(folder, 'README.md').read_text(encoding='utf-8'):
+        raise RuntimeError('application_source_link_mismatch')
+    for item in source_archives():
+        archive = checked_path(folder, 'licenses/sources', item['archive'])
+        if not archive.is_file():
+            raise RuntimeError('corresponding_source_missing:' + item['component'])
+        verify_checksum(archive.read_bytes(), item['sha256'])
 
 
 def verify_tree(folder: Path) -> dict[str, str]:
@@ -191,6 +239,7 @@ def verify_tree(folder: Path) -> dict[str, str]:
         if required not in inventory:
             raise RuntimeError('release_file_missing:' + required)
     verify_x64((folder / 'arXivKaleid.exe').read_bytes())
+    verify_legal_resources(folder)
     return inventory
 
 

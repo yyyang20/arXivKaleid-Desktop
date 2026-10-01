@@ -1,3 +1,7 @@
+# Copyright (c) 2026 yyyang20
+# SPDX-License-Identifier: GPL-3.0-only
+# See LICENSE in the project root for the full license text.
+
 """arXiv curl 传输证据的纯解析与白名单边界。"""
 from __future__ import annotations
 

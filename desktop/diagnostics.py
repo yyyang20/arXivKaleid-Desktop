@@ -1,3 +1,7 @@
+# Copyright (c) 2026 yyyang20
+# SPDX-License-Identifier: GPL-3.0-only
+# See LICENSE in the project root for the full license text.
+
 """Desktop 脱敏 JSONL 运行轨迹与安全内存降级。"""
 from __future__ import annotations
 
