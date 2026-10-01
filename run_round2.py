@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import argparse
 import json
 import sqlite3
-import sys
-import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, TextIO
+from typing import Any, Callable
 
 import build_round2_inputs
 import main
@@ -15,13 +12,9 @@ import model_usage
 import round2_fulltext_state
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent
-
-
 @dataclass(frozen=True)
 class Round2InputBundle:
     run_selection: build_round2_inputs.Round2RunSelection
-    previews: list[build_round2_inputs.Round2InputPreview]
     papers: list[dict[str, Any]]
     messages: list[dict[str, str]]
     request_summary: dict[str, Any]
@@ -29,7 +22,6 @@ class Round2InputBundle:
     estimated_request_tokens: int = 0
     max_request_tokens: int = round2_fulltext_state.DEFAULT_MAX_REQUEST_TOKENS
     full_text_estimated_tokens: int | None = None
-    section_fallback_estimated_tokens: int | None = None
     long_reading_papers: tuple[dict[str, Any], ...] = ()
     fulltext_extraction_failed_papers: tuple[dict[str, Any], ...] = ()
     token_budget_excluded_papers: tuple[dict[str, Any], ...] = ()
@@ -46,10 +38,7 @@ class Round2InputBundle:
                 and not self.input_failure_reasons
                 and 0 < self.estimated_request_tokens <= self.max_request_tokens
             )
-        return all(
-            item.round2_input_status == build_round2_inputs.ROUND2_USABLE_STATUS
-            for item in self.previews
-        )
+        return False
 
 
 def build_round2_result_tool(config: dict[str, Any]) -> dict[str, Any]:
@@ -328,7 +317,6 @@ def _build_no_candidate_bundle(
     estimates = candidate_token_estimates or []
     return Round2InputBundle(
         run_selection=run_selection,
-        previews=[],
         papers=[],
         messages=[],
         request_summary={
@@ -588,7 +576,6 @@ def _build_fulltext_aware_bundle(
     )
     return Round2InputBundle(
         run_selection=run_selection,
-        previews=[],
         papers=remaining,
         messages=messages,
         request_summary=summary,
@@ -650,10 +637,8 @@ def build_round2_input_bundle(
     profile: dict[str, Any],
     prompt: str,
     *,
-    latest: bool,
-    target_date: str | None,
-    run_id: int | None = None,
-    fulltext_connection: sqlite3.Connection | None = None,
+    run_id: int,
+    fulltext_connection: sqlite3.Connection,
     round1_identity: tuple[str, str, str] | None = None,
 ) -> Round2InputBundle:
     prompt_version, profile_version, policy_version = (
@@ -665,8 +650,6 @@ def build_round2_input_bundle(
         prompt_version=prompt_version,
         profile_version=profile_version,
         policy_version=policy_version,
-        latest=latest,
-        target_date=target_date,
         run_id=run_id,
     )
     papers = load_round2_candidate_papers(
@@ -682,84 +665,18 @@ def build_round2_input_bundle(
         papers,
         prompt_version=prompt_version,
     )
-    if fulltext_connection is not None:
-        return _build_fulltext_aware_bundle(
-            run_selection=run_selection,
-            selected_papers=papers,
-            fulltext_connection=fulltext_connection,
-            config=config,
-            profile=profile,
-            prompt=prompt,
-        )
-    previews = build_round2_inputs.load_round2_input_previews(
-        connection,
-        config,
-        run_id=run_selection.run_id,
-        prompt_version=prompt_version,
-        profile_version=profile_version,
-        policy_version=policy_version,
-    )
-    messages = main.build_round2_messages(prompt, profile, papers, config)
-    return Round2InputBundle(
+    return _build_fulltext_aware_bundle(
         run_selection=run_selection,
-        previews=previews,
-        papers=papers,
-        messages=messages,
-        request_summary=main.summarize_round2_request_messages(messages),
-    )
-
-
-def print_round2_dry_run(bundle: Round2InputBundle, *, stream: TextIO) -> None:
-    print("ROUND2_RUN_STATUS=dry_run_ok", file=stream)
-    print(f"RUN_ID={bundle.run_selection.run_id}", file=stream)
-    print(f"RUN_STARTED_AT={bundle.run_selection.started_at}", file=stream)
-    print(f"CANDIDATE_COUNT={len(bundle.papers)}", file=stream)
-    print(
-        f"ROUND1_SELECTED_COUNT={bundle.run_selection.selected_count}", file=stream
-    )
-    print(f"LONG_READING_COUNT={len(bundle.long_reading_papers)}", file=stream)
-    print(
-        "FULLTEXT_EXTRACTION_FAILED_COUNT="
-        f"{len(bundle.fulltext_extraction_failed_papers)}",
-        file=stream,
-    )
-    print(
-        "TOKEN_BUDGET_EXCLUDED_COUNT="
-        f"{len(bundle.token_budget_excluded_papers)}",
-        file=stream,
-    )
-    print(f"ROUND2_INPUT_MODE={bundle.input_mode}", file=stream)
-    print(
-        f"ESTIMATED_REQUEST_TOKENS={bundle.estimated_request_tokens}", file=stream
-    )
-    print(f"MAX_REQUEST_TOKENS={bundle.max_request_tokens}", file=stream)
-    print(
-        "ALL_INPUTS_USABLE="
-        + ("true" if bundle.all_inputs_usable else "false"),
-        file=stream,
-    )
-    print(
-        "REQUEST_SUMMARY_JSON="
-        + json.dumps(
-            bundle.request_summary,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        ),
-        file=stream,
+        selected_papers=papers,
+        fulltext_connection=fulltext_connection,
+        config=config,
+        profile=profile,
+        prompt=prompt,
     )
 
 
 def unusable_input_reasons(bundle: Round2InputBundle) -> list[str]:
-    if bundle.input_failure_reasons:
-        return list(bundle.input_failure_reasons)
-    reasons: list[str] = []
-    for item in bundle.previews:
-        if item.round2_input_status == build_round2_inputs.ROUND2_USABLE_STATUS:
-            continue
-        missing = ",".join(item.missing_fields) if item.missing_fields else "unknown"
-        reasons.append(f"{item.arxiv_id}v{item.version}:{missing}")
-    return reasons
+    return list(bundle.input_failure_reasons) or ["fulltext_input_not_usable"]
 
 
 def create_deepseek_client(
@@ -770,21 +687,10 @@ def create_deepseek_client(
     api_key_override: str | None = None,
 ) -> Any:
     round2_deepseek = main.deepseek_stage_config(config, "round2")
-    if api_key_override is None:
-        key_result, configuration_errors = main.inspect_deepseek_configuration(
-            project_root, round2_deepseek
-        )
-        if configuration_errors:
-            raise RuntimeError(
-                "deepseek_configuration_incomplete:"
-                + ",".join(configuration_errors)
-            )
-        api_key = key_result.api_key
-    else:
-        # Desktop 显式注入当前 GUI Key；空值拒绝，绝不回退到历史密钥。
-        if not api_key_override.strip():
-            raise RuntimeError("deepseek_api_key_override_empty")
-        api_key = api_key_override
+    # Key 只由 Desktop 当前会话注入；不读取任何明文凭据文件。
+    if not isinstance(api_key_override, str) or not api_key_override.strip():
+        raise RuntimeError("deepseek_api_key_override_empty")
+    api_key = api_key_override
     factory = client_factory or main.DeepSeekClient
     return factory(
         api_key=api_key,
@@ -847,61 +753,6 @@ def build_round2_cache_identity(
             separators=(",", ":"),
         ),
     }
-
-
-def build_legacy_round2_content_input_hash(
-    bundle: Round2InputBundle, config: dict[str, Any]
-) -> str:
-    """仅用于核验 forced_named_tool_v1 之前的精确 content 请求身份。"""
-    round2_deepseek = main.deepseek_stage_config(config, "round2")
-    return main.stable_json_hash(
-        {
-            "messages": bundle.messages,
-            "thinking_mode": round2_deepseek["thinking_mode"],
-            "reasoning_effort": round2_deepseek["reasoning_effort"],
-        }
-    )
-
-
-def build_legacy_round2_chat_tool_input_hash(
-    bundle: Round2InputBundle, config: dict[str, Any]
-) -> str:
-    """仅用于核验 v15 Chat Completions 强制工具请求的精确身份。"""
-    round2_deepseek = main.deepseek_stage_config(config, "round2")
-    responses_tool = build_round2_result_tool(config)
-    legacy_tool = {
-        "type": "function",
-        "function": {
-            "name": responses_tool["name"],
-            "description": responses_tool["description"],
-            "parameters": responses_tool["parameters"],
-        },
-    }
-    return main.stable_json_hash(
-        {
-            "messages": bundle.messages,
-            "thinking_mode": round2_deepseek["thinking_mode"],
-            "reasoning_effort": round2_deepseek["reasoning_effort"],
-            "output_transport": "forced_named_tool_v1",
-            "forced_tool": legacy_tool,
-        }
-    )
-
-
-def build_legacy_round2_responses_forced_tool_input_hash(
-    bundle: Round2InputBundle, config: dict[str, Any]
-) -> str:
-    """仅用于核验 v16 Responses 强制工具请求的精确身份。"""
-    round2_deepseek = main.deepseek_stage_config(config, "round2")
-    return main.stable_json_hash(
-        {
-            "messages": bundle.messages,
-            "thinking_mode": round2_deepseek["thinking_mode"],
-            "reasoning_effort": round2_deepseek["reasoning_effort"],
-            "output_transport": "responses_forced_named_tool_v1",
-            "forced_tool": build_round2_result_tool(config),
-        }
-    )
 
 
 def load_valid_round2_cache(
@@ -1034,7 +885,6 @@ def run_round2_model_and_save(
     config: dict[str, Any],
     bundle: Round2InputBundle,
     *,
-    force: bool = False,
     client_factory: Callable[..., Any] | None = None,
     api_key_override: str | None = None,
     diagnostic_observer: Callable[[str, Any], None] | None = None,
@@ -1088,30 +938,29 @@ def run_round2_model_and_save(
         "selection_policy_version": main.ROUND2_SELECTION_POLICY,
         "request_hash": request_hash,
     }
-    if not force:
-        cache_status, cached, cache_warnings = load_valid_round2_cache(
-            connection, bundle, config
+    cache_status, cached, cache_warnings = load_valid_round2_cache(
+        connection, bundle, config
+    )
+    if cache_status == "cache_hit" and cached is not None:
+        call_id = model_usage.record_cache_reuse(
+            connection, **usage_identity
         )
-        if cache_status == "cache_hit" and cached is not None:
-            call_id = model_usage.record_cache_reuse(
-                connection, **usage_identity
+        try:
+            main.save_round2_screening_results(
+                connection,
+                bundle.run_selection.run_id,
+                cached["final_recommendations"],
+                config,
+                selection_audit=cached.get("selection_audit"),
             )
-            try:
-                main.save_round2_screening_results(
-                    connection,
-                    bundle.run_selection.run_id,
-                    cached["final_recommendations"],
-                    config,
-                    selection_audit=cached.get("selection_audit"),
-                )
-            except Exception as exc:
-                model_usage.update_call_status(
-                    connection, call_id, "save_failed", type(exc).__name__
-                )
-                raise
-            return cached, cache_warnings, cache_status
+        except Exception as exc:
+            model_usage.update_call_status(
+                connection, call_id, "save_failed", type(exc).__name__
+            )
+            raise
+        return cached, cache_warnings, cache_status
 
-    local_cache_status = "force_refresh" if force else "miss"
+    local_cache_status = "miss"
     try:
         price_snapshot = model_usage.price_snapshot_from_config(
             config, stage="round2"
@@ -1174,7 +1023,7 @@ def run_round2_model_and_save(
         model_usage.update_call_status(
             connection, call_id, "validation_failed", validation_code
         )
-        # 只向云端封装传递验证器生成的安全结构诊断，不传递模型正文或全文。
+        # 只传递验证器生成的安全结构诊断，不传递模型正文或全文。
         raise RuntimeError(
             "round2_validation_failed:"
             + json.dumps(
@@ -1205,200 +1054,4 @@ def run_round2_model_and_save(
         )
         raise
     model_usage.update_call_status(connection, call_id, "completed")
-    return validated, cache_warnings + warnings, (
-        "force_refresh" if force else "cache_miss"
-    )
-
-
-def open_round2_database(
-    database_path: Path, *, dry_run: bool
-) -> sqlite3.Connection:
-    if dry_run:
-        connection = sqlite3.connect(
-            build_round2_inputs.sqlite_readonly_uri(database_path),
-            timeout=10,
-            uri=True,
-        )
-    else:
-        connection = sqlite3.connect(database_path, timeout=30)
-    connection.row_factory = sqlite3.Row
-    return connection
-
-
-def open_round2_fulltext_database(
-    database_path: Path, *, read_only: bool = True
-) -> sqlite3.Connection:
-    if not database_path.is_file():
-        raise RuntimeError("round2_fulltext_state_missing")
-    connection = (
-        sqlite3.connect(
-            build_round2_inputs.sqlite_readonly_uri(database_path), timeout=10, uri=True
-        )
-        if read_only
-        else sqlite3.connect(database_path, timeout=10)
-    )
-    connection.row_factory = sqlite3.Row
-    round2_fulltext_state.validate_fulltext_schema(connection)
-    return connection
-
-
-def run_round2_command(
-    project_root: Path,
-    *,
-    latest: bool,
-    target_date: str | None,
-    run_id: int | None = None,
-    dry_run: bool,
-    force: bool = False,
-    stdout: TextIO = sys.stdout,
-    client_factory: Callable[..., Any] | None = None,
-) -> int:
-    stage_started_at = model_usage.current_time_iso() if not dry_run else None
-    stage_started_perf = time.perf_counter() if not dry_run else None
-    try:
-        config, paths, profile, prompt = read_round2_context(project_root)
-        if (
-            not dry_run
-            and client_factory is None
-            and config["versions"]["round2_prompt_version"]
-            != main.CURRENT_ROUND2_PROMPT_VERSION
-        ):
-            # 历史提示词只允许 dry-run 回读，禁止通过真实客户端再次执行模型。
-            raise RuntimeError("legacy_round2_input_execution_forbidden")
-        connection = open_round2_database(paths["database"], dry_run=dry_run)
-        fulltext_connection: sqlite3.Connection | None = None
-        try:
-            fulltext_path = paths["database"].with_name("round2_inputs.sqlite")
-            if fulltext_path.is_file():
-                fulltext_connection = open_round2_fulltext_database(
-                    fulltext_path, read_only=dry_run
-                )
-            elif config["versions"]["round2_prompt_version"] in {
-                "round2_v9",
-                "round2_v10",
-                "round2_v11",
-                "round2_v12",
-                "round2_v14",
-                "round2_v15",
-            }:
-                raise RuntimeError("round2_fulltext_state_missing")
-            bundle = build_round2_input_bundle(
-                connection,
-                config,
-                profile,
-                prompt,
-                latest=latest,
-                target_date=target_date,
-                run_id=run_id,
-                fulltext_connection=fulltext_connection,
-            )
-            if dry_run:
-                print_round2_dry_run(bundle, stream=stdout)
-                return 0
-            # 输入已确认后再迁移，使无效 Run 仍保持零写入。
-            main.initialize_database_schema(connection)
-            if fulltext_connection is not None:
-                persist_round2_input_decisions(fulltext_connection, bundle)
-
-            model_usage.initialize_model_usage_schema(connection)
-            validated, warnings, cache_status = run_round2_model_and_save(
-                connection,
-                project_root,
-                config,
-                bundle,
-                force=force,
-                client_factory=client_factory,
-            )
-            stage_finished_at = model_usage.current_time_iso()
-            stage_duration_seconds = max(
-                0, int(round(time.perf_counter() - stage_started_perf))
-            )
-            model_usage.record_run_stage_timing(
-                connection,
-                run_id=bundle.run_selection.run_id,
-                stage_name="round2",
-                started_at=stage_started_at,
-                finished_at=stage_finished_at,
-                duration_seconds=stage_duration_seconds,
-            )
-        finally:
-            if fulltext_connection is not None:
-                fulltext_connection.close()
-            connection.close()
-    except Exception as exc:
-        print("ROUND2_RUN_STATUS=failed", file=stdout)
-        print(f"ERROR_TYPE={type(exc).__name__}", file=stdout)
-        print(f"ERROR_REASON={exc}", file=stdout)
-        return 1
-
-    print("ROUND2_RUN_STATUS=completed", file=stdout)
-    print(f"RUN_ID={bundle.run_selection.run_id}", file=stdout)
-    print(f"CANDIDATE_COUNT={len(bundle.papers)}", file=stdout)
-    print(f"CACHE_STATUS={cache_status}", file=stdout)
-    print(f"ROUND2_RUNTIME_SECONDS={stage_duration_seconds}", file=stdout)
-    print(
-        "FINAL_RECOMMENDATION_COUNT="
-        f"{validated['actual_recommendation_count']}",
-        file=stdout,
-    )
-    if warnings:
-        print(
-            "VALIDATION_WARNINGS="
-            + json.dumps(warnings, ensure_ascii=False, separators=(",", ":")),
-            file=stdout,
-        )
-    return 0
-
-
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="运行 DeepSeek 第二轮同批复筛；dry-run 不调用模型、不写库。"
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="只构造并打印第二轮请求安全摘要，不调用模型、不写数据库。",
-    )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="忽略可复用的第二轮结果并强制重新调用模型。",
-    )
-    selector = parser.add_mutually_exclusive_group(required=True)
-    selector.add_argument(
-        "--run-id",
-        type=int,
-        help="精确选择主流程 RUN_ID；不存在或没有当前第一轮入围结果时停止。",
-    )
-    selector.add_argument(
-        "--latest",
-        action="store_true",
-        help="选择最近一个当前 round1 策略下有 selected 结果的 run。",
-    )
-    selector.add_argument(
-        "--date",
-        help="选择指定本地日期 YYYY-MM-DD 内最近一个有 selected 结果的 run。",
-    )
-    return parser.parse_args(argv)
-
-
-def main_cli(
-    argv: list[str] | None = None,
-    *,
-    project_root: Path = PROJECT_ROOT,
-    stdout: TextIO = sys.stdout,
-) -> int:
-    args = parse_args(argv)
-    return run_round2_command(
-        project_root,
-        latest=bool(args.latest),
-        target_date=args.date,
-        run_id=args.run_id,
-        dry_run=bool(args.dry_run),
-        force=bool(args.force),
-        stdout=stdout,
-    )
-
-
-if __name__ == "__main__":
-    raise SystemExit(main_cli())
+    return validated, cache_warnings + warnings, "cache_miss"

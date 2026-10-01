@@ -7,18 +7,9 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Callable
-
-
-@dataclass(frozen=True)
-class ApiKeyLoadResult:
-    """本地密钥读取结果；错误信息只保存类型，不包含路径或密钥。"""
-
-    api_key: str | None
-    error_type: str | None
 
 
 @dataclass(frozen=True)
@@ -374,53 +365,6 @@ def responses_endpoint_url(chat_completions_url: str) -> str | None:
     return urllib.parse.urlunparse(parsed._replace(path=f"{prefix}/responses"))
 
 
-def resolve_project_file(project_root: Path, raw_path: str) -> Path | None:
-    """只解析项目目录内的相对路径，避免密钥路径逃逸。"""
-    if not isinstance(raw_path, str) or not raw_path.strip():
-        return None
-    relative_path = Path(raw_path)
-    if relative_path.is_absolute():
-        return None
-
-    root = project_root.resolve()
-    target = (root / relative_path).resolve()
-    try:
-        target.relative_to(root)
-    except ValueError:
-        return None
-    return target
-
-
-def load_local_api_key(
-    project_root: Path, deepseek_config: dict[str, Any]
-) -> ApiKeyLoadResult:
-    """仅从配置指定的本地 JSON 文件读取密钥，绝不读取环境变量。"""
-    key_path = resolve_project_file(
-        project_root, deepseek_config.get("api_key_file", "")
-    )
-    if key_path is None:
-        return ApiKeyLoadResult(None, "invalid_api_key_file")
-    if not key_path.is_file():
-        return ApiKeyLoadResult(None, "missing_api_key")
-
-    field_name = deepseek_config.get("api_key_json_field")
-    if not isinstance(field_name, str) or not field_name.strip():
-        return ApiKeyLoadResult(None, "missing_api_key")
-
-    try:
-        with key_path.open("r", encoding="utf-8-sig") as file:
-            content = json.load(file)
-    except (OSError, json.JSONDecodeError):
-        return ApiKeyLoadResult(None, "invalid_api_key_file")
-
-    if not isinstance(content, dict):
-        return ApiKeyLoadResult(None, "invalid_api_key_file")
-    api_key = content.get(field_name)
-    if not isinstance(api_key, str) or not api_key.strip():
-        return ApiKeyLoadResult(None, "missing_api_key")
-    return ApiKeyLoadResult(api_key.strip(), None)
-
-
 class DeepSeekClient:
     """使用 Python 标准库调用 DeepSeek JSON 接口。"""
 
@@ -469,27 +413,6 @@ class DeepSeekClient:
             return "automatic_retry_forbidden"
         return None
 
-    def self_check(self) -> DeepSeekCallResult:
-        """发送极短 JSON 请求，成功后主流程才允许执行第一轮筛选。"""
-        messages = [
-            {
-                "role": "system",
-                "content": '只输出 JSON 对象：{"status":"ok"}。',
-            },
-            {
-                "role": "user",
-                "content": '请返回 {"status":"ok"}。',
-            },
-        ]
-        # 思考模式的推理内容也计入生成预算，保留足够空间返回最终 JSON。
-        result = self.request_json(
-            messages, max_tokens=1024 if self.thinking_mode == "enabled" else 64
-        )
-        if not result.ok:
-            return result
-        if result.data != {"status": "ok"}:
-            return replace(result, ok=False, data=None, error_type="json_parse_failed")
-        return result
 
     def request_json(
         self,

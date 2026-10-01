@@ -1,34 +1,20 @@
 from __future__ import annotations
 
-import argparse
 import json
 import re
 import sqlite3
-import sys
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any
 
 import build_round2_inputs
 import content_labels
-import daily_report_template
-import selection_nature
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent
 ROUND1_TASK_TYPE = "round1_abstract_screening"
 ROUND2_TASK_TYPE = "round2_batch_ranking"
 LEVEL_BUDGETS = {"deep_read": 1, "skim_read": 3, "backup": 1}
-# 当前正式日报和独立第二轮报告均不再生成反馈区块。
-DAILY_REPORT_TEMPLATE_VERSION = daily_report_template.DAILY_REPORT_TEMPLATE_VERSION
-ROUND2_REPORT_TEMPLATE_VERSION = "round2_report_v9_submission_dates"
-COMPACT_DAILY_REPORT_TEMPLATE_VERSIONS = (
-    "daily_report_v11_compact",
-    "daily_report_v12_submission_dates",
-    daily_report_template.LEGACY_TIMING_REPORT_TEMPLATE_VERSION,
-    DAILY_REPORT_TEMPLATE_VERSION,
-)
 RECOMMENDATION_LEVEL_DISPLAY = {
     "deep_read": "Deep Read",
     "skim_read": "Skim Read",
@@ -37,16 +23,6 @@ RECOMMENDATION_LEVEL_DISPLAY = {
 REPORT_LINK_MODE_LOCAL = "local"
 REPORT_LINK_MODE_CLOUD = "cloud"
 REPORT_LINK_MODES = (REPORT_LINK_MODE_LOCAL, REPORT_LINK_MODE_CLOUD)
-EVIDENCE_SOURCE_LABELS = {
-    "pdf_full_text": "PDF 全文",
-    "metadata_abstract": "arXiv 摘要",
-    "pdf_introduction": "PDF 引言",
-    "pdf_conclusion": "PDF 结论",
-}
-# 仅供旧日报导入器兼容历史文件，当前渲染器不得使用。
-FEEDBACK_BLOCK_START = "<!-- ARXIVKALEID_FEEDBACK_START"
-FEEDBACK_BLOCK_END = "<!-- ARXIVKALEID_FEEDBACK_END -->"
-ABSTRACT_HEADING = "**摘要全文**"
 ABSTRACT_URL_PATTERN = re.compile(r"https?://[^\s<>]+")
 UNESCAPED_TILDE_PATTERN = re.compile(r"(?<!\\)~")
 LATEX_NONBREAKING_SPACE = "\u00a0"
@@ -82,62 +58,6 @@ def recommendation_level_display(value: object) -> str:
         return RECOMMENDATION_LEVEL_DISPLAY[str(value)]
     except KeyError as exc:
         raise RuntimeError("report_recommendation_level_invalid") from exc
-
-
-def prompt_requires_structured_evidence(prompt_version: object) -> bool:
-    """仅历史 round2_v5/v6 日报要求已保存的结构化证据。"""
-    match = re.fullmatch(r"round2_v(\d+)", str(prompt_version or "").strip())
-    return bool(match and int(match.group(1)) in {5, 6})
-
-
-def valid_persisted_evidence(value: object) -> bool:
-    """检查入库证据结构；原文页码匹配已在模型结果保存前完成。"""
-    if not isinstance(value, list) or not value:
-        return False
-    for item in value:
-        if not isinstance(item, dict) or set(item) != {
-            "source",
-            "page_number",
-            "quote",
-        }:
-            return False
-        source = item.get("source")
-        page_number = item.get("page_number")
-        quote = item.get("quote")
-        if source not in EVIDENCE_SOURCE_LABELS:
-            return False
-        if not isinstance(quote, str) or not quote.strip():
-            return False
-        if source == "pdf_full_text":
-            if (
-                isinstance(page_number, bool)
-                or not isinstance(page_number, int)
-                or page_number <= 0
-            ):
-                return False
-        elif page_number is not None:
-            return False
-    return True
-
-
-def load_database_and_daily_reports_dir(project_root: Path) -> tuple[Path, Path]:
-    """读取数据库和正式日报目录，供所有只读报告入口共用。"""
-    try:
-        config = json.loads(
-            (project_root / "config.json").read_text(encoding="utf-8-sig")
-        )
-        paths = config["paths"]
-        database = (project_root / paths["database"]).resolve()
-        daily_reports = (project_root / paths["reports_dir"]).resolve()
-    except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
-        raise RuntimeError("cannot_read_report_configuration") from exc
-    return database, daily_reports
-
-
-def load_paths(project_root: Path) -> tuple[Path, Path]:
-    """兼容独立第二轮报告入口，继续返回其专用输出目录。"""
-    database, daily_reports = load_database_and_daily_reports_dir(project_root)
-    return database, daily_reports.parent / "round2"
 
 
 def open_readonly_database(database_path: Path) -> sqlite3.Connection:
@@ -187,26 +107,13 @@ def validate_schema(connection: sqlite3.Connection) -> None:
             raise RuntimeError(f"missing_columns:{table}:{','.join(missing)}")
 
 
-def select_run(
-    connection: sqlite3.Connection, *, run_id: int | None, latest: bool
-) -> sqlite3.Row:
-    if latest == (run_id is not None):
-        raise RuntimeError("choose_exactly_one_of_run_id_or_latest")
-    if latest:
-        row = connection.execute(
-            """
-            SELECT run_id, started_at, status
-            FROM runs
-            WHERE status = 'success'
-            ORDER BY run_id DESC
-            LIMIT 1
-            """
-        ).fetchone()
-    else:
-        row = connection.execute(
-            "SELECT run_id, started_at, status FROM runs WHERE run_id = ?",
-            (run_id,),
-        ).fetchone()
+def select_run(connection: sqlite3.Connection, *, run_id: int) -> sqlite3.Row:
+    """只读取当前 Desktop 明确指定的运行。"""
+    if type(run_id) is not int or run_id <= 0:
+        raise RuntimeError("report_run_invalid")
+    row = connection.execute(
+        "SELECT run_id, started_at, status FROM runs WHERE run_id = ?", (run_id,)
+    ).fetchone()
     if row is None:
         raise RuntimeError("report_run_not_found")
     return row
@@ -215,12 +122,11 @@ def select_run(
 def load_and_validate_round2(
     connection: sqlite3.Connection,
     *,
-    run_id: int | None,
-    latest: bool,
+    run_id: int,
     eligible_paper_keys: set[tuple[str, int]] | None = None,
 ) -> Round2ReportData:
     validate_schema(connection)
-    run = select_run(connection, run_id=run_id, latest=latest)
+    run = select_run(connection, run_id=run_id)
     selected_rows = connection.execute(
         """
         SELECT arxiv_id, version, result_rank
@@ -297,7 +203,7 @@ def load_and_validate_round2(
     ).fetchall()
     if not rows:
         if (
-            audit_prompt_version in {"round2_v14", "round2_v15"}
+            audit_prompt_version in {"round2_v15"}
             and isinstance(audit, dict)
             and audit.get("accepted_count") == 0
         ):
@@ -342,9 +248,9 @@ def load_and_validate_round2(
             next(iter(prompt_versions))
         )
     )
-    uses_tolerant_contract = bool(prompt_versions) and prompt_versions.issubset(
-        {"round2_v14", "round2_v15"}
-    )
+    uses_tolerant_contract = prompt_versions == {"round2_v15"}
+    if not uses_tolerant_contract:
+        reasons.append("Desktop 仅支持 round2_v15 结果。")
     expected_count = min(5, len(candidate_ids))
     if not uses_tolerant_contract and len(rows) != expected_count:
         reasons.append(
@@ -353,21 +259,6 @@ def load_and_validate_round2(
     ranks = [row["result_rank"] for row in rows]
     if ranks != list(range(1, len(rows) + 1)):
         reasons.append("final rank 不是从 1 开始的连续整数。")
-    scores = [row["score"] for row in rows]
-    if not uses_tolerant_contract and any(
-        isinstance(score, bool)
-        or not isinstance(score, int)
-        or not 0 <= score <= 100
-        for score in scores
-    ):
-        reasons.append("score 不是 0 至 100 的合法整数。")
-    elif (
-        not uses_tolerant_contract
-        and not uses_core_content_label
-        and scores != sorted(scores, reverse=True)
-    ):
-        reasons.append("历史第二轮 score 不是合法的降序整数序列。")
-
     if uses_tolerant_contract and (
         not isinstance(audit, dict) or audit.get("accepted_count") != len(rows)
     ):
@@ -450,28 +341,6 @@ def load_and_validate_round2(
                 )
         else:
             item["content_label"] = round1_labels.get(key)
-        if selection_nature.round2_prompt_requires_contribution_tier(
-            item.get("prompt_version")
-        ):
-            item["contribution_tier"] = details.get("contribution_tier")
-            try:
-                item["selection_nature"] = (
-                    selection_nature.round2_selection_nature_from_tier(
-                        item["contribution_tier"],
-                        prompt_version=item.get("prompt_version"),
-                    )
-                )
-            except RuntimeError:
-                reasons.append(
-                    f"{item['arxiv_id']}v{item['version']} 缺少合法的第二轮贡献层级。"
-                )
-        item["evidence"] = details.get("evidence", [])
-        if prompt_requires_structured_evidence(item.get("prompt_version")) and not (
-            valid_persisted_evidence(item["evidence"])
-        ):
-            reasons.append(
-                f"{item['arxiv_id']}v{item['version']} 缺少合法的结构化证据。"
-            )
         recommendations_list.append(item)
     recommendations = tuple(recommendations_list)
     return Round2ReportData(
@@ -512,64 +381,6 @@ def render_abstract_markdown_text(value: str) -> str:
         UNESCAPED_TILDE_PATTERN.sub(LATEX_NONBREAKING_SPACE, text[cursor:])
     )
     return "".join(rendered)
-
-
-def repair_report_abstract_markdown(report_text: str) -> tuple[str, int]:
-    """只修复日报摘要引用块，返回修复文本与发生变化的行数。"""
-    lines = report_text.splitlines(keepends=True)
-    in_abstract = False
-    changed_lines = 0
-    repaired: list[str] = []
-    for line in lines:
-        stripped = line.rstrip("\r\n")
-        if stripped == ABSTRACT_HEADING:
-            in_abstract = True
-            repaired.append(line)
-            continue
-        if in_abstract and stripped == "---":
-            in_abstract = False
-            repaired.append(line)
-            continue
-        if in_abstract and stripped.startswith(">"):
-            rendered = render_abstract_markdown_text(line)
-            if rendered != line:
-                changed_lines += 1
-            repaired.append(rendered)
-            continue
-        repaired.append(line)
-    return "".join(repaired), changed_lines
-
-
-def unsafe_abstract_tilde_count(report_text: str) -> int:
-    """统计摘要引用块中仍可能触发 GitHub 删除线的裸波浪号。"""
-    count = 0
-    in_abstract = False
-    for line in report_text.splitlines():
-        if line == ABSTRACT_HEADING:
-            in_abstract = True
-            continue
-        if in_abstract and line == "---":
-            in_abstract = False
-            continue
-        if in_abstract and line.startswith(">"):
-            count += len(UNESCAPED_TILDE_PATTERN.findall(line))
-    return count
-
-
-def unsafe_abstract_backtick_count(report_text: str) -> int:
-    """统计摘要引用块中仍可能触发 GitHub 代码段的原始反引号。"""
-    count = 0
-    in_abstract = False
-    for line in report_text.splitlines():
-        if line == ABSTRACT_HEADING:
-            in_abstract = True
-            continue
-        if in_abstract and line == "---":
-            in_abstract = False
-            continue
-        if in_abstract and line.startswith(">"):
-            count += line.count("`")
-    return count
 
 
 def build_round2_section(
@@ -668,108 +479,6 @@ def build_local_pdf_line(row: dict[str, Any]) -> str | None:
     return f"- 本地 PDF：[打开本地 PDF](<../../{relative_path}>)"
 
 
-def build_report_text(
-    data: Round2ReportData,
-    generated_at: datetime,
-    *,
-    link_mode: str = REPORT_LINK_MODE_LOCAL,
-) -> str:
-    validate_report_link_mode(link_mode)
-    lines = [
-        "# arXiv Round 2 最终推荐",
-        "",
-        f"报告生成时间：{generated_at.strftime('%Y-%m-%d %H:%M')}",
-        "",
-        "<!-- ARXIVKALEID_REPORT_META",
-        f"report_run_id: {data.run_id}",
-        f"report_generated_at: {generated_at.isoformat(timespec='seconds')}",
-        f"report_template_version: {ROUND2_REPORT_TEMPLATE_VERSION}",
-        "-->",
-        f"运行开始时间：{data.started_at}",
-        f"主流程状态：{data.run_status}",
-        "",
-        build_round2_section(data, link_mode=link_mode),
-    ]
-    return "\n".join(lines)
-
-
-def write_new_report(
-    reports_dir: Path,
-    data: Round2ReportData,
-    *,
-    link_mode: str = REPORT_LINK_MODE_LOCAL,
-) -> tuple[Path, datetime]:
-    validate_report_link_mode(link_mode)
-    reports_dir.mkdir(parents=True, exist_ok=True)
-    generated_at = datetime.now().astimezone()
-    stem = generated_at.strftime(f"round2_run-{data.run_id}_%Y-%m-%d_%H%M%S")
-    for suffix in range(100):
-        name = f"{stem}.md" if suffix == 0 else f"{stem}_{suffix}.md"
-        path = reports_dir / name
-        try:
-            with path.open("x", encoding="utf-8", newline="\n") as file:
-                file.write(
-                    build_report_text(data, generated_at, link_mode=link_mode)
-                )
-                file.write("\n")
-            return path, generated_at
-        except FileExistsError:
-            continue
-        except OSError as exc:
-            raise RuntimeError("cannot_write_round2_report") from exc
-    raise RuntimeError("cannot_allocate_unique_round2_report_name")
-
-
-def generate_report_command(
-    project_root: Path,
-    *,
-    run_id: int | None,
-    latest: bool,
-    link_mode: str = REPORT_LINK_MODE_LOCAL,
-    stdout: TextIO = sys.stdout,
-) -> int:
-    try:
-        database_path, reports_dir = load_paths(project_root)
-        connection = open_readonly_database(database_path)
-        try:
-            fulltext_database = database_path.with_name("round2_inputs.sqlite")
-            eligible_paper_keys = load_eligible_paper_keys(fulltext_database)
-            data = load_and_validate_round2(
-                connection,
-                run_id=run_id,
-                latest=latest,
-                eligible_paper_keys=eligible_paper_keys,
-            )
-            page_counts = load_fulltext_page_counts(fulltext_database)
-            if page_counts:
-                data = replace(
-                    data,
-                    recommendations=tuple(
-                        {
-                            **row,
-                            "page_count": page_counts.get(
-                                (str(row["arxiv_id"]), int(row["version"]))
-                            ),
-                        }
-                        for row in data.recommendations
-                    ),
-                )
-        finally:
-            connection.close()
-        report_path, _ = write_new_report(
-            reports_dir, data, link_mode=link_mode
-        )
-    except Exception as exc:
-        print("ROUND2_REPORT_STATUS=failed", file=stdout)
-        print(f"ERROR_TYPE={type(exc).__name__}", file=stdout)
-        print(f"ERROR_REASON={exc}", file=stdout)
-        return 1
-    print(f"ROUND2_REPORT_STATUS={data.status}", file=stdout)
-    print(f"RUN_ID={data.run_id}", file=stdout)
-    print(f"REPORT_PATH={report_path.relative_to(project_root)}", file=stdout)
-    return 0
-
-
 def load_eligible_paper_keys(
     fulltext_database_path: Path,
 ) -> set[tuple[str, int]] | None:
@@ -798,18 +507,7 @@ def load_eligible_paper_keys(
                     """
                 ).fetchall()
             }
-        # 旧 artifact 没有决策表，仅供历史报告回读。
-        return {
-            (str(row[0]), int(row[1]))
-            for row in connection.execute(
-                """
-                SELECT arxiv_id, version
-                FROM pdf_fulltext_documents
-                WHERE page_gate_status = ?
-                """,
-                (round2_fulltext_state.PAGE_GATE_ELIGIBLE,),
-            ).fetchall()
-        }
+        raise RuntimeError("desktop_round2_decisions_missing")
     finally:
         connection.close()
 
@@ -817,7 +515,7 @@ def load_eligible_paper_keys(
 def load_fulltext_page_counts(
     fulltext_database_path: Path,
 ) -> dict[tuple[str, int], int]:
-    """读取独立全文状态库中的实际物理页数；缺少旧状态库时返回空映射。"""
+    """读取当前独立全文状态库中的实际物理页数。"""
     if not fulltext_database_path.is_file():
         return {}
     connection = open_readonly_database(fulltext_database_path)
@@ -836,39 +534,3 @@ def load_fulltext_page_counts(
         }
     finally:
         connection.close()
-
-
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="从 SQLite 已保存结果生成独立第二轮日报；不调用模型。"
-    )
-    selector = parser.add_mutually_exclusive_group(required=True)
-    selector.add_argument("--run-id", type=int, help="指定主流程 RUN_ID。")
-    selector.add_argument("--latest", action="store_true", help="选择最新成功 run。")
-    parser.add_argument(
-        "--link-mode",
-        choices=REPORT_LINK_MODES,
-        default=REPORT_LINK_MODE_LOCAL,
-        help="链接模式；cloud 明确省略本地 PDF 链接（默认：local）。",
-    )
-    return parser.parse_args(argv)
-
-
-def main_cli(
-    argv: list[str] | None = None,
-    *,
-    project_root: Path = PROJECT_ROOT,
-    stdout: TextIO = sys.stdout,
-) -> int:
-    args = parse_args(argv)
-    return generate_report_command(
-        project_root,
-        run_id=args.run_id,
-        latest=bool(args.latest),
-        link_mode=args.link_mode,
-        stdout=stdout,
-    )
-
-
-if __name__ == "__main__":
-    raise SystemExit(main_cli())

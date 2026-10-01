@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
 import sqlite3
@@ -17,6 +16,7 @@ import round2_fulltext_state
 import run_round2
 from desktop import pipeline
 from desktop import paths as desktop_paths
+from desktop.config import batch_cost_limit
 from desktop.diagnostics import DesktopDiagnostics, StageTimer, new_id
 from desktop.errors import (
     DesktopIssue,
@@ -179,7 +179,7 @@ def initialize_work_paths():
     return tuple(runtime_path("work", name) for name in names)
 
 
-def validate_budget(connection, run_id, config, policy, stage, messages):
+def validate_budget(connection, run_id, config, stage, messages):
     """沿用保守估算和峰值价格，并把前一轮实际费用计入同批上限。"""
     stage_config = main.deepseek_stage_config(config, stage)
     tokens = round2_fulltext_state.conservative_request_token_estimate(messages)
@@ -191,40 +191,37 @@ def validate_budget(connection, run_id, config, policy, stage, messages):
     if (
         stage_config["max_retries"] != 0
         or tokens > int(config["limits"][f"max_{stage}_request_tokens"])
-        or tokens + output > int(policy["model_context_tokens"]) - int(policy["context_safety_margin_tokens"])
-        or output > int(policy["model_max_output_tokens"])
+        or tokens + output > config["limits"]["model_context_tokens"] - config["limits"]["context_safety_margin_tokens"]
+        or output > config["limits"]["model_max_output_tokens"]
     ):
         raise RuntimeError("desktop_token_budget_exceeded")
     price = model_usage.price_snapshot_from_config(config, stage=stage, conservative=True)
     if price is None or price.currency != "CNY":
         raise RuntimeError("desktop_price_unavailable")
-    usage = checked_usage(connection, run_id)
+    usage = checked_usage(connection, run_id, config)
     spent = usage.known_cost if usage else Decimal(0)
     worst = (
         Decimal(tokens) * price.cache_miss_input_price_per_million
         + Decimal(output) * price.output_price_per_million
     ) / Decimal(1_000_000)
-    cap = min(
-        Decimal("3.00"), Decimal(config["automation"]["expected_batch_cost_cny"]),
-        Decimal(config["automation"]["absolute_workflow_cost_cny"]),
-        Decimal(policy["expected_batch_cost_cny"]), Decimal(policy["absolute_workflow_cost_cny"]),
-    )
+    cap = batch_cost_limit(config)
     if not worst.is_finite() or spent + worst > cap:
         raise RuntimeError("desktop_cost_budget_exceeded")
 
 
-def checked_usage(connection, run_id):
+def checked_usage(connection, run_id, config):
     usage = model_usage.load_run_usage_summary(connection, run_id)
     if usage is not None and (
         not usage.token_complete or not usage.cost_complete
-        or usage.currency != "CNY" or usage.known_cost > Decimal("3.00")
+        or usage.currency != "CNY" or not usage.known_cost.is_finite()
+        or usage.known_cost > batch_cost_limit(config)
     ):
         raise RuntimeError("desktop_usage_or_cost_unconfirmed")
     return usage
 
 
 def run_round1(
-    connection, run_id, papers, config, profile, prompt, policy, api_key,
+    connection, run_id, papers, config, profile, prompt, api_key,
     diagnostic_observer: Callable[[str, object], None] | None = None,
 ):
     if not papers:
@@ -233,7 +230,7 @@ def run_round1(
         )
         return []
     messages = main.build_round1_messages(prompt, profile, papers, config)
-    validate_budget(connection, run_id, config, policy, "round1", messages)
+    validate_budget(connection, run_id, config, "round1", messages)
     stage = main.deepseek_stage_config(config, "round1")
     client = main.DeepSeekClient(
         api_key=api_key, model=stage["model"], endpoint_url=stage["base_url"],
@@ -302,7 +299,7 @@ def run_round1(
         model_usage.update_call_status(connection, call_id, "save_failed", "round1_save_failed")
         raise
     model_usage.update_call_status(connection, call_id, "completed")
-    checked_usage(connection, run_id)
+    checked_usage(connection, run_id, config)
     return selected
 
 
@@ -355,8 +352,6 @@ class AnalysisAttempt:
             root = desktop_paths.application_root(pipeline.PROJECT_ROOT)
             resources = desktop_paths.resource_root(pipeline.PROJECT_ROOT)
             config, paths, profile, round2_prompt = run_round2.read_round2_context(resources)
-            policy_path = main.resolve_project_path(resources, config["automation"]["policy_file"], "policy_file")
-            policy = json.loads(policy_path.read_text(encoding="utf-8"))
             if (config["round1_max_selected_n"] > 10 or config["final_max_recommendations"] > 5
                     or config["limits"]["max_round2_pdf_pages"] != 60
                     or config["deepseek"]["max_retries"] != 0):
@@ -427,7 +422,7 @@ class AnalysisAttempt:
 
             selected = run_round1(
                 connection, run_id, papers, config, profile,
-                main.load_prompt(paths["round1_prompt"]), policy, api_key,
+                main.load_prompt(paths["round1_prompt"]), api_key,
                 diagnostic_observer=observe_round1,
             )
             if not selected:
@@ -675,13 +670,13 @@ class AnalysisAttempt:
             stage_timer = StageTimer()
             if papers:
                 bundle = run_round2.build_round2_input_bundle(
-                    connection, config, profile, round2_prompt, latest=False,
-                    target_date=None, run_id=run_id, fulltext_connection=fulltext,
+                    connection, config, profile, round2_prompt,
+                    run_id=run_id, fulltext_connection=fulltext,
                 )
             else:
                 bundle = run_round2.Round2InputBundle(
                     build_round2_inputs.Round2RunSelection(run_id, main.current_time_iso(), 0),
-                    [], [], [], {}, input_mode="no_candidates", uses_fulltext_state=True,
+                    [], [], {}, input_mode="no_candidates", uses_fulltext_state=True,
                 )
             run_round2.persist_round2_input_decisions(fulltext, bundle)
             if not _sqlite_intact(connection, fulltext):
@@ -722,7 +717,7 @@ class AnalysisAttempt:
                         stage="round2", state="start", run_id=run_id,
                         counts={"eligible_count": len(bundle.papers)}, **identities,
                     )
-                validate_budget(connection, run_id, config, policy, "round2", bundle.messages)
+                validate_budget(connection, run_id, config, "round2", bundle.messages)
                 emit_progress(progress, ProgressEvent(
                     task_type="analysis", stage="round2", state="running",
                     message=f"Round 2 分析中 · 全文输入 {len(bundle.papers)} 篇",
@@ -815,7 +810,7 @@ class AnalysisAttempt:
                             "recommendation_count": recommendation_count},
                     **identities,
                 )
-            checked_usage(connection, run_id)
+            checked_usage(connection, run_id, config)
             stage = "report"
             stage_timer = StageTimer()
             if self.diagnostics:

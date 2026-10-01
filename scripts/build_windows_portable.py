@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import struct
 import subprocess
@@ -20,11 +21,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from desktop import __version__
 from desktop.paths import checked_path
+from desktop.config import load_config
 
 NAME = f'arXivKaleid-{__version__}-windows-x64'
 RESOURCES = (
     'config.json',
-    'config/automation_policy.json',
     'prompts/relevance_round1_v20.txt',
     'prompts/relevance_round2_v15.txt',
 )
@@ -42,6 +43,33 @@ REQUIRED_RELEASE_FILES = (
 
 def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def pinned_requirements(filename: str, *, root: Path = ROOT,
+                        visiting: frozenset[Path] = frozenset()) -> dict[str, str]:
+    """展开项目内 requirements 引用；拒绝越界、循环和未固定版本。"""
+    path = checked_path(root, filename)
+    if path in visiting:
+        raise RuntimeError('requirements_include_cycle')
+    pins = {}
+    for raw in path.read_text(encoding='utf-8').splitlines():
+        line = raw.strip()
+        if not line or line.startswith('#'):
+            continue
+        if line.startswith('-r '):
+            included = checked_path(root, str(path.parent.relative_to(root)), line[3:].strip())
+            additions = pinned_requirements(str(included.relative_to(root)), root=root,
+                                            visiting=visiting | {path})
+        else:
+            match = re.fullmatch(r'([A-Za-z0-9_.-]+)==([A-Za-z0-9_.+!-]+)', line)
+            if not match:
+                raise RuntimeError('requirements_pin_invalid')
+            additions = {match[1]: match[2]}
+        for name, version in additions.items():
+            if name in pins and pins[name] != version:
+                raise RuntimeError('requirements_pin_conflict')
+            pins[name] = version
+    return pins
 
 
 def verify_checksum(data: bytes, expected: str) -> None:
@@ -108,10 +136,8 @@ def prepare_resources(stage: Path) -> None:
         target = checked_path(stage, name)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)
-    policy = json.loads((stage / 'config/automation_policy.json').read_text(encoding='utf-8'))
-    for name, digest in policy['file_sha256'].items():
-        text = checked_path(stage, name).read_text(encoding='utf-8')
-        verify_checksum(text.encode('utf-8'), digest)
+    # Desktop 配置同时校验资源身份，不再需要在线策略文件。
+    load_config(stage / 'config.json')
     prefix = Path(sys.prefix)
     tz = json.loads(next((prefix / 'conda-meta').glob('tzdata-*.json')).read_text(encoding='utf-8'))
     if tz['version'] != '2026c':
@@ -146,7 +172,9 @@ def verify_tree(folder: Path) -> dict[str, str]:
             raise RuntimeError('forbidden_release_path')
         if not path.is_file():
             continue
-        if (path.name.lower() in ('secret.dat', 'local_secret.json')
+        if (path.name.lower() in ('secret.dat', 'local_secret.json', 'automation_policy.json',
+                                  'research_profile.json', 'research_profile.md',
+                                  'daily_report_template.py', 'selection_nature.py')
                 or '.sqlite' in path.name.lower()
                 or path.suffix.lower() in {'.pdf', '.jsonl'}):
             raise RuntimeError('forbidden_release_file')
@@ -171,12 +199,10 @@ def main() -> None:
         raise RuntimeError('windows_x64_required')
     if Path(sys.prefix).name != 'arxivkaleid-desktop' or sys.version_info[:2] != (3, 13):
         raise RuntimeError('dedicated_conda_python313_required')
-    for filename in ('requirements.txt', 'requirements-desktop.txt', 'requirements-build.txt'):
-        for line in (ROOT / filename).read_text(encoding='utf-8').splitlines():
-            if line and not line.startswith('#'):
-                name, version = line.split('==')
-                if importlib.metadata.version(name) != version:
-                    raise RuntimeError('build_dependency_version_mismatch:' + name)
+    for filename in ('requirements-desktop.txt', 'requirements-build.txt'):
+        for name, version in pinned_requirements(filename).items():
+            if importlib.metadata.version(name) != version:
+                raise RuntimeError('build_dependency_version_mismatch:' + name)
     build = checked_path(ROOT, '.desktop-build')
     build.mkdir(exist_ok=True)
     job = Path(tempfile.mkdtemp(prefix='build-', dir=build))

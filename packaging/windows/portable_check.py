@@ -23,12 +23,11 @@ def run(*, network=False):
         from zoneinfo import ZoneInfo
         assert str(ZoneInfo('Asia/Shanghai')) == 'Asia/Shanghai'
         import deepseek_client
-        # 诊断进程中的任何模型入口均硬失败；连 self check 也不例外。
+        # 诊断进程中的两个模型入口均硬失败。
         def forbidden(*args, **kwargs):
             raise RuntimeError('model_forbidden_in_portable_check')
         deepseek_client.DeepSeekClient.request_json = forbidden
         deepseek_client.DeepSeekClient.request_responses_json = forbidden
-        deepseek_client.DeepSeekClient.self_check = forbidden
         import run_round2
         config, resources, profile, prompt = run_round2.read_round2_context(paths.resource_root(pipeline.PROJECT_ROOT))
         assert config['versions']['research_profile_version'] == profile['profile_version'] and prompt
@@ -41,9 +40,24 @@ def run(*, network=False):
         assert store.load() == 'synthetic-portable-check-not-an-api-key'
         from desktop.analysis import lock_work_directory, initialize_work_paths
         with lock_work_directory():
-            for path in initialize_work_paths():
-                with sqlite3.connect(path) as conn:
-                    conn.execute('CREATE TABLE diagnostic (value INTEGER)')
+            database, fulltext_database = initialize_work_paths()
+            conn = main.init_database(database)
+            try:
+                assert conn.execute('PRAGMA user_version').fetchone()[0] == main.DESKTOP_SCHEMA_VERSION
+                assert not {'scores', 'feedback', 'pdf_sections', 'daily_reports'} & {
+                    row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                }
+                import build_round2_inputs
+                build_round2_inputs.validate_required_schema(conn)
+            finally:
+                conn.close()
+            import round2_fulltext_state
+            conn = sqlite3.connect(fulltext_database)
+            try:
+                round2_fulltext_state.initialize_fulltext_schema(conn)
+                round2_fulltext_state.validate_fulltext_schema(conn)
+            finally:
+                conn.close()
         import pypdf
         output = io.BytesIO()
         writer = pypdf.PdfWriter()

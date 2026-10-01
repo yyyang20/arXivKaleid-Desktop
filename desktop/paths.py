@@ -1,4 +1,4 @@
-"""Desktop 的资源与运行目录边界，不改变共享 CLI 的项目根定义。"""
+"""Desktop 的应用资源与本地运行目录边界。"""
 from __future__ import annotations
 
 import hashlib

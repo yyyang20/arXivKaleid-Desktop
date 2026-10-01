@@ -31,7 +31,7 @@ def build_desktop_report(
     if eligible is None:
         raise RuntimeError("desktop_report_fulltext_missing")
     round2 = generate_round2_report.load_and_validate_round2(
-        connection, run_id=run_id, latest=False, eligible_paper_keys=eligible
+        connection, run_id=run_id, eligible_paper_keys=eligible
     )
     if round2.status not in {"round2_results_valid", "round2_no_candidates"}:
         raise RuntimeError("desktop_report_round2_invalid")

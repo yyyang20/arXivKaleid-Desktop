@@ -70,8 +70,21 @@ class DesktopBuildTests(unittest.TestCase):
             self.assertIn(config['paths'][name], builder.RESOURCES)
         self.assertNotIn('config/research_profile.json', builder.RESOURCES)
         self.assertNotIn('profiles/research_profile.md', builder.RESOURCES)
-        self.assertIn(config['automation']['policy_file'], builder.RESOURCES)
-        self.assertNotIn(config['deepseek']['api_key_file'], builder.RESOURCES)
+        self.assertNotIn('automation', config)
+        self.assertNotIn('config/automation_policy.json', builder.RESOURCES)
+        self.assertNotIn('config/local_secret.json', builder.RESOURCES)
+
+    def test_desktop_requirements_include_pdf_runtime_with_fixed_versions(self):
+        self.assertEqual(builder.pinned_requirements('requirements-desktop.txt'),
+                         {'pypdf': '6.14.2', 'PySide6': '6.9.2'})
+        (self.root / 'requirements.txt').write_text('-r other.txt\n', encoding='utf-8')
+        (self.root / 'other.txt').write_text('-r requirements.txt\n', encoding='utf-8')
+        with self.assertRaisesRegex(RuntimeError, 'cycle'):
+            builder.pinned_requirements('requirements.txt', root=self.root)
+        for value in ('-r ../outside.txt', 'package>=1.0', 'package==1\npackage==2'):
+            (self.root / 'requirements.txt').write_text(value, encoding='utf-8')
+            with self.assertRaises((ValueError, RuntimeError)):
+                builder.pinned_requirements('requirements.txt', root=self.root)
 
     def test_public_documents_are_copied_to_release_root(self):
         builder.copy_public_documents(self.root)

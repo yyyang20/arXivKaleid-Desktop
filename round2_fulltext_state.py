@@ -161,20 +161,10 @@ def validate_fulltext_schema(connection: sqlite3.Connection) -> None:
         raise RuntimeError("pdf_fulltext_documents_schema_mismatch")
     if pages != (EXPECTED_PAGE_COLUMNS, EXPECTED_PAGE_PRIMARY_KEY):
         raise RuntimeError("pdf_fulltext_pages_schema_mismatch")
-    tables = {
-        str(row[0])
-        for row in connection.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table'"
-        ).fetchall()
-    }
-    # 历史 artifact 没有该表，仍可只读审计；新产物一旦存在就严格验证。
-    if "round2_input_decisions" in tables:
-        decisions = _schema_identity(connection, "round2_input_decisions")
-        if decisions != (
-            EXPECTED_DECISION_COLUMNS,
-            EXPECTED_DECISION_PRIMARY_KEY,
-        ):
-            raise RuntimeError("round2_input_decisions_schema_mismatch")
+    # Desktop 每次创建完整工作库；不接受缺少决策表的在线历史产物。
+    decisions = _schema_identity(connection, "round2_input_decisions")
+    if decisions != (EXPECTED_DECISION_COLUMNS, EXPECTED_DECISION_PRIMARY_KEY):
+        raise RuntimeError("round2_input_decisions_schema_mismatch")
 
 
 def replace_input_decisions(

@@ -34,16 +34,13 @@ class DesktopAnalysisTests(unittest.TestCase):
         scratch = PROJECT_ROOT / ".codex-validation"
         scratch.mkdir(exist_ok=True)
         self.root = Path(self.stack.enter_context(tempfile.TemporaryDirectory(dir=scratch)))
-        for name in ("config.json", "config/research_profile.json", "config/automation_policy.json",
-                     "profiles/research_profile.md", "prompts/relevance_round1_v20.txt", "prompts/relevance_round2_v15.txt"):
+        for name in ("config.json", "prompts/relevance_round1_v20.txt", "prompts/relevance_round2_v15.txt"):
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((PROJECT_ROOT / name).read_bytes())
         self.stack.enter_context(patch.object(pipeline, "PROJECT_ROOT", self.root))
         self.forbidden = [self.stack.enter_context(patch(target, side_effect=AssertionError("forbidden operation"))) for target in (
-            "main.main", "main.load_local_api_key", "main.load_completed_round1_keys",
-            "main.filter_completed_round1_candidates", "main.fetch_arxiv_metadata",
-            "desktop.pipeline.fetch_latest_candidates", "deepseek_client.DeepSeekClient.self_check",
+            "main.fetch_arxiv_metadata", "desktop.pipeline.fetch_latest_candidates",
             "urllib.request.urlopen",
         )]
         client_type = deepseek_client.DeepSeekClient
@@ -194,7 +191,7 @@ class DesktopAnalysisTests(unittest.TestCase):
     def test_frozen_two_rounds_use_bundled_resources_and_portable_data(self):
         resources = self.root / "_internal"
         resources.mkdir()
-        for name in ("config.json", "config", "profiles", "prompts"):
+        for name in ("config.json", "prompts"):
             (self.root / name).rename(resources / name)
         before = {p.relative_to(resources): p.read_bytes() for p in resources.rglob("*") if p.is_file()}
         with patch.object(sys, "frozen", True, create=True), patch.object(sys, "executable", str(self.root / "arXivKaleid.exe")), patch.object(sys, "_MEIPASS", str(resources), create=True):
@@ -419,12 +416,14 @@ class DesktopAnalysisTests(unittest.TestCase):
         self.assertEqual(caught.exception.issue.code, "AKD-FULLTEXT-COMPONENT_FAILED")
         self.assertEqual(caught.exception.issue.scope, "system")
 
-    def test_key_override_empty_never_falls_back_and_default_is_unchanged(self):
+    def test_key_must_be_explicitly_injected_by_desktop(self):
         config = main.load_config(self.root / "config.json")
         with self.assertRaises(RuntimeError):
             run_round2.create_deepseek_client(project_root=self.root, config=config, client_factory=None, api_key_override="")
-        with patch("main.inspect_deepseek_configuration", return_value=(deepseek_client.ApiKeyLoadResult("fake-default", None), [])) as inspect:
-            factory = lambda **kwargs: kwargs
-            result = run_round2.create_deepseek_client(project_root=self.root, config=config, client_factory=factory)
-            self.assertEqual(result["api_key"], "fake-default")
-            inspect.assert_called_once()
+        with self.assertRaises(RuntimeError):
+            run_round2.create_deepseek_client(project_root=self.root, config=config, client_factory=None)
+        result = run_round2.create_deepseek_client(
+            project_root=self.root, config=config, client_factory=lambda **kw: kw,
+            api_key_override="synthetic-session-key",
+        )
+        self.assertEqual(result["api_key"], "synthetic-session-key")

@@ -55,8 +55,8 @@ class IsolatedDesktopTest(unittest.TestCase):
         self.stack.enter_context(patch.object(pipeline, "PROJECT_ROOT", self.root))
         # 真网络、模型、PDF、数据库和旧 Secret 入口一旦触发即失败。
         self.forbidden = [self.stack.enter_context(patch(target, side_effect=AssertionError(target))) for target in (
-            "main.main", "main.DeepSeekClient", "main.download_selected_papers",
-            "main.sqlite3.connect", "main.load_local_api_key", "main.load_recent_papers",
+            "main.DeepSeekClient", "pdf_processing.download_selected_papers",
+            "main.sqlite3.connect",
             "main.subprocess.run",
         )]
 
@@ -230,7 +230,7 @@ class DesktopPipelineTests(IsolatedDesktopTest):
                 pipeline.runtime_path("config")
 
     def test_desktop_imports_only_shared_functions_and_no_automation(self):
-        allowed = {"__future__", "ctypes", "datetime", "logging", "dataclasses", "pathlib", "types", "typing", "zoneinfo", "os", "tempfile", "sys", "PySide6", "desktop", "main", "threading", "_thread", "json", "sqlite3", "decimal", "html", "build_round2_inputs", "model_usage", "pdf_processing", "round2_fulltext_state", "run_round2", "generate_round2_report", "rebuild_daily_report", "msvcrt", "fcntl", "hashlib", "stat", "collections", "time", "traceback", "uuid"}
+        allowed = {"__future__", "ctypes", "datetime", "logging", "dataclasses", "pathlib", "types", "typing", "zoneinfo", "os", "tempfile", "sys", "PySide6", "desktop", "main", "threading", "_thread", "json", "sqlite3", "decimal", "html", "build_round2_inputs", "model_usage", "pdf_processing", "round2_fulltext_state", "run_round2", "generate_round2_report", "rebuild_daily_report", "msvcrt", "fcntl", "hashlib", "stat", "collections", "time", "traceback", "uuid", "re"}
         for source in (PROJECT_ROOT / "desktop").glob("*.py"):
             tree = ast.parse(source.read_text(encoding="utf-8"))
             imports = set()
