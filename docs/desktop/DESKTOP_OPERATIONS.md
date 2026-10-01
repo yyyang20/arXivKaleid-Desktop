@@ -31,7 +31,7 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 
 ## Portable 用户
 
-发行后解压 `arXivKaleid-<version>-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。Alpha 6 处于本地 portable 技术验证阶段，尚未公开发布，不能用 Alpha 5 成品验收新 GUI。源码 GUI 在设置页输入自己的 DeepSeek API Key，首页先获取候选，再执行分析。
+发行后解压 `arXivKaleid-<version>-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。Alpha 6 正式发行必须从合并后的 main 重建并验收，不能用 Alpha 5 或开发分支技术构建代替。源码 GUI 在设置页输入自己的 DeepSeek API Key，首页先获取候选，再执行分析。
 
 所有用户数据都在 EXE 同级 `runtime/`，诊断日志位于 `runtime/logs/`。删除整个 portable 目录相当于卸载并删除运行数据；当前版本不自动轮换或删除旧日志。不要把包含个人 `runtime/` 的已使用目录重新发给其他人，应发送构建生成的干净 ZIP。DPAPI 绑定 Windows 用户与电脑，复制文件夹给另一个用户/电脑后，旧 `secret.dat` 通常无法解密，需要重新输入 Key。
 
@@ -41,7 +41,7 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 
 Alpha 6 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windows 11 样式、SVG 图标插件；不带 QtNetwork、qsvg 图像插件或 offscreen 平台。Fluent 图标/QSS 由其内嵌 Qt 资源模块提供，不从网络获取图标；不额外收集整个 site-packages、full 依赖或系统字体。实际模块/PYZ、运行时 hook、DLL 和插件随冻结成品核验。
 
-源码 manifest 固定 QtBase、QtSvg、PySide/Shiboken、pypdf、Fluent、frameless、darkdetect 和 pywin32 的版本、许可及哈希；原始归档随包保留。新增依赖的原许可与版权文本按实际分发内容收集，pywin32 保留多层同名许可；实际使用的 hooks-contrib 运行时 hook 保留原许可。Fluent wheel 的 GPLv3 标注与上游说明的适用关系留作正式 Release 前核对，不自行增加应用商业限制，不把同类 GPL 项目处理方式当成法律结论。
+源码 manifest 固定 QtBase、QtSvg、PySide/Shiboken、pypdf、Fluent、frameless、darkdetect 和 pywin32 的版本、许可及哈希；原始归档随包保留。新增依赖的原许可与版权文本按实际分发内容收集，pywin32 保留多层同名许可；实际使用的 hooks-contrib 运行时 hook 保留原许可。Fluent 1.11.3 wheel/sdist 许可原文及元数据声明 GPLv3，上游另有商业用途措辞；歧义记录在第三方声明，不因此推定本项目必须购买许可或改变 GPL-3.0-only。原许可、版权和固定对应源码全部保留；只有与实际分发直接相关且现有材料无法解决的具体发行权利缺口才停止 Release，不把其他项目当成许可依据。
 
 仅使用已授权的 `arxivkaleid-desktop` 专用 Conda 环境。构建基线为 Python `3.13.15` x64、`tzdata=2026c`、PySide6 `6.9.2`、pypdf `6.14.2`，以及固定在构建依赖文件中的 PyInstaller `6.22.3`。环境创建/安装须另获授权，构建器本身不安装软件。创建时禁用 shortcuts 和用户环境登记，将 Conda package cache 与安装 TEMP/TMP 限制在项目忽略目录；保留包缓存中的 `info/licenses/` 供构建读取。
 
@@ -55,6 +55,8 @@ Alpha 6 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windo
 构建入口按现有 spec 生成 Windows GUI one-folder；资源 allowlist 仅包含 `config.json` 和两份现行自包含 Prompt，不包含独立自动化策略或 Profile 文件。curl `8.22.0_2` 来自 curl 官方固定 x64 归档，并核验 manifest 中的 SHA-256 后才运行。时区数据来自专用环境，不依赖系统 IANA 数据。
 
 构建前必须在已授权范围内冻结干净提交；本地技术验证使用 `codex/` 开发分支，要求其是已核验 `origin/main` 基线的后代，不要求 HEAD 等于基线。产物为根 `dist/` 下带版本目录、`release/` 下同名 ZIP 和 `.zip.sha256`。`BUILD_INFO.json` 记录分支、基线、冻结提交、验证用途和环境版本。旧干净发行物移入本次 `.desktop-build/build-*/` 留存；已有 `runtime/` 的发行目录拒绝覆盖。构建目录、vendor 下载和输出均被 Git 忽略。所有下载都先校验固定哈希，缓存不符即停止。
+
+正式构建要求分支为 `main` 且 HEAD 等于已核验的 `origin/main`，`BUILD_INFO.json` 的 `purpose` 为 `public-release`；开发分支为 `local-portable-technical-validation`。构建和验证阶段的材料留存不等于发布后永久保留 `release/` 旧 ZIP；正式发布及远端核验成功后的精确清理见 [本地历史 portable 收口](../OPERATIONS.md#本地历史-portable-收口)，不清理 `.desktop-build/` 或其他材料。
 
 发行物包含 GPL-3.0-only 应用 LICENSE、第三方声明、实际依赖许可证及上述八项上游源码归档，允许按 LGPL 替换动态库；这些归档用于分发材料，用户无需解包。源码 manifest 显式记录各组件许可，版本与固定运行依赖一致；gzip/xz 归档原样保留并核验 SHA-256。许可证缺失、源码入口/归档哈希不符、用户运行文件或本机个人路径进入发行树时，构建失败。ZIP 生成后逐文件重新比对哈希；构建审计目录记录模块/运行时 hook 清单及各主要组成的未压缩字节数。
 

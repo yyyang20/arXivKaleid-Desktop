@@ -1,9 +1,16 @@
 arXivKaleid Windows Desktop - Third-party notices
 
-Alpha 6 local portable technical validation / release preparation:
-PySide6-Fluent-Widgets 1.11.3 (basic, not full) declares GPLv3 in its wheel.
-Upstream commercial-use wording requires clarification before a formal Release;
-this note does not resolve or supersede that wording or the original license.
+Alpha 6 distribution license audit:
+PySide6-Fluent-Widgets 1.11.3 (basic, not full) declares GPLv3 in its wheel
+metadata and supplies the same original GPLv3 LICENSE in its wheel and sdist.
+Copyright (c) 2021 zhiyiYo; original notices and fixed source are retained.
+The versioned upstream README also describes non-commercial GPLv3 and a
+commercial license: https://pypi.org/project/PySide6-Fluent-Widgets/1.11.3/ .
+This wording is recorded as an ambiguity; its presence alone is not treated
+as a requirement for this GPL-3.0-only application to purchase a commercial
+license or change its license. This distribution retains the original
+LICENSE, notices and exact Corresponding Source; it adds no non-commercial
+application restriction and grants no separate rights to proprietary editions.
 PySideSix-Frameless-Window 0.8.2 declares LGPLv3; darkdetect 0.8.0 declares
 BSD-3-Clause; pywin32 312 declares PSF and retains incorporated-code notices.
 Fluent uses QtSvg/SvgWidgets/Xml 6.9.2 and the SVG icon plugin. The current
@@ -94,8 +101,8 @@ it does not copy another project's omissions or add a non-commercial application
 restriction. Fixed upstream LICENSE texts are preserved without alteration.
 
 Local technical builds are identified by their frozen development-branch commit.
-The application tag/source link is reserved until formal publication; formal
-Release requires rebuilding from merged main/the corresponding release tag.
+Formal builds are identified as public-release and rebuilt from clean merged
+main, with the application tag/source commit matching BUILD_INFO.json.
 
 These exclusions do not extend to modified or intimately linked application
 components. Re-evaluate coverage when the shipped components or linkage change.

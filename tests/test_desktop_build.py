@@ -227,6 +227,22 @@ class DesktopBuildTests(unittest.TestCase):
             identity = builder.frozen_identity()
             self.assertEqual(identity['commit'], 'feature')
             self.assertEqual(identity['baseline_commit'], 'baseline')
+            self.assertEqual(identity['purpose'], 'local-portable-technical-validation')
         with patch.object(builder.subprocess, 'check_output', return_value=' M tracked.py'):
             with self.assertRaisesRegex(RuntimeError, 'clean_frozen'):
                 builder.frozen_identity()
+
+    def test_public_release_identity_requires_main_equal_verified_origin(self):
+        for commit, expected in (('baseline', 'public-release'), ('ahead', None)):
+            with self.subTest(commit=commit), \
+                    patch.object(builder.subprocess, 'check_output',
+                                 side_effect=['', 'baseline', commit, 'main']), \
+                    patch.object(builder.subprocess, 'run') as run:
+                run.return_value.returncode = 0
+                if expected:
+                    identity = builder.frozen_identity()
+                    self.assertEqual(identity['purpose'], expected)
+                    self.assertEqual(identity['commit'], identity['baseline_commit'])
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'release_main_not_equal_origin'):
+                        builder.frozen_identity()

@@ -53,7 +53,7 @@ Alpha 5 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/
 
 第三方组件保留各自许可，声明见 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)。完整许可文本及实际分发库的固定对应源码随 portable ZIP 提供，清单见 `licenses/components.json`。本版许可不改写 alpha.1 至 alpha.4 的历史发行资料。
 
-Alpha 6 新增 Fluent、frameless、darkdetect 和 pywin32。Fluent wheel 标注 GPLv3，但上游商业使用说明与 GPLv3 的关系仍需正式 Release 前确认；新增许可证、QtSvg 与对应源码分发也须完成发行核验。自有应用许可不代替第三方许可。
+Alpha 6 新增 Fluent、frameless、darkdetect 和 pywin32。Fluent 1.11.3 的 wheel/sdist 原许可及元数据声明 GPLv3，上游另有商业用途措辞；歧义记录在第三方声明，不因此推定本项目必须购买商业许可或改变 GPL-3.0-only。第三方原许可、版权及固定对应源码随包保留，自有应用许可不代替第三方许可。
 
 安全问题报告方式见 [SECURITY.md](SECURITY.md)。不要在公开 Issue 中张贴 API Key、`secret.dat`、SQLite、PDF 或整个 `runtime/` 目录。
 

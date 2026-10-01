@@ -207,7 +207,7 @@ def source_archives(root: Path = ROOT) -> list[dict[str, str]]:
 
 
 def frozen_identity() -> dict:
-    """技术验证允许开发分支；必须干净，且是已核验 main 基线的后代。"""
+    """区分正式 main 构建与开发验证；两者均要求干净冻结身份。"""
     def git(*args):
         return subprocess.check_output(['git', *args], cwd=ROOT, text=True).strip()
     if git('status', '--porcelain'):
@@ -215,9 +215,14 @@ def frozen_identity() -> dict:
     baseline = git('rev-parse', 'origin/main')
     if subprocess.run(['git', 'merge-base', '--is-ancestor', baseline, 'HEAD'], cwd=ROOT).returncode:
         raise RuntimeError('build_baseline_not_ancestor')
-    return {'commit': git('rev-parse', 'HEAD'), 'branch': git('branch', '--show-current'),
+    commit = git('rev-parse', 'HEAD')
+    branch = git('branch', '--show-current')
+    # main 不能沿用开发分支的宽松后代条件，正式成品必须等于已核验基线。
+    if branch == 'main' and commit != baseline:
+        raise RuntimeError('release_main_not_equal_origin')
+    return {'commit': commit, 'branch': branch,
             'baseline_commit': baseline, 'working_tree_clean': True,
-            'purpose': 'local-portable-technical-validation'}
+            'purpose': 'public-release' if branch == 'main' else 'local-portable-technical-validation'}
 
 
 def inspect_python_archive(executable: Path) -> dict:
