@@ -107,7 +107,7 @@ def compose_captures(output, filename, items, columns):
 
 
 def main():
-    scratch = checked_path(ROOT, ".codex-validation", "alpha6-visual-qa")
+    scratch = checked_path(ROOT, ".codex-validation", "alpha7-visual-qa")
     scratch.mkdir(parents=True, exist_ok=True)
     output = Path(tempfile.mkdtemp(prefix="capture-", dir=scratch))
     application = QApplication.instance() or QApplication([])

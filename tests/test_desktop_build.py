@@ -88,6 +88,34 @@ class DesktopBuildTests(unittest.TestCase):
         self.assertNotIn('automation', config)
         self.assertNotIn('config/automation_policy.json', builder.RESOURCES)
         self.assertNotIn('config/local_secret.json', builder.RESOURCES)
+        self.assertIn('assets/app-icon.ico', builder.RESOURCES)
+        self.assertIn('_internal/assets/app-icon.ico', builder.REQUIRED_RELEASE_FILES)
+        self.assertIn('_internal/PySide6/plugins/imageformats/qico.dll',
+                      builder.REQUIRED_RELEASE_FILES)
+
+    def test_a0_icon_has_vector_master_multisize_layers_and_exe_binding(self):
+        master = (ROOT / 'assets/app-icon.svg').read_text(encoding='utf-8')
+        self.assertIn('viewBox="0 0 1024 1024"', master)
+        self.assertIn('<rect x="32" y="32" width="960" height="960" rx="190"', master)
+        self.assertNotIn('<image', master)
+        self.assertNotIn('filter=', master)
+
+        data = (ROOT / 'assets/app-icon.ico').read_bytes()
+        reserved, kind, count = struct.unpack_from('<HHH', data)
+        self.assertEqual((reserved, kind, count), (0, 1, 6))
+        sizes = set()
+        for index in range(count):
+            width, height, _, _, planes, depth, length, offset = struct.unpack_from(
+                '<BBBBHHII', data, 6 + index * 16,
+            )
+            sizes.add(256 if width == 0 else width)
+            self.assertEqual(256 if height == 0 else height, 256 if width == 0 else width)
+            self.assertEqual((planes, depth), (1, 32))
+            self.assertEqual(data[offset:offset + 8], b'\x89PNG\r\n\x1a\n')
+            self.assertGreater(length, 100)
+        self.assertEqual(sizes, {16, 24, 32, 48, 64, 256})
+        spec_text = (ROOT / 'packaging/windows/arxivkaleid.spec').read_text(encoding='utf-8')
+        self.assertIn("icon=str(root / 'assets/app-icon.ico')", spec_text)
 
     def test_desktop_requirements_include_pdf_runtime_with_fixed_versions(self):
         self.assertEqual(builder.pinned_requirements('requirements-desktop.txt'),
@@ -218,7 +246,8 @@ class DesktopBuildTests(unittest.TestCase):
 
     def test_fluent_spec_keeps_svg_dependencies_without_full_extras(self):
         text = (ROOT / 'packaging/windows/arxivkaleid.spec').read_text(encoding='utf-8')
-        for name in ('Qt6Svg.dll', 'Qt6SvgWidgets.dll', 'Qt6Xml.dll', 'qsvgicon.dll'):
+        for name in ('Qt6Svg.dll', 'Qt6SvgWidgets.dll', 'Qt6Xml.dll',
+                     'qsvgicon.dll', 'qico.dll'):
             self.assertIn(name, text)
         for name in ('Qt6Network.dll', 'qsvg.dll', 'qoffscreen.dll'):
             self.assertNotIn(name, text)

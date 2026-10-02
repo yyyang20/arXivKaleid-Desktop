@@ -17,7 +17,7 @@
 
 | 项目 | 当前值 |
 |---|---|
-| Desktop 版本 | `0.1.0-alpha.6` |
+| Desktop 版本 | `0.1.0-alpha.7` |
 | Desktop 配置 | `desktop_config_v1` |
 | Round 1 模型 | `deepseek-flash` |
 | Round 2 模型 | `deepseek-flash` |

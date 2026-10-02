@@ -6,9 +6,10 @@ from __future__ import annotations
 
 import sys
 from datetime import date, datetime, timezone
+from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal, Slot, QUrl
-from PySide6.QtGui import QDesktopServices, QFont
+from PySide6.QtGui import QDesktopServices, QFont, QIcon
 from PySide6.QtWidgets import (
     QApplication, QHBoxLayout, QMessageBox, QStackedWidget, QVBoxLayout, QWidget,
 )
@@ -27,6 +28,7 @@ from desktop.diagnostics import DesktopDiagnostics
 from desktop.errors import DesktopIssue, DesktopOutcome, make_issue
 from desktop.progress import ProgressEvent
 from desktop.pages import HomePage, HistoryPage, SettingsPage
+from desktop.style import PAGE_BACKGROUND
 from desktop.task_panel import ANALYSIS_STAGES, STAGE_SYMBOLS
 
 
@@ -37,6 +39,20 @@ ANALYSIS_NOTICE = (
     "应用没有维护者服务器中转或遥测。\n\n"
     "是否同意并继续？详情见随附 PRIVACY.md。"
 )
+SOURCE_ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_application_icon() -> QIcon:
+    """源码和冻结模式都只从受控只读资源根加载正式 ICO。"""
+    icon_path = paths.checked_path(
+        paths.resource_root(SOURCE_ROOT), "assets", "app-icon.ico",
+    )
+    if not icon_path.is_file():
+        raise ValueError("Desktop 应用图标缺失。")
+    icon = QIcon(str(icon_path))
+    if icon.isNull():
+        raise ValueError("Desktop 应用图标无效。")
+    return icon
 
 class FetchWorker(QThread):
     """工作线程只计算结果；finished 连接的窗口槽在 GUI 线程执行。"""
@@ -101,6 +117,7 @@ class DesktopWindow(QWidget):
         self,
         secret_store: SecretStore | None = None,
         diagnostics: DesktopDiagnostics | None = None,
+        window_icon: QIcon | None = None,
     ):
         super().__init__()
         self.secret_store = secret_store if secret_store is not None else SecretStore()
@@ -113,10 +130,11 @@ class DesktopWindow(QWidget):
         setThemeColor("#1677ff", save=False)
         self.setFont(QFont("Microsoft YaHei UI", 10))
         self.setWindowTitle(f"arXivKaleid Desktop v{__version__}")
+        self.setWindowIcon(window_icon if window_icon is not None else load_application_icon())
         self.resize(1060, 820)
         self.setMinimumSize(850, 680)
         self.setObjectName("desktopWindow")
-        self.setStyleSheet("QWidget#desktopWindow {background: #f0f4f9;}")
+        self.setStyleSheet(f"QWidget#desktopWindow {{background: {PAGE_BACKGROUND};}}")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 12, 0, 0)
         self.version_header = SubtitleLabel(f"arXivKaleid   v{__version__}")
@@ -523,6 +541,7 @@ def main() -> int:
     application = QApplication(sys.argv)
     diagnostics = DesktopDiagnostics(pipeline.PROJECT_ROOT)
     startup_issue = None
+    app_icon = QIcon()
     try:
         paths.prepare_runtime(pipeline.PROJECT_ROOT)
     except Exception as exc:
@@ -535,6 +554,7 @@ def main() -> int:
     try:
         paths.configure_timezone(pipeline.PROJECT_ROOT)
         paths.curl_executable(pipeline.PROJECT_ROOT)
+        app_icon = load_application_icon()
     except Exception as exc:
         if startup_issue is None:
             startup_issue = make_issue("AKD-STARTUP-RESOURCE_INVALID")
@@ -543,7 +563,8 @@ def main() -> int:
                 stage="startup", state="fail", code=startup_issue.code,
                 scope=startup_issue.scope, unexpected=exc,
             )
-    window = DesktopWindow(diagnostics=diagnostics)
+    window = DesktopWindow(diagnostics=diagnostics, window_icon=app_icon)
+    application.setWindowIcon(window.windowIcon())
     if startup_issue:
         window.status.setText(startup_issue.reason)
         window.show_issue(startup_issue)

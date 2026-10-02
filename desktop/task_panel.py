@@ -7,9 +7,10 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QVBoxLayout, QWidget
-from qfluentwidgets import CardWidget, FluentIcon, PushButton, ScrollArea, ToolButton
+from qfluentwidgets import FluentIcon, PushButton, ScrollArea, ToolButton
 
 from desktop.progress import ProgressEvent
+from desktop.style import SurfaceCard
 
 
 ANALYSIS_STAGES = (
@@ -30,7 +31,7 @@ def wrapping_label(text="", parent=None):
     return label
 
 
-class TaskPanel(CardWidget):
+class TaskPanel(SurfaceCard):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.running = False
@@ -149,8 +150,8 @@ class TaskPanel(CardWidget):
                   "success": ("#f0faf3", "#b9e4c7", "#137333"),
                   "error": ("#fff2f0", "#f0bcb7", "#a4262c")}
         background, border, color = colors[tone]
+        self.set_surface(background, border)
         self.setStyleSheet(
-            f"TaskPanel {{background: {background}; border: 1px solid {border}; border-radius: 8px;}}"
             f"QLabel#taskSummary {{color: {color}; font-weight: 600;}}"
         )
 

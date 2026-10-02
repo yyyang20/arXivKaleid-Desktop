@@ -12,6 +12,7 @@
 | `desktop/diagnostics.py` | session/operation/snapshot/fetch/run 关联、脱敏 JSONL、安全 traceback、计时与内存降级 |
 | `desktop/app.py` | QApplication、主窗口导航与业务连接、首次告知、Key 保存、现有 Fetch/Analysis QThread 和生命周期 |
 | `desktop/pages.py` | 首页、设置页、历史占位页；抓取信息卡、密码框、About 和 Markdown/空态布局 |
+| `desktop/style.py` | alpha 7 三页共享灰蓝调色板、输入框样式与低对比度卡片绘制 |
 | `desktop/task_panel.py` | 可复用任务状态组件；运行展开、成功收缩、失败诊断、真实事件与快照/结果详情 |
 | `desktop/analysis.py` | 一次性快照分析、工作库重置和锁、两轮/PDF/全文编排、累计费用预检、结构化进度与安全结果 |
 | `desktop/progress.py` | 抓取与分析共用的不可变结构化进度事件及不影响业务流程的安全派发 |
@@ -27,6 +28,8 @@
 | `scripts/portable_licenses.py` | 从实际分发组件及固定 gzip/xz 源码收集原许可，保留八项源码归档与哈希 |
 | `scripts/validate_windows_portable.py` | 全新副本的脱离开发环境验证和重启 |
 | `scripts/visual_qa_desktop.py` | 禁止网络/模型、内存假 Key、合成业务事件驱动的真实 Qt 截图；产物仅在项目忽略目录 |
+| `scripts/generate_app_icon.py` | 使用现有 PySide6 从 A0 SVG 母版确定性生成 16～256 px Windows ICO 与可选验收预览 |
+| `assets/app-icon.svg`、`assets/app-icon.ico` | 透明画布 A0 矢量母版及 Qt/EXE 共用的正式多尺寸图标 |
 | `packaging/windows/portable_visual.py` | 冻结诊断专用合成 QThread 状态、真实截图、DLL 来源和窗口生命周期验证，不进入正式业务流程 |
 | `tests/test_portable_diagnostic.py` | Windows 合成 DPAPI 的独立进程完整诊断路径、后置检查失败与已用 runtime 拒绝回归 |
 | `tests/test_desktop_portable.py` | source/frozen 路径、链接、可写性、bundled curl 与工作库边界 |

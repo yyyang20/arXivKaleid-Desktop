@@ -8,17 +8,20 @@ from PySide6.QtWidgets import (
     QFormLayout, QHBoxLayout, QLabel, QSizePolicy, QStackedWidget, QTextBrowser, QVBoxLayout, QWidget,
 )
 from qfluentwidgets import (
-    BodyLabel, CardWidget, FluentIcon, PasswordLineEdit, PrimaryPushButton,
+    BodyLabel, FluentIcon, PasswordLineEdit, PrimaryPushButton,
     ScrollArea, SubtitleLabel, TitleLabel,
 )
 from desktop import __version__
+from desktop.style import (
+    API_KEY_STYLE, PAGE_STYLE, SUBTLE_BACKGROUND, SUBTLE_BORDER, TEXT_PRIMARY, SurfaceCard,
+)
 from desktop.task_panel import TaskPanel, wrapping_label
 
 
 def card(title, parent=None):
-    widget = CardWidget(parent)
+    widget = SurfaceCard(parent)
     layout = QVBoxLayout(widget)
-    layout.setContentsMargins(18, 14, 18, 14)
+    layout.setContentsMargins(20, 16, 20, 16)
     layout.setSpacing(10)
     layout.addWidget(SubtitleLabel(title))
     return widget, layout
@@ -29,7 +32,7 @@ class HomePage(QWidget):
         super().__init__(parent)
         self.setObjectName("homePage")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setContentsMargins(24, 18, 24, 18)
         layout.setSpacing(12)
         fetch_card, fetch = card("抓取信息")
         self.statistics = {}
@@ -87,7 +90,7 @@ class HomePage(QWidget):
         # 日报始终获取剩余空间；小窗口/高 DPI 允许缩小可滚动正文以保住顶部操作。
         self.report.setMinimumHeight(70)
         self.report.setStyleSheet(
-            "QTextBrowser {background: white; border: none; color: #17243b; padding: 6px;"
+            "QTextBrowser {background: transparent; border: none; color: #17243b; padding: 8px;"
             "font-family: 'Microsoft YaHei UI'; font-size: 14px;}"
         )
         self.report_stack.addWidget(empty)
@@ -97,10 +100,11 @@ class HomePage(QWidget):
         )
         report_layout.addWidget(self.report_stack, 1)
         layout.addWidget(report_card, 1)
-        self.setStyleSheet(
-            "QWidget#statTile {background: #f5f8fc; border: 1px solid #e4ebf4; border-radius: 6px;}"
-            "QLabel#statValue {font-size: 21px; font-weight: 600; color: #17243b;}"
-        )
+        self.setStyleSheet(PAGE_STYLE + (
+            f"QWidget#statTile {{background: {SUBTLE_BACKGROUND}; border: 1px solid {SUBTLE_BORDER};"
+            "border-radius: 7px;}"
+            f"QLabel#statValue {{font-size: 21px; font-weight: 600; color: {TEXT_PRIMARY};}}"
+        ))
 
 
 class SettingsPage(ScrollArea):
@@ -110,12 +114,17 @@ class SettingsPage(ScrollArea):
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         content = QWidget()
+        content.setObjectName("settingsContent")
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(18)
+        layout.setContentsMargins(24, 18, 24, 18)
+        layout.setSpacing(12)
         layout.addWidget(TitleLabel("设置"))
         key_card, key = card("DeepSeek API Key")
         self.api_key = PasswordLineEdit()
+        self.api_key.setObjectName("apiKeyInput")
+        self.api_key.setFixedHeight(38)
+        self.api_key.setCustomFocusedBorderColor("#1677ff", "#1677ff")
+        self.api_key.setStyleSheet(API_KEY_STYLE)
         self.api_key.setPlaceholderText("可留空，不影响候选抓取")
         self.api_key.setAccessibleName("DeepSeek API Key")
         key.addWidget(self.api_key)
@@ -135,7 +144,11 @@ class SettingsPage(ScrollArea):
         layout.addWidget(about_card)
         layout.addStretch()
         self.setWidget(content)
-        self.setStyleSheet("QScrollArea#settingsPage {background: transparent; border: none;}")
+        self.setStyleSheet(PAGE_STYLE)
+        self.viewport().setObjectName("settingsViewport")
+        self.viewport().setStyleSheet(
+            "QWidget#settingsViewport {background: #eef3f8; border: none;}"
+        )
 
 
 class HistoryPage(QWidget):
@@ -143,7 +156,7 @@ class HistoryPage(QWidget):
         super().__init__(parent)
         self.setObjectName("historyPage")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setContentsMargins(24, 18, 24, 18)
         layout.addWidget(TitleLabel("历史"))
         layout.addStretch()
         title = SubtitleLabel("历史功能尚未开放")
@@ -153,3 +166,4 @@ class HistoryPage(QWidget):
         message.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(message)
         layout.addStretch()
+        self.setStyleSheet(PAGE_STYLE)
