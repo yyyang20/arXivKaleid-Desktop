@@ -12,6 +12,8 @@
 
 GitHub Run、PR、Issue、artifact 和仓库变量都属于实时外部状态。执行相关任务时必须重新查询，不得从任何 Markdown 文档推断当前值。
 
+GitHub 与项目维护文本的语言统一遵循根目录 [公开维护文本语言](../AGENTS.md#公开维护文本语言)，本索引及下级文档只引用该规则。
+
 Windows portable 的打包 README、用户协议、隐私和安全说明集中在 [公开发布资料](public_release/README.md)；发布前按 [公开发布检查清单](public_release/RELEASE_CHECKLIST.md) 核对。
 
 `docs/public_release/` 是 EULA、PRIVACY、SECURITY 的唯一维护源；修改后同步根目录 `EULA.txt`、`PRIVACY.md`、`SECURITY.md`，保持字节一致。第三方声明的唯一维护源是 `packaging/windows/THIRD_PARTY_NOTICES.txt`，根目录同名文件为同步副本。根仓库 README 与 portable README 面向不同读者，分别维护，不要求内容相同。

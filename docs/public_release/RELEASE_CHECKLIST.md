@@ -39,6 +39,7 @@
 
 ## 发布 GitHub Release
 
+- [ ] 本次发行说明已按根目录 [公开维护文本语言](../../AGENTS.md#公开维护文本语言) 核对。
 - [ ] 已获得当次 GitHub 写操作授权，并重新只读核对目标仓库、标签和现有 Release。
 - [ ] 保存并对比全部既有历史 tag、Release 正文、资产 id/名称/字节数/digest 基线，既有历史发行保持不变。
 - [ ] 目标公开仓库已启用 immutable releases 和 private vulnerability reporting。
