@@ -158,6 +158,23 @@ def maintained_display_documents() -> tuple[str, ...]:
     return tuple(sorted({p.relative_to(PROJECT_ROOT).as_posix() for p in paths}))
 
 
+def maintenance_language_errors(text: str) -> list[str]:
+    """核对根语言契约，不用字符比例误判英文标识或技术术语。"""
+    rules = {
+        'default': ('后续', 'PR 标题/正文', 'Issue 标题/正文', 'Release notes',
+                    '公开评论', 'Git 提交说明', '面向用户或维护者的项目说明',
+                    '默认使用简体中文'),
+        'identifiers': ('文件名、路径、命令、代码标识、API、类名、版本号、第三方库名',
+                        '必要的标准技术术语保留英文', '第三方原文', '保留原样'),
+        'style': ('避免在同一标题或段落中无必要地中英文混写',),
+        'history': ('已冻结的历史 PR、Release、tag、资产和历史评论保持原样',
+                    '不为了语言统一回改历史记录',
+                    '只约束后续新增或因当前任务需要修改的维护文本'),
+    }
+    return [rule for rule, fragments in rules.items()
+            if any(fragment not in text for fragment in fragments)]
+
+
 def portable_cleanup_errors(operations: str, checklist: str, agents: str) -> list[str]:
     """只读发布契约；静态检查不执行网络核验或删除。"""
     contracts = {
@@ -250,6 +267,38 @@ class DesktopGovernanceTests(unittest.TestCase):
             '`docs/PROJECT_SPEC.md`', '`docs/OPERATIONS.md`',
             '身份、授权、费用和停止条件', '授权分别处理',
         ))
+
+    def test_public_maintenance_language_has_one_root_contract(self):
+        contract = section(read_utf8('AGENTS.md'), '公开维护文本语言')
+        self.assertEqual(maintenance_language_errors(contract), [])
+        for relative, target in (
+            ('docs/README.md', '../AGENTS.md#公开维护文本语言'),
+            ('docs/OPERATIONS.md', '../AGENTS.md#公开维护文本语言'),
+            ('docs/public_release/RELEASE_CHECKLIST.md', '../../AGENTS.md#公开维护文本语言'),
+        ):
+            with self.subTest(document=relative):
+                text = read_utf8(relative)
+                self.assertIn(f'[公开维护文本语言]({target})', text)
+                self.assertNotIn('默认使用简体中文', text)
+
+    def test_maintenance_language_regressions_are_detected_in_memory(self):
+        contract = section(read_utf8('AGENTS.md'), '公开维护文本语言')
+        # 只修改内存反例，不访问或改写 GitHub 历史记录。
+        for removed, expected in (
+            ('PR 标题/正文', 'default'), ('Issue 标题/正文', 'default'),
+            ('Release notes', 'default'), ('公开评论', 'default'),
+            ('面向用户或维护者的项目说明', 'default'),
+            ('默认使用简体中文', 'default'),
+            ('必要的标准技术术语保留英文', 'identifiers'),
+            ('第三方原文', 'identifiers'),
+            ('避免在同一标题或段落中无必要地中英文混写', 'style'),
+            ('已冻结的历史 PR、Release、tag、资产和历史评论保持原样', 'history'),
+            ('不为了语言统一回改历史记录', 'history'),
+            ('只约束后续新增或因当前任务需要修改的维护文本', 'history'),
+        ):
+            with self.subTest(rule=expected, removed=removed):
+                self.assertIn(expected, maintenance_language_errors(
+                    contract.replace(removed, '错误规则')))
 
     def test_completion_is_owned_by_root_agents(self):
         agents = section(read_utf8('AGENTS.md'), '文档与完成要求')

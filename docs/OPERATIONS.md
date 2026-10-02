@@ -2,6 +2,8 @@
 
 本文档维护 Desktop 当前有效的开发、验证和公开发布流程。核心筛选规则见 [当前业务规范](PROJECT_SPEC.md)，源码启动、依赖、本机构建和 portable 验证细节见 [Desktop 运行手册](desktop/DESKTOP_OPERATIONS.md)。文档分工与更新路由以 [文档索引](README.md) 为准。
 
+编写 PR、Issue、Release 说明、公开评论及项目维护说明时，遵循根目录 [公开维护文本语言](../AGENTS.md#公开维护文本语言)。
+
 ## 实时核验原则
 
 涉及 Git 或 GitHub 操作时，只读核验与本次操作相关的本地 HEAD、分支、工作树、远程提交、PR、Release、标签和资产。GitHub 状态必须重新查询，不能从文档推断；不得读取 Secret 值。身份、哈希、版本或文件集合不一致时停止。
