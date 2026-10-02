@@ -136,6 +136,28 @@ def mirror_errors(sources: dict[str, bytes], copies: dict[str, bytes]) -> list[s
     return [name for name, value in sources.items() if copies.get(name) != value]
 
 
+def display_alpha_errors(text: str) -> list[str]:
+    """检查展示文字，保留链接目标、正式版本标识和文件名的原身份。"""
+    text = prose(text)
+    # 链接标签仍属展示文字；链接目标与原始 URL 不参与展示大小写校验。
+    text = re.sub(r'(?<=\]\()[^\s)]+', '', text)
+    text = re.sub(r'https?://[^\s<>()]+', '', text)
+    tokens = re.findall(r'(?<![A-Za-z0-9_./-])alpha(?![A-Za-z_./-])', text, re.IGNORECASE)
+    return [token for token in tokens if token != 'alpha']
+
+
+def maintained_display_documents() -> tuple[str, ...]:
+    # 扫描根 Markdown、docs 全部说明以及明确的文本维护源，不读取运行数据。
+    paths = list(PROJECT_ROOT.glob('*.md'))
+    paths += [p for p in (PROJECT_ROOT / 'docs').rglob('*')
+              if p.is_file() and p.suffix in ('.md', '.txt', '.rst', '.adoc')]
+    paths += [PROJECT_ROOT / p for p in (
+        'desktop/AGENTS.md', 'EULA.txt', 'THIRD_PARTY_NOTICES.txt',
+        'packaging/windows/THIRD_PARTY_NOTICES.txt',
+    )]
+    return tuple(sorted({p.relative_to(PROJECT_ROOT).as_posix() for p in paths}))
+
+
 def portable_cleanup_errors(operations: str, checklist: str, agents: str) -> list[str]:
     """只读发布契约；静态检查不执行网络核验或删除。"""
     contracts = {
@@ -350,6 +372,32 @@ class DesktopGovernanceTests(unittest.TestCase):
         # 使用原始字节比较，换行或编码漂移也必须被发现。
         copies = {name: read_bytes(name) for name in sources}
         self.assertEqual(mirror_errors(sources, copies), [])
+
+    def test_maintained_documents_use_lowercase_alpha_display_names(self):
+        rules = section(read_utf8('docs/README.md'), '文档更新规则')
+        self.assert_fragments(rules, (
+            '预发布测试版的展示名称统一使用小写 `alpha`', '`alpha 5`、`alpha 6`',
+            '标准版本标识保持原样', 'tag、文件名、URL、代码正式版本常量',
+            'Release asset 或 BUILD_INFO 身份', '历史 tag、资产及对应源码状态保持不变',
+            '不重建或替换已发布资产',
+        ))
+        for relative in maintained_display_documents():
+            with self.subTest(document=relative):
+                self.assertEqual(display_alpha_errors(read_utf8(relative)), [])
+
+    def test_alpha_display_case_regressions_and_identities_in_memory(self):
+        # 反例只在内存运行；不会改写历史发行、版本常量或 URL。
+        for text in ('Alpha 6', 'ALPHA 5', 'aLpHa 7', '新版Alpha6', '`Alpha 6`',
+                     '[Alpha 6](https://example.com/Alpha/6)'):
+            with self.subTest(display=text):
+                self.assertTrue(display_alpha_errors(text))
+        for text in ('alpha 5、alpha 6', '0.1.0-alpha.6、v0.1.0-alpha.6',
+                     'arXivKaleid-0.1.0-alpha.6-windows-x64.zip',
+                     '[alpha 6](https://example.com/Alpha/6)',
+                     '[source](Alpha.md)', 'https://example.com/Alpha/6',
+                     '```python\nVERSION = "0.1.0-alpha.6"\n```'):
+            with self.subTest(identity=text):
+                self.assertEqual(display_alpha_errors(text), [])
 
     def test_gpl_only_scope_and_exact_release_source_entry(self):
         version = literal_constant('desktop/__init__.py', '__version__')
