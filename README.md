@@ -35,7 +35,7 @@ Get-FileHash -Algorithm SHA256 .\arXivKaleid-<version>-windows-x64.zip
 
 ## 费用与数据
 
-候选抓取不需要 API Key。Alpha 6 的 Key 位于设置页，首页保留“获取最新候选”和“开始两轮分析”两个独立按钮。两轮分析使用你自己的 DeepSeek API Key，可能产生费用；开始分析前应用会显示数据发送告知，只有同意后才会调用模型。
+候选抓取不需要 API Key。alpha 6 的 Key 位于设置页，首页保留“获取最新候选”和“开始两轮分析”两个独立按钮。两轮分析使用你自己的 DeepSeek API Key，可能产生费用；开始分析前应用会显示数据发送告知，只有同意后才会调用模型。
 
 API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和脱敏诊断日志位于 EXE 同级 `runtime/` 目录。GUI 会显示失败阶段、稳定错误代码、影响、建议和日志关联；日志不上传，应用没有维护者服务器中转或遥测。不要转发已使用过的 portable 目录。
 
@@ -49,11 +49,11 @@ API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和脱
 
 Copyright (c) 2026 yyyang20. 自有应用源码、测试、构建脚本、配置、提示词和项目文档采用 **GPL-3.0-only**，完整文本见 [LICENSE](LICENSE)，许可说明见 [EULA.txt](EULA.txt)。本软件无保证；允许使用、研究、修改和分发，包括商业使用。分发受 GPL 覆盖的衍生版本须继续按 GPLv3 提供相应源码，私人修改不要求公开。
 
-Alpha 6 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.6.zip)包含源码、资源、测试及构建说明；对应 [Windows portable Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.6) 的 `BUILD_INFO.json` 提交与该 tag 一致。不要用浮动 main 代替发行源码。
+alpha 6 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.6.zip)包含源码、资源、测试及构建说明；对应 [Windows portable Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.6) 的 `BUILD_INFO.json` 提交与该 tag 一致。不要用浮动 main 代替发行源码。
 
 第三方组件保留各自许可，声明见 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)。完整许可文本及实际分发库的固定对应源码随 portable ZIP 提供，清单见 `licenses/components.json`。本版许可不改写既有历史发行资料。
 
-Alpha 6 新增 Fluent、frameless、darkdetect 和 pywin32。Fluent 1.11.3 的 wheel/sdist 原许可及元数据声明 GPLv3，上游另有商业用途措辞；歧义记录在第三方声明，不因此推定本项目必须购买商业许可或改变 GPL-3.0-only。第三方原许可、版权及固定对应源码随包保留，自有应用许可不代替第三方许可。
+alpha 6 新增 Fluent、frameless、darkdetect 和 pywin32。Fluent 1.11.3 的 wheel/sdist 原许可及元数据声明 GPLv3，上游另有商业用途措辞；歧义记录在第三方声明，不因此推定本项目必须购买商业许可或改变 GPL-3.0-only。第三方原许可、版权及固定对应源码随包保留，自有应用许可不代替第三方许可。
 
 安全问题报告方式见 [SECURITY.md](SECURITY.md)。不要在公开 Issue 中张贴 API Key、`secret.dat`、SQLite、PDF 或整个 `runtime/` 目录。
 

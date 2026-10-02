@@ -1,6 +1,6 @@
 arXivKaleid Windows Desktop - Third-party notices
 
-Alpha 6 distribution license audit:
+alpha 6 distribution license audit:
 PySide6-Fluent-Widgets 1.11.3 (basic, not full) declares GPLv3 in its wheel
 metadata and supplies the same original GPLv3 LICENSE in its wheel and sdist.
 Copyright (c) 2021 zhiyiYo; original notices and fixed source are retained.

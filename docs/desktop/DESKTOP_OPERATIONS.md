@@ -31,7 +31,7 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 
 ## Portable 用户
 
-发行后解压 `arXivKaleid-<version>-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。Alpha 6 正式发行必须从合并后的 main 重建并验收，不能用 Alpha 5 或开发分支技术构建代替。源码 GUI 在设置页输入自己的 DeepSeek API Key，首页先获取候选，再执行分析。
+发行后解压 `arXivKaleid-<version>-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。alpha 6 正式发行必须从合并后的 main 重建并验收，不能用 alpha 5 或开发分支技术构建代替。源码 GUI 在设置页输入自己的 DeepSeek API Key，首页先获取候选，再执行分析。
 
 所有用户数据都在 EXE 同级 `runtime/`，诊断日志位于 `runtime/logs/`。删除整个 portable 目录相当于卸载并删除运行数据；当前版本不自动轮换或删除旧日志。不要把包含个人 `runtime/` 的已使用目录重新发给其他人，应发送构建生成的干净 ZIP。DPAPI 绑定 Windows 用户与电脑，复制文件夹给另一个用户/电脑后，旧 `secret.dat` 通常无法解密，需要重新输入 Key。
 
@@ -39,7 +39,7 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 
 ## 本机构建
 
-Alpha 6 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windows 11 样式、SVG 图标插件；不带 QtNetwork、qsvg 图像插件或 offscreen 平台。Fluent 图标/QSS 由其内嵌 Qt 资源模块提供，不从网络获取图标；不额外收集整个 site-packages、full 依赖或系统字体。实际模块/PYZ、运行时 hook、DLL 和插件随冻结成品核验。
+alpha 6 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windows 11 样式、SVG 图标插件；不带 QtNetwork、qsvg 图像插件或 offscreen 平台。Fluent 图标/QSS 由其内嵌 Qt 资源模块提供，不从网络获取图标；不额外收集整个 site-packages、full 依赖或系统字体。实际模块/PYZ、运行时 hook、DLL 和插件随冻结成品核验。
 
 源码 manifest 固定 QtBase、QtSvg、PySide/Shiboken、pypdf、Fluent、frameless、darkdetect 和 pywin32 的版本、许可及哈希；原始归档随包保留。新增依赖的原许可与版权文本按实际分发内容收集，pywin32 保留多层同名许可；实际使用的 hooks-contrib 运行时 hook 保留原许可。Fluent 1.11.3 wheel/sdist 许可原文及元数据声明 GPLv3，上游另有商业用途措辞；歧义记录在第三方声明，不因此推定本项目必须购买许可或改变 GPL-3.0-only。原许可、版权和固定对应源码全部保留；只有与实际分发直接相关且现有材料无法解决的具体发行权利缺口才停止 Release，不把其他项目当成许可依据。
 
