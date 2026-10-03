@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>arXivKaleid A0 application icon</title>
+  <desc>Transparent canvas with a deep navy rounded plate and a geometric four-colour K.</desc>
+  <defs>
+    <linearGradient id="navy" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#052544"/>
+      <stop offset="1" stop-color="#082e54"/>
+    </linearGradient>
+    <linearGradient id="white" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f3f7fb"/>
+    </linearGradient>
+    <linearGradient id="lightBlue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#62c2fa"/>
+      <stop offset="1" stop-color="#3e9eea"/>
+    </linearGradient>
+    <linearGradient id="brightBlue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2488ff"/>
+      <stop offset="1" stop-color="#126bf0"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22e4df"/>
+      <stop offset="1" stop-color="#0bc8c6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 画布四角保持真正透明；底板没有阴影或外发光。 -->
+  <rect x="32" y="32" width="960" height="960" rx="190" fill="url(#navy)"/>
+
+  <!-- 右上臂与右下臂共享同一条中心边，避免生成图中的深色裂缝。 -->
+  <path d="M408 410 642 176Q652 166 667 166H843Q858 166 866 179Q871 190 860 201L548 520C505 550 460 575 408 598Z"
+        fill="url(#brightBlue)"/>
+  <path d="M408 598C460 575 505 550 548 520L866 838Q877 849 868 861Q862 870 847 870H663Q651 870 643 861L408 618Z"
+        fill="url(#cyan)"/>
+
+  <!-- 左竖杆上下色块在同一精确中心节点闭合。 -->
+  <path d="M220 166H376Q408 166 408 198V598L188 432V198Q188 166 220 166Z"
+        fill="url(#white)"/>
+  <path d="M188 432 408 598V838Q408 870 376 870H220Q188 870 188 838Z"
+        fill="url(#lightBlue)"/>
+</svg>

@@ -4,7 +4,7 @@ arXivKaleid Desktop 是面向黑洞与致密天体强引力成像、偏振和新
 
 本仓库包含 Desktop 应用源码、测试、构建配置和项目文档；Windows portable 成品通过 GitHub Releases 提供。
 
-当前版本为 `0.1.0-alpha.6`，使用 Fluent 首页、历史占位页和设置页；已公开 Windows x64 portable 预发布版，下载入口见下方 Release 链接。
+当前版本为 `0.1.0-alpha.7`，统一 Fluent 首页、历史占位页和设置页的浅灰蓝视觉，并接入正式 A0 应用图标。当前最新公开 Windows x64 portable 仍为 alpha 6，下载入口见下方 Release 链接。
 
 ## 开发方式
 
@@ -35,7 +35,7 @@ Get-FileHash -Algorithm SHA256 .\arXivKaleid-<version>-windows-x64.zip
 
 ## 费用与数据
 
-候选抓取不需要 API Key。alpha 6 的 Key 位于设置页，首页保留“获取最新候选”和“开始两轮分析”两个独立按钮。两轮分析使用你自己的 DeepSeek API Key，可能产生费用；开始分析前应用会显示数据发送告知，只有同意后才会调用模型。
+候选抓取不需要 API Key。alpha 7 的 Key 位于设置页，首页保留“获取最新候选”和“开始两轮分析”两个独立按钮。两轮分析使用你自己的 DeepSeek API Key，可能产生费用；开始分析前应用会显示数据发送告知，只有同意后才会调用模型。
 
 API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和脱敏诊断日志位于 EXE 同级 `runtime/` 目录。GUI 会显示失败阶段、稳定错误代码、影响、建议和日志关联；日志不上传，应用没有维护者服务器中转或遥测。不要转发已使用过的 portable 目录。
 
@@ -49,7 +49,9 @@ API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和脱
 
 Copyright (c) 2026 yyyang20. 自有应用源码、测试、构建脚本、配置、提示词和项目文档采用 **GPL-3.0-only**，完整文本见 [LICENSE](LICENSE)，许可说明见 [EULA.txt](EULA.txt)。本软件无保证；允许使用、研究、修改和分发，包括商业使用。分发受 GPL 覆盖的衍生版本须继续按 GPLv3 提供相应源码，私人修改不要求公开。
 
-alpha 6 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.6.zip)包含源码、资源、测试及构建说明；对应 [Windows portable Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.6) 的 `BUILD_INFO.json` 提交与该 tag 一致。不要用浮动 main 代替发行源码。
+最新公开 alpha 6 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.6.zip)包含源码、资源、测试及构建说明；对应 [Windows portable Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.6) 的 `BUILD_INFO.json` 提交与该 tag 一致。alpha 7 当前仅为源码开发版本，不要用浮动 main 代替已发行版本源码。
+
+alpha 7 后续正式发行时的[对应源码入口](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.7.zip)固定为 `v0.1.0-alpha.7`；该 tag 和 portable 尚未创建，只有完成正式构建、验收与发布后才成为可用发行来源。
 
 第三方组件保留各自许可，声明见 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)。完整许可文本及实际分发库的固定对应源码随 portable ZIP 提供，清单见 `licenses/components.json`。本版许可不改写既有历史发行资料。
 

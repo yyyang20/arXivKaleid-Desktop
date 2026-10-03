@@ -15,8 +15,8 @@ a = Analysis(
               'PySide6.QtWebEngineCore', 'PySide6.QtWebEngineWidgets'],
     noarchive=False,
 )
-# Fluent 的内嵌 SVG 图标需要 Svg/SvgWidgets/Xml；仍不带 PDF、视频、WebEngine。
-plugin_names = {'qwindows.dll', 'qmodernwindowsstyle.dll', 'qsvgicon.dll'}
+# Fluent 的内嵌 SVG 图标及应用 ICO 需要对应 Qt 插件；仍不带 PDF、视频、WebEngine。
+plugin_names = {'qwindows.dll', 'qmodernwindowsstyle.dll', 'qsvgicon.dll', 'qico.dll'}
 a.binaries = [item for item in a.binaries
               if '/plugins/' not in item[0].replace('\\', '/')
               or Path(item[0]).name in plugin_names]
@@ -28,5 +28,6 @@ a.binaries = [item for item in a.binaries
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='arXivKaleid',
           debug=False, bootloader_ignore_signals=False, strip=False, upx=False,
-          console=False, disable_windowed_traceback=True, contents_directory='_internal')
+          console=False, disable_windowed_traceback=True, contents_directory='_internal',
+          icon=str(root / 'assets/app-icon.ico'))
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name='arXivKaleid')

@@ -23,7 +23,8 @@ sys.path.insert(0, str(root))
 from desktop import app, paths
 from desktop.diagnostics import DesktopDiagnostics
 internal = copy / '_internal'
-for name in ['config.json', 'prompts/relevance_round1_v20.txt', 'prompts/relevance_round2_v15.txt']:
+for name in ['config.json', 'assets/app-icon.ico',
+             'prompts/relevance_round1_v20.txt', 'prompts/relevance_round2_v15.txt']:
     target = internal / name
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(root / name, target)

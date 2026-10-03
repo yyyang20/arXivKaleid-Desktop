@@ -1,6 +1,8 @@
 # Desktop 规范
 
-当前版本 `0.1.0-alpha.6` 使用 PySide6 与基础版 PySide6-Fluent-Widgets。主窗口采用 Windows 原生标题栏与 Fluent 导航，页面为首页、历史占位、设置；版本显示统一读取 `desktop.__version__`。
+当前版本 `0.1.0-alpha.7` 使用 PySide6 与基础版 PySide6-Fluent-Widgets。主窗口采用 Windows 原生标题栏与 Fluent 导航，页面为首页、历史占位、设置；版本显示统一读取 `desktop.__version__`。
+
+三页统一使用浅灰蓝背景、略浅的同色卡片、低对比度冷灰边框、8 px 卡片圆角和一致的页面边距；不使用阴影或装饰性渐变。设置页 API Key 输入框使用接近卡片的灰蓝底色与淡边框，仅在聚焦时显示蓝色描边。布局与样式调整不改变页面信息架构、控件语义或业务行为。
 
 ## 页面与任务展示
 
@@ -14,6 +16,8 @@
 ## Portable 路径与资源
 
 Windows 10/11 x64 发行形式为 PyInstaller one-folder ZIP，解压后双击 `arXivKaleid.exe`。application root 是 EXE 所在目录，只读 bundled resource root 是其 `_internal/`，所有运行数据均在 EXE 同级 `runtime/`。源码模式使用项目根与 `.desktop-runtime/`。两种模式使用同一 `config.json` 和两份现行自包含提示词，资源哈希由 Desktop 配置校验，不依赖独立自动化策略文件。
+
+正式 A0 图标使用透明画布上的深海军蓝圆角底板和四色几何 K；SVG 母版位于 `assets/app-icon.svg`，Windows ICO 包含 16、24、32、48、64、256 px 图层，其中 16/24 px 使用同一几何的无渐变简化渲染。`assets/app-icon.ico` 同时用于 Qt 应用/窗口图标和 PyInstaller EXE 图标。
 
 路径由 `sys.frozen`、`sys.executable` 和资源目录确定，不依赖 cwd；拒绝 `..`、越界路径及 symlink/reparse point。运行目录不可写或资源缺失时，GUI 显示固定错误并禁止操作，不回退到 AppData、Documents、home 或注册表。bundled curl 缺失或哈希不符时安全失败，不搜索系统 PATH；源码模式继续使用系统 curl。
 

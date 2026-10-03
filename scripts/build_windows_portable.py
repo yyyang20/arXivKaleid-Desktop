@@ -31,6 +31,7 @@ NAME = f'arXivKaleid-{__version__}-windows-x64'
 SOURCE_URL = f'https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v{__version__}.zip'
 RESOURCES = (
     'config.json',
+    'assets/app-icon.ico',
     'prompts/relevance_round1_v20.txt',
     'prompts/relevance_round2_v15.txt',
 )
@@ -46,6 +47,7 @@ REQUIRED_RELEASE_FILES = (
       ('Core', 'Gui', 'Widgets', 'Svg', 'SvgWidgets', 'Xml')),
     '_internal/PySide6/plugins/platforms/qwindows.dll',
     '_internal/PySide6/plugins/iconengines/qsvgicon.dll',
+    '_internal/PySide6/plugins/imageformats/qico.dll',
     '_internal/PySide6/plugins/styles/qmodernwindowsstyle.dll',
     '_internal/pywin32_system32/pywintypes313.dll',
     *('_internal/' + p for p in RESOURCES),

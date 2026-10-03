@@ -10,7 +10,7 @@
 python -B -m desktop.app
 ```
 
-当前版本为 `0.1.0-alpha.6`，使用 PySide6 / Qt `6.9.2`、PySide6-Fluent-Widgets `1.11.3` 基础版、PySideSix-Frameless-Window `0.8.2`、darkdetect `0.8.0`、Windows pywin32 `312`，均固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。不安装 full 的 scipy、pillow、colorthief。该文件同时引入 [requirements.txt](../../requirements.txt) 中的 pypdf 核心运行依赖；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
+当前版本为 `0.1.0-alpha.7`，使用 PySide6 / Qt `6.9.2`、PySide6-Fluent-Widgets `1.11.3` 基础版、PySideSix-Frameless-Window `0.8.2`、darkdetect `0.8.0`、Windows pywin32 `312`，均固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。不安装 full 的 scipy、pillow、colorthief。该文件同时引入 [requirements.txt](../../requirements.txt) 中的 pypdf 核心运行依赖；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
 
 仅在用户已授权且已核实为本项目专用的 Conda 环境中，才可安装 Desktop 依赖：
 
@@ -31,7 +31,7 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 
 ## Portable 用户
 
-发行后解压 `arXivKaleid-<version>-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。alpha 6 正式发行必须从合并后的 main 重建并验收，不能用 alpha 5 或开发分支技术构建代替。源码 GUI 在设置页输入自己的 DeepSeek API Key，首页先获取候选，再执行分析。
+发行后解压 `arXivKaleid-<version>-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。当前公开成品仍为 alpha 6；alpha 7 尚未执行正式 portable 构建或发布。源码 GUI 在设置页输入自己的 DeepSeek API Key，首页先获取候选，再执行分析。
 
 所有用户数据都在 EXE 同级 `runtime/`，诊断日志位于 `runtime/logs/`。删除整个 portable 目录相当于卸载并删除运行数据；当前版本不自动轮换或删除旧日志。不要把包含个人 `runtime/` 的已使用目录重新发给其他人，应发送构建生成的干净 ZIP。DPAPI 绑定 Windows 用户与电脑，复制文件夹给另一个用户/电脑后，旧 `secret.dat` 通常无法解密，需要重新输入 Key。
 
@@ -39,7 +39,7 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 
 ## 本机构建
 
-alpha 6 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windows 11 样式、SVG 图标插件；不带 QtNetwork、qsvg 图像插件或 offscreen 平台。Fluent 图标/QSS 由其内嵌 Qt 资源模块提供，不从网络获取图标；不额外收集整个 site-packages、full 依赖或系统字体。实际模块/PYZ、运行时 hook、DLL 和插件随冻结成品核验。
+alpha 7 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windows 11 样式、SVG 图标插件；不带 QtNetwork、qsvg 图像插件或 offscreen 平台。Fluent 图标/QSS 由其内嵌 Qt 资源模块提供，不从网络获取图标；正式 `assets/app-icon.ico` 同时进入 `_internal/` 资源和 EXE 文件图标。应用图标可用现有项目环境运行 `python -B scripts/generate_app_icon.py` 从 SVG 母版确定性重建，不额外引入图像依赖。不额外收集整个 site-packages、full 依赖或系统字体。实际模块/PYZ、运行时 hook、DLL 和插件随冻结成品核验。
 
 源码 manifest 固定 QtBase、QtSvg、PySide/Shiboken、pypdf、Fluent、frameless、darkdetect 和 pywin32 的版本、许可及哈希；原始归档随包保留。新增依赖的原许可与版权文本按实际分发内容收集，pywin32 保留多层同名许可；实际使用的 hooks-contrib 运行时 hook 保留原许可。Fluent 1.11.3 wheel/sdist 许可原文及元数据声明 GPLv3，上游另有商业用途措辞；歧义记录在第三方声明，不因此推定本项目必须购买许可或改变 GPL-3.0-only。原许可、版权和固定对应源码全部保留；只有与实际分发直接相关且现有材料无法解决的具体发行权利缺口才停止 Release，不把其他项目当成许可依据。
 
@@ -106,7 +106,7 @@ Qt `QDomDocument.setContent` 弃用提示暂为非阻塞已知问题，以冻结
 
 ## 离线验证
 
-隔离视觉 QA 使用已有环境运行 `python -X utf8 -B scripts/visual_qa_desktop.py`，执行前按下述方式限制 TEMP/TMP。该入口不调用正式 main、不读取用户 Secret、不运行真实候选或分析；内存假 Key、合成快照/事件/Markdown 驱动真实 QThread 与 GUI，urllib/socket/子进程网络入口硬禁止。截图与 qa.json 写入 `.codex-validation/alpha6-visual-qa/capture-*/`，包含初始、抓取、成功收缩/展开、分析、日报、设置/禁改、历史、最小窗口及失败。Windows 使用当前进程 `QT_QPA_PLATFORM=windows`；可分别以 `QT_SCALE_FACTOR=1` 和 `1.5` 复核不同缩放，实际 DPR 在 qa.json 中记录，不改变持久系统设置。
+隔离视觉 QA 使用已有环境运行 `python -X utf8 -B scripts/visual_qa_desktop.py`，执行前按下述方式限制 TEMP/TMP。该入口不调用正式 main、不读取用户 Secret、不运行真实候选或分析；内存假 Key、合成快照/事件/Markdown 驱动真实 QThread 与 GUI，urllib/socket/子进程网络入口硬禁止。截图与 qa.json 写入 `.codex-validation/alpha7-visual-qa/capture-*/`，包含初始、抓取、成功收缩/展开、分析、日报、设置/禁改、历史、最小窗口及失败。Windows 使用当前进程 `QT_QPA_PLATFORM=windows`；可分别以 `QT_SCALE_FACTOR=1` 和 `1.5` 复核不同缩放，实际 DPR 在 qa.json 中记录，不改变持久系统设置。
 
 在项目根目录及已有匹配依赖的环境中运行；临时目录只作用于当前 PowerShell 进程及其子进程，结束后恢复原值，不修改用户或系统的持久设置。先使用已有路径检查函数确认临时目录仍在项目内且没有目录链接：
 

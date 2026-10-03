@@ -15,6 +15,7 @@
 | `requirements.txt` | 固定 pypdf 核心运行依赖 |
 | `requirements-desktop.txt` | 核心 PDF、PySide6、基础 Fluent 与 Windows 必要依赖固定版本，不使用 full |
 | `requirements-build.txt` | 固定 PyInstaller 及仅构建阶段依赖 |
+| `assets/` | A0 应用图标 SVG 母版与 Windows 多尺寸 ICO 正式资源 |
 | `desktop/` | GUI、候选快照、DPAPI、配置、诊断、进度、一次性分析和 Markdown 日报；详见 [Desktop 结构](desktop/DESKTOP_STRUCTURE.md) |
 | `main.py` | arXiv URL、curl 传输、Atom 解析、排序合并、Desktop 主库 schema 与筛选保存核心函数；无 CLI 启动入口 |
 | `arxiv_transport_evidence.py` | curl write-out、timing 和响应头白名单纯解析边界 |

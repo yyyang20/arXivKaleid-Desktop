@@ -28,6 +28,7 @@ if HAS_QT:
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QLineEdit
     from desktop import app
+    from desktop.style import CARD_BACKGROUND, PAGE_BACKGROUND, SurfaceCard
 
 
 @unittest.skipUnless(HAS_QT, "Desktop GUI dependencies PySide6 / qfluentwidgets are absent")
@@ -72,6 +73,27 @@ class DesktopAppTests(IsolatedDesktopTest):
         ))
         self.assertTrue(self.window.task_panel.isHidden())
         self.assertIs(self.window.pages.currentWidget(), self.window.home_page)
+        self.assertFalse(self.window.windowIcon().isNull())
+        icon_sizes = {(size.width(), size.height()) for size in self.window.windowIcon().availableSizes()}
+        self.assertEqual(icon_sizes, {(16, 16), (24, 24), (32, 32),
+                                      (48, 48), (64, 64), (256, 256)})
+        for size in (16, 24, 32, 48, 64, 256):
+            image = self.window.windowIcon().pixmap(size, size).toImage()
+            self.assertEqual(image.pixelColor(0, 0).alpha(), 0)
+
+    def test_alpha7_pages_share_surface_palette_and_key_focus_style(self):
+        self.assertIn(PAGE_BACKGROUND, self.window.styleSheet())
+        self.assertIn(PAGE_BACKGROUND, self.window.home_page.styleSheet())
+        self.assertIn(PAGE_BACKGROUND, self.window.history_page.styleSheet())
+        self.assertIn(PAGE_BACKGROUND, self.window.settings_page.styleSheet())
+        self.assertEqual(self.window.api_key.objectName(), "apiKeyInput")
+        self.assertIn("border: 1px solid #1677ff", self.window.api_key.styleSheet())
+        cards = self.window.home_page.findChildren(SurfaceCard)
+        self.assertGreaterEqual(len(cards), 3)
+        self.assertTrue(all(card._surface.name() == CARD_BACKGROUND for card in cards[:2]))
+        margins = self.window.home_page.layout().contentsMargins()
+        self.assertEqual((margins.left(), margins.top(), margins.right(), margins.bottom()),
+                         (24, 18, 24, 18))
 
     def test_pages_and_versions_use_the_single_source_without_history_storage(self):
         from desktop import __version__
@@ -156,6 +178,7 @@ class DesktopAppTests(IsolatedDesktopTest):
         with patch.object(app.paths, "prepare_runtime", side_effect=PermissionError("private-user-path")), patch.object(app, "QApplication") as application, patch.object(app, "DesktopWindow", return_value=self.window):
             application.return_value.exec.return_value = 0
             self.assertEqual(app.main(), 0)
+        application.return_value.setWindowIcon.assert_called_once()
         self.assertIn("可写位置", self.window.status.text())
         self.assertNotIn("private", self.window.status.text())
         self.assertTrue(self.window.task_panel.expanded)

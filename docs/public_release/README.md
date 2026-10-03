@@ -4,7 +4,7 @@ arXivKaleid Desktop 是面向黑洞与致密天体强引力成像、偏振和新
 
 本文档说明 Windows portable 的下载和使用方式。
 
-当前版本为 `0.1.0-alpha.6`，提供 Fluent 首页、历史占位页与设置页；第三方原许可、版权声明和固定对应源码随包提供。
+当前版本为 `0.1.0-alpha.7`，提供视觉统一的 Fluent 首页、历史占位页、设置页和正式 A0 应用图标；第三方原许可、版权声明和固定对应源码随包提供。
 
 ## 开发方式
 
@@ -49,7 +49,7 @@ API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和脱
 
 Copyright (c) 2026 yyyang20. 应用采用 **GPL-3.0-only**，完整许可文本见 portable 根目录的 `LICENSE`，说明见 [EULA.txt](EULA.txt)。本软件无保证；允许使用、研究、修改和分发，包括商业使用。分发受 GPL 覆盖的修改版本须按 GPLv3 提供相应源码，私人修改不要求公开。
 
-本版[对应源码下载](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.6.zip)固定到 `v0.1.0-alpha.6`，包含应用源码、配置、Prompt、测试、构建脚本及说明，对应 `BUILD_INFO.json` 中的提交。源码归档用于研究、修改和构建，不是可直接运行的 Windows 成品；公开成品下载见 [Releases](https://github.com/yyyang20/arXivKaleid-Desktop/releases)。
+本版[对应源码下载](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.7.zip)固定到 `v0.1.0-alpha.7`，包含应用源码、配置、Prompt、测试、构建脚本及说明，对应 `BUILD_INFO.json` 中的提交。源码归档用于研究、修改和构建，不是可直接运行的 Windows 成品；公开成品下载见 [Releases](https://github.com/yyyang20/arXivKaleid-Desktop/releases)。
 
 第三方组件保留各自许可；声明见 `THIRD_PARTY_NOTICES.txt`，许可文本位于 `licenses/`，QtBase、QtSvg、PySide/Shiboken、pypdf、Fluent、frameless、darkdetect 和 pywin32 固定源码位于 `licenses/sources/`。来源、版本与哈希见 `licenses/components.json`；Fluent GPLv3 元数据与上游商业用途措辞的歧义，以及通用执行平台、独立工具和系统库的范围说明见第三方声明。既有历史发行资料不变。
 
