@@ -1,6 +1,6 @@
 # Desktop 文档入口
 
-当前版本为 `0.1.0-alpha.7`，使用基础版 PySide6-Fluent-Widgets，提供视觉统一的首页、历史占位和设置页，并接入正式 A0 应用图标。首页保留候选抓取、两轮分析独立入口、可收缩的真实运行进度、Markdown 日报和安全诊断；Key 与 About 位于设置页，核心业务行为不变。最新公开成品为 [alpha 7 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.7)，已完成零模型成品及匿名下载验收，运行与验证方式见运行手册。
+当前版本为 `0.1.0-alpha.7.1`，修复 Round 1 非空摘要证据校验时缺少标准库导入导致的异常。使用基础版 PySide6-Fluent-Widgets，提供首页、历史占位和设置页及正式 A0 应用图标。首页保留候选抓取、两轮分析独立入口、可收缩的真实运行进度、Markdown 日报和安全诊断；Key 与 About 位于设置页，核心业务行为不变。最新公开成品为 [alpha 7 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.7)，运行与验证方式见运行手册。
 
 每次启动后首次开始分析前必须显示模型数据发送、费用、DPAPI 凭据与本地运行数据告知；用户拒绝时不消费快照、不调用模型。
 

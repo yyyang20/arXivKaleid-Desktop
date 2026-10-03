@@ -12,6 +12,7 @@ import sqlite3
 import subprocess
 import tempfile
 import time
+import unicodedata
 import urllib.parse
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta, timezone

@@ -2,6 +2,13 @@
 
 本文件保留 Desktop 与通用功能的简短历史。代码解耦前的条目来自原项目：当时的发行来源、构建提交、兼容行为和治理测试仅表示历史事实，不代表当前仓库仍有这些入口或测试。现行行为以代码、配置、测试和 [当前业务规范](PROJECT_SPEC.md) 为准；详细历史通过 Git、PR 和 Issue 查询。
 
+## 2026-10-04：Desktop alpha 7.1 非空证据校验修复
+
+- 补充 `unicodedata` 标准库导入，修复 Round 1 模型返回非空证据后，本地校验触发未预见异常的问题；筛选逻辑、Prompt、GUI、模型配置和依赖保持不变。
+- 新增非空标题/摘要证据、Unicode 与空白规范化、无效证据容错及两轮合成 HTTP 回归测试；冻结程序诊断增加非空证据校验，不访问真实 arXiv 或 DeepSeek。
+- 冻结诊断仅隔离自身 GUI 线程的输入法服务，避免本机第三方输入法注入干扰 DLL 来源检查；隔离失败仍停止验收，不改变系统设置或正式 GUI 行为。
+- Desktop 版本更新为 `0.1.0-alpha.7.1`；现行版本说明和 portable 对应源码入口同步，历史发行保持不变。
+
 ## 2026-10-03：Desktop alpha.7 公开发行
 
 - 已公开 [v0.1.0-alpha.7 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.7)，仅上传 Windows x64 ZIP 和 `.sha256`；发行 tag 与 BUILD_INFO 均指向合并后的 main 提交 `fc7ca1cb0eab1759cdb4c2d1ea0d5d5f2f0a23ce`，用途为 public-release。

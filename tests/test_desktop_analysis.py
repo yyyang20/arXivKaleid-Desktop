@@ -55,6 +55,7 @@ class DesktopAnalysisTests(unittest.TestCase):
         self.requests = []
         self.pdf_urls = []
         self.selected_indices = [1, 2, 3]
+        self.evidence_by_candidate = {}
         self.recommendations_limit = 5
         self.page_counts = {}
         self.fail_pdf = set()
@@ -78,10 +79,7 @@ class DesktopAnalysisTests(unittest.TestCase):
         if self.fail_stage == stage:
             raise TimeoutError("synthetic-private-response")
         if stage == "round1":
-            data = dict(task_type="round1_abstract_screening", profile_version="profile_v2",
-                        prompt_version="round1_v20", selection_policy="top_k_daily_budget",
-                        selection_policy_version="top_k_daily_budget_v4",
-                        selected_papers=[dict(candidate_index=i, content_label="成像", reason="生成黑洞阴影图像。") for i in self.selected_indices])
+            data = self.round1_payload()
             result = dict(model="deepseek-flash", choices=[dict(message=dict(content=json.dumps(data)), finish_reason="stop")],
                           usage=dict(prompt_tokens=100, completion_tokens=20 + self.extra_output_tokens,
                                      total_tokens=120 + self.extra_output_tokens, prompt_cache_hit_tokens=0, prompt_cache_miss_tokens=100))
@@ -103,6 +101,86 @@ class DesktopAnalysisTests(unittest.TestCase):
         if self.missing_usage:
             result.pop("usage")
         return Response(json.dumps(result).encode())
+
+    def round1_payload(self):
+        # 合成响应可携带真实校验器需要的证据；未配置时保留原有测试场景。
+        selected = []
+        for index in self.selected_indices:
+            item = dict(candidate_index=index, content_label="成像", reason="生成黑洞阴影图像。")
+            if index in self.evidence_by_candidate:
+                item["evidence"] = self.evidence_by_candidate[index]
+            selected.append(item)
+        return dict(task_type="round1_abstract_screening", profile_version="profile_v2",
+                    prompt_version="round1_v20", selection_policy="top_k_daily_budget",
+                    selection_policy_version="top_k_daily_budget_v4", selected_papers=selected)
+
+    def validate_round1(self, papers):
+        return main.validate_round1_result(
+            self.round1_payload(), papers, max_selected=10,
+            profile_version="profile_v2", prompt_version="round1_v20",
+            selection_policy_version="top_k_daily_budget_v4",
+        )
+
+    def test_round1_nonempty_evidence_normalizes_unicode_and_whitespace(self):
+        self.selected_indices = [1]
+        candidate = dict(paper(1), title="Ｓｙｎｔｈｅｔｉｃ　paper",
+                         summary="Synthetic\n  abstract")
+        self.evidence_by_candidate[1] = [
+            dict(source="metadata_title", quote="  Synthetic   paper  "),
+            dict(source="metadata_abstract", quote="Ｓｙｎｔｈｅｔｉｃ　abstract"),
+        ]
+        validated, warnings = self.validate_round1([candidate])
+        self.assertTrue(validated["batch_valid"])
+        self.assertEqual(warnings, [])
+        selected = validated["selected_papers"][0]
+        self.assertEqual(selected["evidence"], [
+            dict(source="metadata_title", quote="Synthetic paper"),
+            dict(source="metadata_abstract", quote="Synthetic abstract"),
+        ])
+        self.assertEqual(selected["evidence_status"], "valid")
+        self.assertEqual(selected["evidence_invalid_count"], 0)
+
+    def test_round1_invalid_evidence_preserves_selection_and_order(self):
+        self.selected_indices = [2, 1]
+        self.evidence_by_candidate = {
+            2: [dict(source="metadata_title", quote="Synthetic paper"),
+                dict(source="metadata_abstract", quote="Unsupported evidence quote")],
+            1: [dict(source="metadata_abstract", quote="Another unsupported quote")],
+        }
+        validated, warnings = self.validate_round1([paper(1), paper(2)])
+        self.assertTrue(validated["batch_valid"])
+        selected = validated["selected_papers"]
+        self.assertEqual([item["candidate_index"] for item in selected], [2, 1])
+        self.assertEqual([item["round1_rank"] for item in selected], [1, 2])
+        self.assertEqual([item["evidence_status"] for item in selected], ["partial", "invalid"])
+        self.assertEqual([item["evidence_invalid_count"] for item in selected], [1, 1])
+        self.assertEqual(selected[1]["evidence"], [])
+        self.assertEqual(validated["selection_audit"]["evidence_discarded_count"], 2)
+        self.assertEqual(validated["selection_audit"]["excluded_count"], 0)
+        self.assertTrue(warnings)
+
+    def test_round1_nonempty_evidence_completes_mocked_two_rounds(self):
+        self.evidence_by_candidate[1] = [
+            dict(source="metadata_title", quote="Synthetic paper"),
+            dict(source="metadata_abstract", quote="Synthetic abstract"),
+        ]
+        result = self.run_snapshot()
+        self.assertEqual([stage for stage, _ in self.requests], ["round1", "round2"])
+        self.assertEqual(len(self.pdf_urls), 3)
+        conn = self.connect()
+        self.assertEqual(conn.execute("SELECT status FROM runs").fetchone()[0], "success")
+        details = [json.loads(row[0]) for row in conn.execute(
+            "SELECT details_json FROM screening_results "
+            "WHERE task_type = 'round1_abstract_screening' AND result_rank = 1"
+        )]
+        self.assertEqual(len(details), 1)
+        self.assertEqual(details[0]["evidence_status"], "valid")
+        self.assertEqual(details[0]["evidence"], self.evidence_by_candidate[1])
+        self.assertEqual(model_usage.load_run_usage_summary(conn, result.run_id).api_attempt_count, 2)
+        self.assertIn("Round 1 入围数量：3", result.markdown)
+        self.assertIn("Round 2 最终推荐数量：3", result.markdown)
+        for operation in self.forbidden:
+            operation.assert_not_called()
 
     def pdf(self, url, **kwargs):
         self.pdf_urls.append(url)

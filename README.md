@@ -4,7 +4,7 @@ arXivKaleid Desktop 是面向黑洞与致密天体强引力成像、偏振和新
 
 本仓库包含 Desktop 应用源码、测试、构建配置和项目文档；Windows portable 成品通过 GitHub Releases 提供。
 
-当前版本为 `0.1.0-alpha.7`，统一 Fluent 首页、历史占位页和设置页的浅灰蓝视觉，并接入正式 A0 应用图标。最新公开成品为 [alpha 7 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.7)，下载 ZIP 和同名校验文件后按下述方式核验。
+当前版本为 `0.1.0-alpha.7.1`，修复 Round 1 非空摘要证据校验时缺少标准库导入导致的异常；筛选规则、Prompt 和界面行为保持不变。alpha 7.1 尚未公开发布；最新公开成品为 [alpha 7 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.7)，下载 ZIP 和同名校验文件后按下述方式核验。
 
 ## 开发方式
 

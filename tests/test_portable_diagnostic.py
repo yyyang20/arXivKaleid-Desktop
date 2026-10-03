@@ -31,6 +31,10 @@ for name in ['config.json', 'assets/app-icon.ico',
 spec = importlib.util.spec_from_file_location('portable_check', root / 'packaging/windows/portable_check.py')
 diagnostic = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(diagnostic)
+if sys.argv[3] == 'ime-failure':
+    def isolation_failure():
+        raise RuntimeError('synthetic_ime_isolation_failure')
+    diagnostic.disable_diagnostic_ime = isolation_failure
 original_close, injected = DesktopDiagnostics.close, []
 def fail_late(self):
     original_close(self)
@@ -49,6 +53,8 @@ with patch.object(sys, 'frozen', True, create=True), \
     rejected = diagnostic.run()
 report = json.loads((copy / 'runtime/work/portable-check.json').read_text(encoding='utf-8'))
 print('RESULT:' + json.dumps({'code': code, 'ok': report['ok'], 'injected': bool(injected),
+                            'round1_nonempty_evidence': report.get('round1_nonempty_evidence'),
+                            'diagnostic_ime_thread_only': report.get('diagnostic_ime_thread_only'),
                             'failure_type': report.get('failure_type'), 'used_runtime': rejected}))
 '''
 
@@ -78,4 +84,13 @@ class PortableDiagnosticTests(unittest.TestCase):
         result = self.exercise('success')
         self.assertTrue(result['ok'])
         self.assertEqual(result['code'], 0)
+        self.assertTrue(result['round1_nonempty_evidence'])
+        self.assertTrue(result['diagnostic_ime_thread_only'])
         self.assertEqual(result['used_runtime'], 2)
+
+    def test_ime_isolation_failure_rejects_diagnostic(self):
+        result = self.exercise('ime-failure')
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['code'], 1)
+        self.assertEqual(result['failure_type'], 'RuntimeError')
+        self.assertIsNone(result['diagnostic_ime_thread_only'])

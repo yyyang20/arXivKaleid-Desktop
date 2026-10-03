@@ -10,7 +10,7 @@
 python -B -m desktop.app
 ```
 
-当前版本为 `0.1.0-alpha.7`，使用 PySide6 / Qt `6.9.2`、PySide6-Fluent-Widgets `1.11.3` 基础版、PySideSix-Frameless-Window `0.8.2`、darkdetect `0.8.0`、Windows pywin32 `312`，均固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。不安装 full 的 scipy、pillow、colorthief。该文件同时引入 [requirements.txt](../../requirements.txt) 中的 pypdf 核心运行依赖；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
+当前版本为 `0.1.0-alpha.7.1`，使用 PySide6 / Qt `6.9.2`、PySide6-Fluent-Widgets `1.11.3` 基础版、PySideSix-Frameless-Window `0.8.2`、darkdetect `0.8.0`、Windows pywin32 `312`，均固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。不安装 full 的 scipy、pillow、colorthief。该文件同时引入 [requirements.txt](../../requirements.txt) 中的 pypdf 核心运行依赖；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
 
 仅在用户已授权且已核实为本项目专用的 Conda 环境中，才可安装 Desktop 依赖：
 
@@ -72,7 +72,7 @@ alpha 7 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windo
 & $desktopPython -X utf8 -B scripts/validate_windows_portable.py --arxiv
 ```
 
-验证器先检查干净发行树，再复制到项目内新的 `.desktop-build/validation-*/`，使用非源码 cwd 和仅包含 Windows System32 的 PATH 启动 EXE。检查资源、Qt GUI/Markdown、进度控件、首次分析告知默认拒绝、拒绝后快照未消费且分析线程未启动、DPAPI 假值、SQLite、pypdf、时区、bundled curl 与重启。`--arxiv` 通过实际 GUI/QThread 抓取候选，不点击分析按钮；诊断进程硬禁用模型入口。结果只写验证副本的 `runtime/` 和项目内验证摘要，不接触真实 Key。已有 runtime 的副本拒绝诊断。
+验证器先检查干净发行树，再复制到项目内新的 `.desktop-build/validation-*/`，使用非源码 cwd 和仅包含 Windows System32 的 PATH 启动 EXE。诊断窗口创建前仅对当前诊断线程调用 [ImmDisableIME](https://learn.microsoft.com/en-us/windows/win32/api/imm/nf-imm-immdisableime)，避免第三方输入法 DLL 干扰严格来源检查；不改变系统输入法、正式 GUI 或普通重启入口，不覆盖真实输入法交互。检查资源、Qt GUI/Markdown、进度控件、首次分析告知默认拒绝、拒绝后快照未消费且分析线程未启动、DPAPI 假值、SQLite、pypdf、时区、bundled curl 与重启。`--arxiv` 通过实际 GUI/QThread 抓取候选，不点击分析按钮；诊断进程硬禁用模型入口。结果只写验证副本的 `runtime/` 和项目内验证摘要，不接触真实 Key。已有 runtime 的副本拒绝诊断。
 
 默认离线验证在真实 Windows 平台抓取七个主要状态、详情、失败、设置禁改与最小窗口截图，使用真实 QThread 与合成计算，不分发 unittest/mock 或开发 QA 脚本。Python 网络及非本地版本检查的子进程传输被硬禁止。新建副本写入合成 DPAPI 后，只有匹配验证器随机诊断令牌的新进程才检查恢复；普通 GUI 额外重复启动/关闭三次。图像和诊断只在副本 `runtime/work/`，绝不回流发行包。
 
@@ -137,4 +137,4 @@ git status --short
 
 新增测试使用 `.codex-validation/` 下的隔离目录，不接触实际 Desktop Secret。治理测试只读文档、JSON 配置及源码 AST；检查文档与发行资料契约，不启动应用或读取运行数据。GUI 测试自动使用 Qt offscreen；有 PySide6 与 qfluentwidgets 时必须实际执行，缺少 GUI 依赖时安全跳过 GUI 部分；pipeline 和 Secret 文件边界测试不依赖 Qt。Windows 额外运行真实 DPAPI 往返测试，仅使用合成假值；非 Windows 跳过该项。所有跳过须报告原因和未覆盖范围，涉及 GUI、DPAPI 或 Windows 发行的任务不能以跳过代替对应验收。
 
-普通单元测试的网络全部使用 mock，不访问真实 arXiv、不调用真实 DeepSeek、不下载真实 PDF。分析测试使用真实客户端解析合成 HTTP 响应，核验单次 attempt、冻结顺序、预算、页数门控与日报事实；诊断测试覆盖身份关联、作用域、线程安全、内存降级、绝对路径与敏感内容 canary；GUI 测试覆盖展示失败不改写分析成功。构建扫描必须拒绝 `runtime/`、`logs/`、JSONL、SQLite、PDF 和 Secret。Git/GitHub 收尾遵循根 [运行手册](../OPERATIONS.md)。
+普通单元测试的网络全部使用 mock，不访问真实 arXiv、不调用真实 DeepSeek、不下载真实 PDF。分析测试使用真实客户端解析合成 HTTP 响应，核验单次 attempt、冻结顺序、非空证据规范化与无效证据容错、预算、页数门控与日报事实；冻结诊断也使用合成数据执行非空证据校验。诊断测试覆盖身份关联、作用域、线程安全、内存降级、绝对路径与敏感内容 canary；GUI 测试覆盖展示失败不改写分析成功。构建扫描必须拒绝 `runtime/`、`logs/`、JSONL、SQLite、PDF 和 Secret。Git/GitHub 收尾遵循根 [运行手册](../OPERATIONS.md)。
