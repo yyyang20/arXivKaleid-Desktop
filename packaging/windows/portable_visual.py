@@ -214,11 +214,27 @@ def exercise(application, window, root, synthetic_key):
         window.show_issue(make_issue('AKD-FETCH-UNEXPECTED'))
         window.task_panel.finish(failed=True)
         capture('12-failure')
+        # 每个安全停止独立还原阶段事实，避免沿用上一场景的红叉或成功日报。
+        window.report.clear()
+        window.task_panel.begin('analysis')
+        window.reset_analysis_progress()
         window.show_issue(make_issue('AKD-R1-INPUT_LIMIT'))
         window.status.setText(make_issue('AKD-R1-INPUT_LIMIT').reason)
+        window.task_panel.finish(failed=True)
         capture('12b-round1-safety-stop')
+        window.task_panel.begin('analysis')
+        window.reset_analysis_progress()
+        for stage, message in [('round1', 'Round 1 完成 · 有效入围 10 篇'),
+                               ('pdf', 'PDF 下载完成 · 已处理 10 / 10'),
+                               ('fulltext', '全文提取完成 · 已处理 9 / 9')]:
+            window.handle_progress(ProgressEvent(task_type='analysis', stage=stage,
+                                                 state='completed', message=message))
         window.show_issue(make_issue('AKD-R2-COST_LIMIT'))
         window.status.setText(make_issue('AKD-R2-COST_LIMIT').reason)
+        window.task_panel.finish(failed=True)
+        assert window.analysis_steps['round1'].text().startswith('✓')
+        assert window.analysis_steps['round2'].text().startswith('✕')
+        assert 'Round 1 已发生的结果与费用仍保留' in window.diagnostic_text.text()
         capture('12c-round2-safety-stop')
         # 保存失败使用隔离的代理，不更改 Windows ACL 或系统配置。
         store = window.secret_store

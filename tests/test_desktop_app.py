@@ -543,6 +543,26 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.assertTrue(self.window.task_panel.expanded)
         self.assertIn("AKD-PREPARE-WORKSPACE_FAILED", self.window.diagnostic_text.text())
 
+    def test_round2_safety_stop_preserves_completed_round1_display(self):
+        from desktop.errors import make_issue
+        self.prepare_analysis()
+
+        def stopped(_attempt, _key, progress):
+            for stage in ("round1", "pdf", "fulltext"):
+                progress(ProgressEvent(task_type="analysis", stage=stage,
+                                       state="completed", message=f"{stage} 已完成"))
+            raise app.AnalysisError(make_issue("AKD-R2-COST_LIMIT"))
+
+        with patch.object(app.AnalysisAttempt, "run", stopped):
+            self.window.start_analysis()
+            self.wait_until(lambda: self.window.worker is None)
+        self.assertTrue(self.window.analysis_steps["round1"].text().startswith("✓"))
+        self.assertTrue(self.window.analysis_steps["round2"].text().startswith("✕"))
+        self.assertIn("未调用本轮模型", self.window.status.text())
+        self.assertIn("Round 1 已发生的结果与费用仍保留", self.window.diagnostic_text.text())
+        self.assertEqual(self.window.report.toPlainText(), "")
+        self.assertFalse(self.window.analyze_button.isEnabled())
+
     def test_markdown_render_failure_preserves_analysis_success_semantics(self):
         self.prepare_analysis()
         result = app.AnalysisResult(
