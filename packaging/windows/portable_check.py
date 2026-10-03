@@ -4,6 +4,7 @@
 
 """仅用于全新发行副本的零模型费用诊断，不接受用户 Key。"""
 import io
+import ctypes
 import json
 import hashlib
 import os
@@ -21,6 +22,19 @@ from desktop import paths, pipeline
 SYNTHETIC_KEY = 'synthetic-portable-check-not-an-api-key'
 
 
+def disable_diagnostic_ime():
+    """仅隔离当前诊断线程的输入法；不切换系统输入法或影响正式 GUI。"""
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.GetCurrentThreadId.argtypes = []
+    kernel.GetCurrentThreadId.restype = ctypes.c_uint32
+    imm = ctypes.WinDLL('imm32', use_last_error=True)
+    imm.ImmDisableIME.argtypes = [ctypes.c_uint32]
+    imm.ImmDisableIME.restype = ctypes.c_int
+    # 必须先于诊断窗口创建，防止第三方输入法 DLL 干扰严格来源检查。
+    if not imm.ImmDisableIME(kernel.GetCurrentThreadId()):
+        raise RuntimeError('diagnostic_ime_isolation_failed')
+
+
 def run_recovery():
     """仅接受验证器新建副本的随机诊断令牌，不对用户 runtime 做恢复探测。"""
     root = paths.application_root(pipeline.PROJECT_ROOT)
@@ -35,6 +49,7 @@ def run_recovery():
         return 2
     result = {'ok': False}
     try:
+        disable_diagnostic_ime()
         from PySide6.QtWidgets import QApplication
         from desktop import app as desktop_app
         application = QApplication([])
@@ -60,6 +75,8 @@ def run(*, network=False, visual=False):
     paths.prepare_runtime(pipeline.PROJECT_ROOT)
     report = {'ok': False, 'model_http_attempts': 0, 'model_cost_cny': '0'}
     try:
+        disable_diagnostic_ime()
+        report['diagnostic_ime_thread_only'] = True
         paths.configure_timezone(pipeline.PROJECT_ROOT)
         from zoneinfo import ZoneInfo
         assert str(ZoneInfo('Asia/Shanghai')) == 'Asia/Shanghai'

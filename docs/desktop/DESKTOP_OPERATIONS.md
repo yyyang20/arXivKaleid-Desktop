@@ -72,7 +72,7 @@ alpha 7 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windo
 & $desktopPython -X utf8 -B scripts/validate_windows_portable.py --arxiv
 ```
 
-验证器先检查干净发行树，再复制到项目内新的 `.desktop-build/validation-*/`，使用非源码 cwd 和仅包含 Windows System32 的 PATH 启动 EXE。检查资源、Qt GUI/Markdown、进度控件、首次分析告知默认拒绝、拒绝后快照未消费且分析线程未启动、DPAPI 假值、SQLite、pypdf、时区、bundled curl 与重启。`--arxiv` 通过实际 GUI/QThread 抓取候选，不点击分析按钮；诊断进程硬禁用模型入口。结果只写验证副本的 `runtime/` 和项目内验证摘要，不接触真实 Key。已有 runtime 的副本拒绝诊断。
+验证器先检查干净发行树，再复制到项目内新的 `.desktop-build/validation-*/`，使用非源码 cwd 和仅包含 Windows System32 的 PATH 启动 EXE。诊断窗口创建前仅对当前诊断线程调用 [ImmDisableIME](https://learn.microsoft.com/en-us/windows/win32/api/imm/nf-imm-immdisableime)，避免第三方输入法 DLL 干扰严格来源检查；不改变系统输入法、正式 GUI 或普通重启入口，不覆盖真实输入法交互。检查资源、Qt GUI/Markdown、进度控件、首次分析告知默认拒绝、拒绝后快照未消费且分析线程未启动、DPAPI 假值、SQLite、pypdf、时区、bundled curl 与重启。`--arxiv` 通过实际 GUI/QThread 抓取候选，不点击分析按钮；诊断进程硬禁用模型入口。结果只写验证副本的 `runtime/` 和项目内验证摘要，不接触真实 Key。已有 runtime 的副本拒绝诊断。
 
 默认离线验证在真实 Windows 平台抓取七个主要状态、详情、失败、设置禁改与最小窗口截图，使用真实 QThread 与合成计算，不分发 unittest/mock 或开发 QA 脚本。Python 网络及非本地版本检查的子进程传输被硬禁止。新建副本写入合成 DPAPI 后，只有匹配验证器随机诊断令牌的新进程才检查恢复；普通 GUI 额外重复启动/关闭三次。图像和诊断只在副本 `runtime/work/`，绝不回流发行包。
 
