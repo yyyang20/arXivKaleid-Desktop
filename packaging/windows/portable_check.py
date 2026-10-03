@@ -84,6 +84,15 @@ def run(*, network=False, visual=False):
         config, resources, profile, prompt = run_round2.read_round2_context(paths.resource_root(pipeline.PROJECT_ROOT))
         assert config['versions']['research_profile_version'] == profile['profile_version'] and prompt
         import main
+        # 在冻结程序中执行非空证据路径，防止缺失标准库导入被零结果掩盖。
+        evidence = [{'source': 'metadata_title', 'quote': 'Synthetic paper'},
+                    {'source': 'metadata_abstract', 'quote': 'Ｓｙｎｔｈｅｔｉｃ　abstract'}]
+        checked, status, discarded = main.validate_optional_round1_evidence(
+            evidence, {'title': 'Ｓｙｎｔｈｅｔｉｃ　paper', 'summary': 'Synthetic\n  abstract'})
+        assert checked == [{'source': 'metadata_title', 'quote': 'Synthetic paper'},
+                           {'source': 'metadata_abstract', 'quote': 'Synthetic abstract'}]
+        assert status == 'valid' and discarded == 0
+        report['round1_nonempty_evidence'] = True
         payload = json.loads(main.build_round2_messages(prompt, profile, [], config)[1]['content'])
         assert 'research_profile' not in payload
         from desktop.secrets import SecretStore

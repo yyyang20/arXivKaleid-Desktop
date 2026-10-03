@@ -78,7 +78,7 @@ docs/
 | `test_desktop_config.py` | 当前配置、预算、模型协议、Prompt 路径及哈希，拒绝旧 Online 配置字段 |
 | `test_desktop_decoupling.py` | alpha.4 合成场景行为基线、主库 schema v1、缓存、预算、导入边界和隔离源码运行 |
 | `test_desktop_pipeline.py` | 假 Atom、日期边界、计数、排序、冻结快照、进度及安全传输诊断 |
-| `test_desktop_analysis.py` | mock HTTP 两轮集成、门控、预算、单次 attempt、工作数据隔离和日报事实 |
+| `test_desktop_analysis.py` | mock HTTP 两轮集成、非空证据规范化与无效证据容错、门控、预算、单次 attempt、工作数据隔离和日报事实 |
 | `test_desktop_secrets.py` | 密文落盘、错误、路径和 Windows DPAPI 假值往返 |
 | `test_desktop_app.py` | offscreen GUI、告知拒绝、线程、凭据交互和日报展示失败 |
 | `test_desktop_diagnostics.py` | JSONL、身份关联、作用域、线程安全、内存降级和隐私 canary |

@@ -49,6 +49,7 @@ with patch.object(sys, 'frozen', True, create=True), \
     rejected = diagnostic.run()
 report = json.loads((copy / 'runtime/work/portable-check.json').read_text(encoding='utf-8'))
 print('RESULT:' + json.dumps({'code': code, 'ok': report['ok'], 'injected': bool(injected),
+                            'round1_nonempty_evidence': report.get('round1_nonempty_evidence'),
                             'failure_type': report.get('failure_type'), 'used_runtime': rejected}))
 '''
 
@@ -78,4 +79,5 @@ class PortableDiagnosticTests(unittest.TestCase):
         result = self.exercise('success')
         self.assertTrue(result['ok'])
         self.assertEqual(result['code'], 0)
+        self.assertTrue(result['round1_nonempty_evidence'])
         self.assertEqual(result['used_runtime'], 2)
