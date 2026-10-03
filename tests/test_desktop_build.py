@@ -139,13 +139,29 @@ class DesktopBuildTests(unittest.TestCase):
             self.assertIn(name, builder.REQUIRED_RELEASE_FILES)
             self.assertEqual(
                 (self.root / name).read_bytes(),
-                (ROOT / 'docs/public_release' / name).read_bytes(),
+                (ROOT / 'docs/public_release' / name).read_bytes() if name != 'README.md' else
+                (ROOT / 'docs/public_release' / name).read_text(encoding='utf-8').replace(
+                    '{{APPLICATION_SOURCE_NOTICE}}',
+                    f"本版[对应源码下载]({builder.SOURCE_URL})固定到 `v{builder.__version__}`，包含应用源码、配置、Prompt、测试、构建脚本及说明，对应 `BUILD_INFO.json` 中的提交。"
+                ).encode('utf-8'),
             )
         self.assertFalse((self.root / 'RELEASE_CHECKLIST.md').exists())
         self.assertNotIn('THIRD_PARTY_NOTICES.txt', builder.PUBLIC_DOCUMENTS)
         self.assertIn('THIRD_PARTY_NOTICES.txt', builder.REQUIRED_RELEASE_FILES)
         self.assertIn('LICENSE', builder.REQUIRED_RELEASE_FILES)
         self.assertEqual((self.root / 'LICENSE').read_bytes(), (ROOT / 'LICENSE').read_bytes())
+
+    def test_local_technical_readme_binds_frozen_commit_without_public_tag(self):
+        frozen = {'purpose': 'local-portable-technical-validation', 'commit': 'a' * 40}
+        builder.copy_public_documents(self.root, frozen)
+        (self.root / 'BUILD_INFO.json').write_text(json.dumps(frozen), encoding='utf-8')
+        with patch.object(builder, 'source_archives', return_value=[]):
+            builder.verify_legal_resources(self.root)
+            self.assertNotIn(builder.SOURCE_URL, (self.root / 'README.md').read_text(encoding='utf-8'))
+            frozen['commit'] = 'b' * 40
+            (self.root / 'BUILD_INFO.json').write_text(json.dumps(frozen), encoding='utf-8')
+            with self.assertRaisesRegex(RuntimeError, 'source_link_mismatch'):
+                builder.verify_legal_resources(self.root)
 
     def test_application_license_missing_is_rejected_without_guessing(self):
         with patch.object(builder, 'ROOT', self.root):

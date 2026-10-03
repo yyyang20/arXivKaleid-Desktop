@@ -454,13 +454,15 @@ class DesktopGovernanceTests(unittest.TestCase):
         license_text = read_utf8('LICENSE')
         self.assert_fragments(license_text, ('GNU GENERAL PUBLIC LICENSE', 'Version 3, 29 June 2007',
                                             'Free Software Foundation', 'END OF TERMS AND CONDITIONS'))
-        # main 的开发版本可以领先已发布版本；portable 准备稿仍绑定目标 tag。
+        # 开发版本可以领先公开版本；构建器按技术候选/公开发行填入实际源码身份。
         root_readme = read_utf8('README.md')
         self.assert_fragments(root_readme, ('GPL-3.0-only', '无保证', 'archive/refs/tags/'))
         if source_url not in root_readme:
             self.assertIn('尚未公开发布', root_readme)
         self.assert_fragments(read_utf8('docs/public_release/README.md'),
-                              ('GPL-3.0-only', source_url, '无保证'))
+                              ('GPL-3.0-only', '{{APPLICATION_SOURCE_NOTICE}}', '无保证', '本地技术候选'))
+        builder = read_utf8('scripts/build_windows_portable.py')
+        self.assert_fragments(builder, ('local-portable-technical-validation', '对应本地冻结提交', 'SOURCE_URL'))
         eula = read_utf8('docs/public_release/EULA.txt')
         self.assert_fragments(eula, ('GPL-3.0-only', '不是额外的使用许可条件', '包括商业使用和收费分发',
                                      '提供相应源码', '权利终止和恢复仅按 GPLv3'))

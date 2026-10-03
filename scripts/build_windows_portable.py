@@ -161,7 +161,7 @@ def prepare_resources(stage: Path) -> None:
     shutil.copyfile(prefix / 'share/zoneinfo/Asia/Shanghai', target)
 
 
-def copy_public_documents(folder: Path) -> None:
+def copy_public_documents(folder: Path, frozen: dict | None = None) -> None:
     """将公开文档放在发行根目录；发布检查清单只留在开发仓库。"""
     source_root = checked_path(ROOT, 'docs/public_release')
     for name in PUBLIC_DOCUMENTS:
@@ -169,6 +169,17 @@ def copy_public_documents(folder: Path) -> None:
         if not source.is_file():
             raise RuntimeError('public_document_missing:' + name)
         shutil.copyfile(source, checked_path(folder, name))
+    readme = checked_path(folder, 'README.md')
+    text = readme.read_text(encoding='utf-8')
+    if '{{APPLICATION_SOURCE_NOTICE}}' in text:
+        if frozen and frozen['purpose'] == 'local-portable-technical-validation':
+            notice = (f"本包为本地 portable 技术候选，尚未公开发布。对应本地冻结提交 `{frozen['commit']}`；"
+                      "源码保存在构建此包的本地仓库中，不存在本版本公开 tag 或 Release。"
+                      "构建身份以 `BUILD_INFO.json` 为准。")
+        else:
+            notice = (f"本版[对应源码下载]({SOURCE_URL})固定到 `v{__version__}`，"
+                      "包含应用源码、配置、Prompt、测试、构建脚本及说明，对应 `BUILD_INFO.json` 中的提交。")
+        readme.write_text(text.replace('{{APPLICATION_SOURCE_NOTICE}}', notice), encoding='utf-8', newline='\n')
     # 应用许可证只有根目录这一份维护源，不从第三方目录或副本推断。
     license_source = checked_path(ROOT, 'LICENSE')
     if not license_source.is_file():
@@ -246,7 +257,16 @@ def verify_legal_resources(folder: Path) -> None:
     """核验实际发行物的应用许可证、源码入口和第三方源码字节。"""
     if checked_path(folder, 'LICENSE').read_bytes() != checked_path(ROOT, 'LICENSE').read_bytes():
         raise RuntimeError('application_license_mismatch')
-    if SOURCE_URL not in checked_path(folder, 'README.md').read_text(encoding='utf-8'):
+    readme = checked_path(folder, 'README.md').read_text(encoding='utf-8')
+    info = checked_path(folder, 'BUILD_INFO.json')
+    identity = json.loads(info.read_text(encoding='utf-8')) if info.is_file() else {}
+    if identity.get('purpose') == 'local-portable-technical-validation':
+        valid_source = (bool(re.fullmatch(r'[0-9a-f]{40}', str(identity.get('commit', ''))))
+                        and f"对应本地冻结提交 `{identity['commit']}`" in readme
+                        and '尚未公开发布' in readme and SOURCE_URL not in readme)
+    else:
+        valid_source = SOURCE_URL in readme
+    if not valid_source:
         raise RuntimeError('application_source_link_mismatch')
     for item in source_archives():
         archive = checked_path(folder, 'licenses/sources', item['archive'])
@@ -330,7 +350,7 @@ def main() -> None:
     folder = job / 'dist/arXivKaleid'
     module_inventory = inspect_python_archive(folder / 'arXivKaleid.exe')
     (job / 'module-inventory.json').write_text(json.dumps(module_inventory, indent=2), encoding='utf-8')
-    copy_public_documents(folder)
+    copy_public_documents(folder, frozen)
     from portable_licenses import collect_licenses
     collect_licenses(ROOT, folder, module_inventory)
     if frozen_identity() != frozen:

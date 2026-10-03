@@ -333,12 +333,12 @@ def finish_run(
 def build_arxiv_query_url(
     category: str, submission_date: date, max_results: int, start: int = 0
 ) -> str:
-    """为单个分类和 UTC submittedDate 日历日构造查询 URL。"""
-    date_prefix = submission_date.strftime("%Y%m%d")
+    """查询覆盖北京时间自然日的 UTC 区间；结束点由 published 精确过滤。"""
+    lower, upper = beijing_submission_bounds(submission_date)
     parameters = {
         "search_query": (
             f"cat:{category.strip()} AND "
-            f"submittedDate:[{date_prefix}0000 TO {date_prefix}2359]"
+            f"submittedDate:[{lower:%Y%m%d%H%M} TO {upper:%Y%m%d%H%M}]"
         ),
         "sortBy": "submittedDate",
         "sortOrder": "descending",
@@ -367,8 +367,16 @@ def merge_papers_by_identity(
     return merged_papers, source_count - len(merged_papers)
 
 
-def parse_utc_submission_date(value: Any) -> date | None:
-    """把 Atom published 时间解析为 UTC 日期；无效值返回 None。"""
+def beijing_submission_bounds(day: date) -> tuple[datetime, datetime]:
+    """自然日使用时区转换，不将 UTC 日期机械改名为北京时间日期。"""
+    from zoneinfo import ZoneInfo
+    lower = datetime.combine(day, datetime.min.time(), ZoneInfo("Asia/Shanghai"))
+    upper = datetime.combine(day + timedelta(days=1), datetime.min.time(), lower.tzinfo)
+    return lower.astimezone(timezone.utc), upper.astimezone(timezone.utc)
+
+
+def parse_submission_timestamp(value: Any) -> datetime | None:
+    """Atom 时间必须携带时区；无法确认时间的条目不进入目标日期。"""
     if not isinstance(value, str) or not value.strip():
         return None
     normalized = value.strip().replace("Z", "+00:00")
@@ -377,8 +385,35 @@ def parse_utc_submission_date(value: Any) -> date | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc).date()
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+class ArxivFeedPage:
+    """保留原始条目数量，避免无效元数据或日期过滤造成漏页。"""
+
+    def __init__(self, xml_data: bytes, logger: logging.Logger):
+        try:
+            root = ET.fromstring(xml_data)
+        except ET.ParseError:
+            raise ValueError("arxiv_atom_invalid") from None
+        if root.tag != "{http://www.w3.org/2005/Atom}feed":
+            raise ValueError("arxiv_atom_not_feed")
+        entries = root.findall("atom:entry", ATOM_NS)
+        if any("/api/errors" in element_text(entry.find("atom:id", ATOM_NS)) for entry in entries):
+            raise ValueError("arxiv_atom_api_error")
+        namespace = "{http://a9.com/-/spec/opensearch/1.1/}"
+        values = [root.find(namespace + name) for name in ("startIndex", "totalResults", "itemsPerPage")]
+        if any(value is not None for value in values) and not all(value is not None for value in values):
+            raise ValueError("arxiv_atom_paging_incomplete")
+        self.start = self.total = self.page_size = None
+        if all(value is not None for value in values):
+            self.start, self.total, self.page_size = (int(value.text) for value in values)
+            if min(self.start, self.total, self.page_size) < 0:
+                raise ValueError("arxiv_atom_paging_invalid")
+        self.raw_count = len(entries)
+        self.fingerprint = hashlib.sha256(b"".join(ET.tostring(entry) for entry in entries)).hexdigest()
+        self.papers = parse_arxiv_feed(xml_data, logger)
 
 
 def fetch_category_submission_pages(
@@ -386,7 +421,7 @@ def fetch_category_submission_pages(
     category: str,
     submission_date: date,
     page_size: int,
-    fetch_page: Callable[[str, date, int, int], list[dict[str, Any]]],
+    fetch_page: Callable[[str, date, int, int], ArxivFeedPage],
     logger: logging.Logger,
 ) -> list[dict[str, Any]]:
     """分页读取单分类目标 submittedDate；分页失败时抛出异常，不返回部分结果。"""
@@ -394,10 +429,20 @@ def fetch_category_submission_pages(
         raise RuntimeError("arXiv 分页大小必须大于 0。")
 
     papers: list[dict[str, Any]] = []
+    lower, upper = beijing_submission_bounds(submission_date)
+    seen_pages: set[str] = set()
     start = 0
     while True:
-        page_papers = fetch_page(category, submission_date, start, page_size)
-        if not page_papers:
+        page = fetch_page(category, submission_date, start, page_size)
+        if page.start is not None and page.start != start:
+            raise ValueError("arxiv_atom_paging_start_mismatch")
+        if (page.raw_count > page_size
+                or (page.page_size is not None and page.raw_count > page.page_size)
+                or (page.total is not None and start + page.raw_count > page.total)):
+            raise ValueError("arxiv_atom_paging_count_invalid")
+        if not page.raw_count:
+            if page.total is not None and start < page.total:
+                raise ValueError("arxiv_atom_paging_empty_before_end")
             logger.info(
                 "日期 %s 分类 %s 分页 start=%d 返回空页，停止分页。",
                 submission_date.isoformat(),
@@ -406,86 +451,32 @@ def fetch_category_submission_pages(
             )
             break
 
-        papers.extend(page_papers)
-        exact_date_count = sum(
-            parse_utc_submission_date(paper.get("published"))
-            == submission_date
-            for paper in page_papers
-        )
-        off_date_count = len(page_papers) - exact_date_count
+        if page.fingerprint in seen_pages:
+            raise ValueError("arxiv_atom_paging_repeated")
+        seen_pages.add(page.fingerprint)
+        exact = [paper for paper in page.papers
+                 if (timestamp := parse_submission_timestamp(paper.get("published"))) is not None
+                 and lower <= timestamp < upper]
+        papers.extend(exact)
+        exact_date_count = len(exact)
+        off_date_count = len(page.papers) - exact_date_count
         logger.info(
             "日期 %s 分类 %s 分页 start=%d 获取并解析论文数量：%d，"
             "目标日期数量：%d，非目标日期数量：%d",
             submission_date.isoformat(),
             category,
             start,
-            len(page_papers),
+            len(page.papers),
             exact_date_count,
             off_date_count,
         )
 
-        if off_date_count:
-            logger.warning(
-                "日期 %s 分类 %s 分页 start=%d 出现非目标 submittedDate "
-                "论文 %d 篇，停止继续分页。",
-                submission_date.isoformat(),
-                category,
-                start,
-                off_date_count,
-            )
+        # 有分页元数据时按原始 offset/total 读取；无元数据时按原始页长停止。
+        start += page.raw_count
+        if (page.total is not None and start >= page.total) or (page.total is None and page.raw_count < page_size):
             break
-        if len(page_papers) < page_size:
-            logger.info(
-                "日期 %s 分类 %s 分页 start=%d 返回 %d 篇，小于分页大小 %d，"
-                "停止分页。",
-                submission_date.isoformat(),
-                category,
-                start,
-                len(page_papers),
-                page_size,
-            )
-            break
-
-        start += page_size
 
     return papers
-
-
-def find_recent_nonempty_submission_batch(
-    *,
-    start_date_utc: date,
-    lookback_days: int,
-    categories: list[str],
-    fetch_category: Callable[[str, date], list[dict[str, Any]]],
-) -> tuple[date | None, list[dict[str, Any]], int, int, int]:
-    """从 UTC 当天向前找最近非空提交日，只返回该日跨分类合并结果。"""
-    checked_date_count = 0
-    discarded_off_date_count = 0
-    for offset in range(lookback_days + 1):
-        candidate_date = start_date_utc - timedelta(days=offset)
-        checked_date_count += 1
-        paper_groups: list[list[dict[str, Any]]] = []
-        for category in categories:
-            category_papers = fetch_category(category, candidate_date)
-            exact_date_papers: list[dict[str, Any]] = []
-            for paper in category_papers:
-                if parse_utc_submission_date(paper.get("published")) == candidate_date:
-                    exact_date_papers.append(paper)
-                else:
-                    discarded_off_date_count += 1
-            paper_groups.append(exact_date_papers)
-
-        merged, duplicate_count = merge_papers_by_identity(paper_groups)
-        if merged:
-            return (
-                candidate_date,
-                merged,
-                duplicate_count,
-                checked_date_count,
-                discarded_off_date_count,
-            )
-
-    return None, [], 0, checked_date_count, discarded_off_date_count
 
 
 def respect_request_interval(

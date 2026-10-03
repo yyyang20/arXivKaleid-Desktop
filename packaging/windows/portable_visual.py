@@ -11,12 +11,13 @@ from pathlib import Path
 import threading
 import time
 
-from PySide6.QtCore import QCoreApplication, QEvent, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QUrl
+from PySide6.QtGui import QDesktopServices, QFont
 from desktop import app
 from desktop.errors import make_issue
 from desktop.progress import ProgressEvent
 from desktop.secrets import SecretError
+from desktop.date_picker import qt_date
 
 
 MARKDOWN = """# arXiv 日报（离线合成验收数据）
@@ -113,14 +114,20 @@ def exercise(application, window, root, synthetic_key):
                          'pixel_size': [image.width(), image.height()], 'dpr': image.devicePixelRatio(),
                          'screen': window.screen().name(),
                          'report_height': window.home_page.report_stack.height()})
+        popup = window.date_picker
+        if popup.isVisible():
+            available = window.rect().translated(window.mapToGlobal(QPoint(0, 0))).intersected(window.screen().availableGeometry())
+            assert available.contains(popup.geometry()), 'calendar_outside_window'
+            assert popup.grab().save(str(output / (name + '-popup.png')))
+            captures[-1]['calendar_geometry'] = [popup.x(), popup.y(), popup.width(), popup.height()]
 
     def fetch(day, progress, **kwargs):
         progress(ProgressEvent(task_type='fetch', stage='category', state='running',
-                               message='正在检查 UTC 2000-01-01 · 分类 2 / 3：astro-ph.HE\n当前已获取 67 条有效记录',
+                               message=f'正在查询北京时间 {day.isoformat()} · 分类 2 / 3：astro-ph.HE\n当前已获取 67 条有效记录',
                                current_date=day, category='astro-ph.HE', category_index=2, category_total=3, processed=67))
         assert gate.wait(15)
-        return app.CandidateSnapshot(date(2000, 1, 1), datetime(2000, 1, 1, tzinfo=timezone.utc),
-                                     126, 117, tuple({'arxiv_id': f'2610.{i:05d}', 'version': 1} for i in range(100)))
+        return app.CandidateSnapshot(day, datetime.now(timezone.utc).astimezone(app.ZoneInfo('Asia/Shanghai')),
+                                     126, 117, tuple({'arxiv_id': f'2610.{i:05d}', 'version': 1} for i in range(117)))
 
     def analyze(attempt, _key, progress):
         for stage, state, message in [('round1', 'completed', 'Round 1 完成 · 有效入围 10 篇'),
@@ -134,8 +141,8 @@ def exercise(application, window, root, synthetic_key):
         return app.AnalysisResult(1, MARKDOWN, 4, operation_id=attempt.operation_id,
                                   snapshot_id=attempt.snapshot.snapshot_id)
 
-    originals = app.fetch_latest_candidates, app.AnalysisAttempt.run, QDesktopServices.openUrl
-    app.fetch_latest_candidates = fetch
+    originals = app.fetch_candidates_for_date, app.AnalysisAttempt.run, QDesktopServices.openUrl
+    app.fetch_candidates_for_date = fetch
     app.AnalysisAttempt.run = analyze
     opened = []
     QDesktopServices.openUrl = lambda url: opened.append(url.toString()) or True
@@ -146,6 +153,18 @@ def exercise(application, window, root, synthetic_key):
         window.task_panel.hide()
         window.show()
         capture('01-initial')
+        window.open_date_picker()
+        capture('01b-calendar')
+        today = window.beijing_today()
+        earliest = qt_date(today).addDays(-365).toPython()
+        window.date_picker.prepare(today, earliest)
+        assert not window.date_picker.previous.isEnabled()
+        window.date_picker.calendar.showPreviousMonth()
+        assert (window.date_picker.calendar.yearShown(), window.date_picker.calendar.monthShown()) == (earliest.year, earliest.month)
+        capture('01c-calendar-earliest')
+        window.date_picker._choose(qt_date(today).addDays(-3))
+        assert window.worker is None and window.snapshot is None
+        capture('01d-selected-date')
         window.start_fetch()
         wait(lambda: '67' in window.fetch_progress_text.text())
         assert window.fetch_progress.maximum() == 0
@@ -187,10 +206,20 @@ def exercise(application, window, root, synthetic_key):
         capture('11-minimum-size')
         window.task_panel.set_expanded(True)
         capture('11b-minimum-expanded')
+        window.home_page.layout().itemAt(0).widget().setFont(QFont('Microsoft YaHei UI', 12))
+        window.open_date_picker()
+        capture('11c-minimum-calendar')
+        window.date_picker.hide()
         window.resize(1060, 820)
         window.show_issue(make_issue('AKD-FETCH-UNEXPECTED'))
         window.task_panel.finish(failed=True)
         capture('12-failure')
+        window.show_issue(make_issue('AKD-R1-INPUT_LIMIT'))
+        window.status.setText(make_issue('AKD-R1-INPUT_LIMIT').reason)
+        capture('12b-round1-safety-stop')
+        window.show_issue(make_issue('AKD-R2-COST_LIMIT'))
+        window.status.setText(make_issue('AKD-R2-COST_LIMIT').reason)
+        capture('12c-round2-safety-stop')
         # 保存失败使用隔离的代理，不更改 Windows ACL 或系统配置。
         store = window.secret_store
         class FailingStore:
@@ -214,7 +243,7 @@ def exercise(application, window, root, synthetic_key):
         if window.worker is not None:
             window.worker.wait(20000)
             pump()
-        app.fetch_latest_candidates, app.AnalysisAttempt.run, QDesktopServices.openUrl = originals
+        app.fetch_candidates_for_date, app.AnalysisAttempt.run, QDesktopServices.openUrl = originals
     # 预热后重复创建和释放窗口，检查持有对象与 Windows 内存使用；不删除运行数据。
     window.hide()
     samples = []

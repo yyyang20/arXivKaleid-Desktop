@@ -12,6 +12,7 @@
 | `desktop/diagnostics.py` | session/operation/snapshot/fetch/run 关联、脱敏 JSONL、安全 traceback、计时与内存降级 |
 | `desktop/app.py` | QApplication、主窗口导航与业务连接、首次告知、Key 保存、现有 Fetch/Analysis QThread 和生命周期 |
 | `desktop/pages.py` | 首页、设置页、历史占位页；抓取信息卡、密码框、About 和 Markdown/空态布局 |
+| `desktop/date_picker.py` | 首页 Qt 月历弹层、365 天范围、月份导航限制、今天标记和屏幕内定位 |
 | `desktop/style.py` | alpha 7 三页共享灰蓝调色板、输入框样式与低对比度卡片绘制 |
 | `desktop/task_panel.py` | 可复用任务状态组件；运行展开、成功收缩、失败诊断、真实事件与快照/结果详情 |
 | `desktop/analysis.py` | 一次性快照分析、工作库重置和锁、两轮/PDF/全文编排、累计费用预检、结构化进度与安全结果 |
@@ -43,7 +44,7 @@
 | `tests/test_desktop_decoupling.py` | alpha.4 行为基线、schema v1、缓存、预算和独立源码运行 |
 | `tests/test_desktop_governance.py` | 根与局部治理、文档路由、当前身份、链接、发行资料副本与发布清单的只读检查 |
 
-portable 根目录包含直接来自仓库根的 GPLv3 `LICENSE`。应用对应源码入口固定到与 `BUILD_INFO.json` 相同提交的版本 tag；第三方源码归档位于 `licenses/sources/`，身份和 SHA-256 由 `packaging/windows/source-manifest.json` 固定，原许可不改写。
+portable 根目录包含直接来自仓库根的 GPLv3 `LICENSE`。应用源码说明按用途绑定 `BUILD_INFO.json`：技术候选引用本地冻结 commit，正式发行引用同提交的版本 tag；第三方源码归档位于 `licenses/sources/`，身份和 SHA-256 由 `packaging/windows/source-manifest.json` 固定，原许可不改写。
 
 ## 当前运行数据
 

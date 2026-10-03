@@ -5,10 +5,11 @@
 from __future__ import annotations
 
 import sys
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
-from PySide6.QtCore import QThread, Signal, Slot, QUrl
+from PySide6.QtCore import QEvent, QThread, Signal, Slot, QUrl
 from PySide6.QtGui import QDesktopServices, QFont, QIcon
 from PySide6.QtWidgets import (
     QApplication, QHBoxLayout, QMessageBox, QStackedWidget, QVBoxLayout, QWidget,
@@ -20,7 +21,7 @@ from qfluentwidgets import (
 from desktop import __version__
 from desktop import paths, pipeline
 from desktop.pipeline import (
-    CandidateError, CandidateFetchResult, CandidateSnapshot, fetch_latest_candidates,
+    CandidateError, CandidateFetchResult, CandidateSnapshot, fetch_candidates_for_date,
 )
 from desktop.secrets import SecretError, SecretStore
 from desktop.analysis import AnalysisAttempt, AnalysisError, AnalysisResult
@@ -60,11 +61,11 @@ class FetchWorker(QThread):
     progress = Signal(object)
 
     def __init__(
-        self, start_date_utc: date, diagnostics: DesktopDiagnostics | None = None,
+        self, target_date: date, diagnostics: DesktopDiagnostics | None = None,
         operation_id: str | None = None, parent=None,
     ):
         super().__init__(parent)
-        self.start_date_utc = start_date_utc
+        self.target_date = target_date
         self.snapshot: CandidateSnapshot | None = None
         self.outcome: DesktopOutcome | None = None
         self.issue: DesktopIssue | None = None
@@ -74,10 +75,10 @@ class FetchWorker(QThread):
     def run(self) -> None:
         try:
             if self.diagnostics is None and self.operation_id is None:
-                result = fetch_latest_candidates(self.start_date_utc, self.progress.emit)
+                result = fetch_candidates_for_date(self.target_date, self.progress.emit)
             else:
-                result = fetch_latest_candidates(
-                    self.start_date_utc, self.progress.emit,
+                result = fetch_candidates_for_date(
+                    self.target_date, self.progress.emit,
                     diagnostics=self.diagnostics, operation_id=self.operation_id,
                 )
             if isinstance(result, CandidateSnapshot):
@@ -125,6 +126,9 @@ class DesktopWindow(QWidget):
         self.snapshot: CandidateSnapshot | None = None
         self.worker: FetchWorker | AnalysisWorker | None = None
         self.analysis_notice_accepted = False
+        # None 表示随北京时间变化的“今天”，历史日期才固定保存。
+        self.selected_date: date | None = None
+        self._display_target: date | None = None
         # 不使用 Fluent 的默认配置持久化，避免向 cwd 写入额外设置文件。
         setTheme(Theme.LIGHT, save=False)
         setThemeColor("#1677ff", save=False)
@@ -172,6 +176,8 @@ class DesktopWindow(QWidget):
         self.api_key = self.settings_page.api_key
         self.secret_status = self.settings_page.secret_status
         self.fetch_button = self.home_page.fetch_button
+        self.calendar_button = self.home_page.calendar_button
+        self.date_picker = self.home_page.date_picker
         self.analyze_button = self.home_page.analyze_button
         self.statistics = self.home_page.statistics
         self.task_panel = self.home_page.task_panel
@@ -200,6 +206,8 @@ class DesktopWindow(QWidget):
                 )
         self.api_key.editingFinished.connect(self.save_key)
         self.fetch_button.clicked.connect(self.start_fetch)
+        self.calendar_button.clicked.connect(self.open_date_picker)
+        self.date_picker.date_chosen.connect(self.select_date)
         self.analyze_button.clicked.connect(self.start_analysis)
         if self.diagnostics and not self.diagnostics.persistent:
             self.diagnostic_text.setText("诊断仅保留在当前会话；本地日志不可写。")
@@ -210,8 +218,72 @@ class DesktopWindow(QWidget):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
+        if hasattr(self, "date_picker"):
+            self.date_picker.hide()
         if hasattr(self, "task_panel"):
             self.task_panel.fit_to_window()
+
+    def event(self, event):
+        if (event.type() == QEvent.Type.WindowActivate and hasattr(self, "calendar_button")
+                and self.calendar_button.isEnabled()):
+            self.refresh_target_date()
+        if event.type() == QEvent.Type.ScreenChangeInternal and hasattr(self, "date_picker"):
+            self.date_picker.hide()
+        return super().event(event)
+
+    def beijing_today(self) -> date:
+        return datetime.now(timezone.utc).astimezone(ZoneInfo("Asia/Shanghai")).date()
+
+    def clear_candidate_display(self):
+        self.snapshot = None
+        self.report.clear()
+        self.analyze_button.setEnabled(False)
+        for label in self.statistics.values():
+            label.setText("—")
+        self.task_panel.begin("fetch")
+        self.task_panel.fetch_details.clear()
+        self.task_panel.finish()
+        self.reset_analysis_progress()
+        self.status.setText("可点击日历选择指定抓取日期")
+        self.fetch_progress_text.setText("尚未抓取")
+        self.fetch_progress.setRange(0, 1)
+        self.fetch_progress.setValue(0)
+
+    def refresh_target_date(self) -> date:
+        today = self.beijing_today()
+        if self.worker is None:
+            if self.selected_date is not None and not today - timedelta(days=365) <= self.selected_date <= today:
+                self.selected_date = None
+            target = self.selected_date or today
+            if self._display_target is not None and self._display_target != target:
+                self.clear_candidate_display()
+            self._display_target = target
+            self.fetch_button.setText("抓取今天" if target == today else f"抓取 {target.isoformat()}")
+            return target
+        return self._display_target or today
+
+    @Slot()
+    def open_date_picker(self):
+        if self.worker is not None or not self.calendar_button.isEnabled():
+            return
+        target = self.refresh_target_date()
+        self.date_picker.prepare(self.beijing_today(), target)
+        self.date_picker.show_at(self.calendar_button)
+
+    @Slot(object)
+    def select_date(self, selected):
+        if self.worker is not None:
+            return
+        today = self.beijing_today()
+        if not today - timedelta(days=365) <= selected <= today:
+            return
+        previous = self.selected_date or today
+        self.selected_date = None if selected == today else selected
+        if selected != previous:
+            self.clear_candidate_display()
+        self._display_target = selected
+        self.refresh_target_date()
+        self.date_picker.hide()
 
     def reset_analysis_progress(self) -> None:
         for stage, title in ANALYSIS_STAGES:
@@ -316,7 +388,8 @@ class DesktopWindow(QWidget):
     def start_fetch(self) -> None:
         if self.worker is not None:
             return
-        start_date_utc = datetime.now(timezone.utc).date()
+        target_date = self.refresh_target_date()
+        self.date_picker.hide()
         # 先使旧快照失效，再启动网络工作；API Key 不参与候选管线。
         self.snapshot = None
         self.report.clear()
@@ -325,16 +398,17 @@ class DesktopWindow(QWidget):
         self.reset_analysis_progress()
         self.analyze_button.setEnabled(False)
         self.fetch_button.setEnabled(False)
+        self.calendar_button.setEnabled(False)
         for label in self.statistics.values():
             label.setText("—")
-        self.status.setText("正在抓取最新候选…")
+        self.status.setText("正在抓取候选…")
         self.fetch_progress_text.setText(
-            f"候选抓取中 · 正在检查 UTC {start_date_utc.isoformat()}"
+            f"候选抓取中 · 北京时间 {target_date.isoformat()}"
         )
         self.fetch_progress.setRange(0, 0)
         operation_id = self.diagnostics.operation_id() if self.diagnostics else None
         self.worker = FetchWorker(
-            start_date_utc, self.diagnostics, operation_id, self
+            target_date, self.diagnostics, operation_id, self
         )
         self.worker.progress.connect(self.handle_progress)
         self.worker.finished.connect(self.finish_fetch)
@@ -350,6 +424,12 @@ class DesktopWindow(QWidget):
             if worker.outcome is not None:
                 self.status.setText(worker.outcome.summary)
                 self.show_outcome(worker.outcome, operation_id=worker.operation_id)
+                details = worker.outcome.details
+                self.statistics["抓取日期（北京时间）"].setText(details.get("target_date", worker.target_date.isoformat()))
+                self.statistics["抓取完成时间"].setText(details.get("completed_time", "—"))
+                self.statistics["原始条目数"].setText("0")
+                self.statistics["去重后候选数"].setText("0")
+                self.task_panel.fetch_details.setText(worker.outcome.summary)
             elif worker.issue is not None:
                 self.status.setText(worker.issue.reason)
                 self.fetch_progress_text.setText(worker.issue.reason)
@@ -362,14 +442,13 @@ class DesktopWindow(QWidget):
             snapshot = self.snapshot
             values = (
                 snapshot.candidate_date.isoformat(), snapshot.completed_time_text,
-                str(snapshot.raw_count), str(snapshot.unique_count), str(snapshot.round1_count),
+                str(snapshot.raw_count), str(snapshot.unique_count),
             )
             for label, value in zip(self.statistics.values(), values):
                 label.setText(value)
-            self.status.setText(f"候选获取完成 · 锁定 {snapshot.round1_count} 篇")
+            self.status.setText(f"候选获取完成 · {snapshot.round1_count} 篇候选")
             self.fetch_progress_text.setText(
-                f"原始 {snapshot.raw_count} 条 → 去重 {snapshot.unique_count} 条 → "
-                f"锁定 Round 1 候选 {snapshot.round1_count} 篇"
+                f"原始 {snapshot.raw_count} 条 → 去重后候选 {snapshot.unique_count} 篇"
             )
             self.fetch_progress.setRange(0, 1)
             self.fetch_progress.setValue(1)
@@ -377,6 +456,7 @@ class DesktopWindow(QWidget):
         self.task_panel.finish(failed=worker.issue is not None)
         self.analyze_button.setEnabled(self.snapshot is not None and not self.snapshot.analysis_attempted)
         self.fetch_button.setEnabled(True)
+        self.calendar_button.setEnabled(True)
         self.refresh_diagnostic_availability()
         self.worker = None
         worker.deleteLater()
@@ -437,6 +517,8 @@ class DesktopWindow(QWidget):
         self.switch_page(self.home_page)
         self.task_panel.begin("analysis")
         self.fetch_button.setEnabled(False)
+        self.calendar_button.setEnabled(False)
+        self.date_picker.hide()
         self.analyze_button.setEnabled(False)
         self.api_key.setEnabled(False)
         self.status.setText("正在准备分析…")
@@ -505,6 +587,7 @@ class DesktopWindow(QWidget):
                 self.status.setText("分析失败，已停止。")
             self.task_panel.finish(failed=True)
         self.fetch_button.setEnabled(True)
+        self.calendar_button.setEnabled(True)
         self.analyze_button.setEnabled(False)
         self.api_key.setEnabled(True)
         self.refresh_diagnostic_availability()
@@ -569,6 +652,7 @@ def main() -> int:
         window.status.setText(startup_issue.reason)
         window.show_issue(startup_issue)
         window.fetch_button.setEnabled(False)
+        window.calendar_button.setEnabled(False)
         window.analyze_button.setEnabled(False)
         window.api_key.setEnabled(False)
     window.show()

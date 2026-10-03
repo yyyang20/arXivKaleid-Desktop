@@ -44,7 +44,7 @@ class DesktopAnalysisTests(unittest.TestCase):
             target.write_bytes((PROJECT_ROOT / name).read_bytes())
         self.stack.enter_context(patch.object(pipeline, "PROJECT_ROOT", self.root))
         self.forbidden = [self.stack.enter_context(patch(target, side_effect=AssertionError("forbidden operation"))) for target in (
-            "main.fetch_arxiv_metadata", "desktop.pipeline.fetch_latest_candidates",
+            "main.fetch_arxiv_metadata", "desktop.pipeline.fetch_candidates_for_date",
             "urllib.request.urlopen",
         )]
         client_type = deepseek_client.DeepSeekClient
@@ -396,9 +396,51 @@ class DesktopAnalysisTests(unittest.TestCase):
             else:
                 modified["deepseek"]["round1_pricing"]["rate_schedule"]["peak_rates"]["output_price_per_million"] = "100"
             with patch("main.load_config", return_value=modified):
-                with self.assertRaises(analysis.AnalysisError):
+                with self.assertRaises(analysis.AnalysisError) as caught:
                     self.run_snapshot()
+            self.assertEqual(caught.exception.issue.code, "AKD-R1-INPUT_LIMIT" if change == "tokens" else "AKD-R1-COST_LIMIT")
+            self.assertFalse(caught.exception.issue.details["model_request_sent"])
             self.assertEqual(self.requests, [])
+
+    def test_all_38_127_240_candidates_enter_one_round1_and_late_index_is_valid(self):
+        hashes = []
+        for count in (38, 127, 240):
+            self.requests.clear()
+            self.pdf_urls.clear()
+            self.selected_indices = [count]
+            result = self.run_snapshot(self.snapshot(count))
+            self.assertEqual([stage for stage, _ in self.requests], ["round1", "round2"])
+            message = self.requests[0][1]["messages"]
+            candidates = json.loads(message[1]["content"])["candidate_papers"]
+            self.assertEqual(len(candidates), count)
+            self.assertEqual(candidates[-1]["candidate_index"], count)
+            connection = self.connect()
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM screening_completion").fetchone()[0], count)
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM screening_results WHERE task_type = 'round1_abstract_screening'").fetchone()[0], 1)
+            self.assertIn(f"Round 1 输入数量：{count}", result.markdown)
+            hashes.append(main.stable_json_hash(message))
+            connection.close()
+        self.assertEqual(len(set(hashes)), 3)
+
+    def test_budget_exact_input_context_and_price_boundaries(self):
+        config = main.load_config(self.root / "config.json")
+        with patch("round2_fulltext_state.conservative_request_token_estimate", return_value=800000), patch("desktop.analysis.checked_usage", return_value=None):
+            analysis.validate_budget(None, 1, config, "round1", [])
+        for stage, code, tokens, modify in (
+            ("round1", "INPUT_LIMIT", 800001, {}),
+            ("round1", "CONTEXT_LIMIT", 800000, {"model_context_tokens": 999999}),
+            ("round2", "CONTEXT_LIMIT", 1000, {"model_context_tokens": 200000}),
+        ):
+            changed = copy.deepcopy(config)
+            changed["limits"].update(modify)
+            with self.subTest(stage=stage, code=code), patch("round2_fulltext_state.conservative_request_token_estimate", return_value=tokens), self.assertRaises(analysis.DesktopOperationError) as caught:
+                analysis.validate_budget(None, 1, changed, stage, [])
+            self.assertEqual(caught.exception.issue.code, f"AKD-{'R1' if stage == 'round1' else 'R2'}-{code}")
+            self.assertFalse(caught.exception.issue.details["model_request_sent"])
+        with patch("model_usage.price_snapshot_from_config", return_value=None), self.assertRaises(analysis.DesktopOperationError) as caught:
+            analysis.validate_budget(None, 1, config, "round1", [])
+        self.assertEqual(caught.exception.issue.code, "AKD-R1-PRICE_UNAVAILABLE")
+        self.assertFalse(self.requests)
 
     def test_round2_budget_includes_actual_round1_cost(self):
         self.extra_output_tokens = 500000
@@ -407,9 +449,31 @@ class DesktopAnalysisTests(unittest.TestCase):
         def price(config, **kwargs):
             return original_price(config, at=datetime(2026, 9, 25, 0, tzinfo=timezone.utc), **kwargs)
         with patch("model_usage.price_snapshot_from_config", side_effect=price):
-            with self.assertRaisesRegex(analysis.AnalysisError, "Round 2失败"):
+            with self.assertRaises(analysis.AnalysisError) as caught:
                 self.run_snapshot()
+        self.assertEqual(caught.exception.issue.code, "AKD-R2-COST_LIMIT")
+        self.assertIn("Round 1", caught.exception.issue.impact)
+        connection = self.connect()
+        usage = model_usage.load_run_usage_summary(connection, 1)
+        self.assertEqual(usage.api_attempt_count, 1)
+        self.assertGreater(usage.known_cost, 0)
         self.assertEqual(len(self.requests), 1)
+
+    def test_round2_context_stop_keeps_round1_results_and_usage(self):
+        original = analysis.validate_budget
+        def validate(connection, run_id, config, stage, messages):
+            changed = copy.deepcopy(config)
+            if stage == "round2":
+                changed["limits"]["model_context_tokens"] = 1
+            return original(connection, run_id, changed, stage, messages)
+        with patch.object(analysis, "validate_budget", side_effect=validate), self.assertRaises(analysis.AnalysisError) as caught:
+            self.run_snapshot()
+        self.assertEqual(caught.exception.issue.code, "AKD-R2-CONTEXT_LIMIT")
+        self.assertFalse(caught.exception.issue.details["model_request_sent"])
+        self.assertEqual([stage for stage, _ in self.requests], ["round1"])
+        connection = self.connect()
+        self.assertEqual(connection.execute("SELECT COUNT(*) FROM screening_results WHERE task_type = 'round1_abstract_screening'").fetchone()[0], 3)
+        self.assertEqual(model_usage.load_run_usage_summary(connection, 1).api_attempt_count, 1)
 
     def test_token_gate_excludes_all_without_round2_http(self):
         config = main.load_config(self.root / "config.json")

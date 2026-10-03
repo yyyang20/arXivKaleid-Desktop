@@ -2,6 +2,12 @@
 
 本文件保留 Desktop 与通用功能的简短历史。代码解耦前的条目来自原项目：当时的发行来源、构建提交、兼容行为和治理测试仅表示历史事实，不代表当前仓库仍有这些入口或测试。现行行为以代码、配置、测试和 [当前业务规范](PROJECT_SPEC.md) 为准；详细历史通过 Git、PR 和 Issue 查询。
 
+## 2026-10-04：Desktop alpha 8 本地功能
+
+- 首页可选择今天及此前 365 天的北京时间自然日；按首次提交 `published` 精确过滤，只查询所选日期，完整分页后按 ID/版本合并。无候选正常结束，可同日再次抓取，不回退或等待。
+- 取消 100 篇候选门控，全部去重候选进入同一次 Round 1；首页改为两个统计框。保留两轮输出、PDF 门控、Prompt、模型、Token/context、¥3 累计费用和零重试规则，安全预检使用分轮错误说明未发送的请求。
+- 本地 portable 技术候选的 README 绑定冻结 commit，不生成未发布 tag 链接；保留 alpha 7.1 非空证据修复和诊断线程输入法隔离。公开下载入口仍指向 alpha 7.1。
+
 ## 2026-10-04：Desktop alpha 7.1 公开发行
 
 - 已公开 [v0.1.0-alpha.7.1 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.7.1)，仅上传 Windows x64 ZIP 和 `.sha256`；发行 tag 与 BUILD_INFO 均指向干净 main 提交 `8ad5826861d1490545dbec068ba0451343bccb39`，用途为 public-release。
