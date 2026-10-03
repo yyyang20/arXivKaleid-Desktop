@@ -2,6 +2,14 @@
 
 本文件保留 Desktop 与通用功能的简短历史。代码解耦前的条目来自原项目：当时的发行来源、构建提交、兼容行为和治理测试仅表示历史事实，不代表当前仓库仍有这些入口或测试。现行行为以代码、配置、测试和 [当前业务规范](PROJECT_SPEC.md) 为准；详细历史通过 Git、PR 和 Issue 查询。
 
+## 2026-10-03：Desktop alpha.7 公开发行
+
+- 已公开 [v0.1.0-alpha.7 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.7)，仅上传 Windows x64 ZIP 和 `.sha256`；发行 tag 与 BUILD_INFO 均指向合并后的 main 提交 `fc7ca1cb0eab1759cdb4c2d1ea0d5d5f2f0a23ce`，用途为 public-release。
+- ZIP 为 118,590,285 字节，SHA-256 为 `bdaf603fe7018b6524fc9a3de5a56d71ba584420e9a8315fc0269a5b5d1c22be`；匿名下载成品、校验文件和 tag 源码通过，82 个源码文件与发行提交逐字节一致，GitHub asset digest 与本地摘要一致。
+- [PR #8](https://github.com/yyyang20/arXivKaleid-Desktop/pull/8) 冻结提交及发行 main 均通过 129 项完整离线测试、零跳过和 44 个 Python 文件 AST 检查；技术与正式包分别完成原生 DPR 1.5、模拟 100/125/150/200% 的 13 状态 GUI、三次重启、合成 DPAPI 恢复、资源缺失拒绝与运行目录占用验证。
+- A0 图标六个尺寸及透明角、Qt/EXE 资源核验通过；标题栏、资源管理器、任务栏与 Alt+Tab 已完成实际检查，正式包任务栏和 Alt+Tab 经用户人工确认。核验八组对应源码、许可、资源 allowlist 及隐私扫描；技术 ZIP 未上传。
+- alpha 1～6 的历史 tag、Release 正文及资产身份与发布前基线完全一致。本条仅为发布后文档收口，不重建或替换已发布资产；最终 main 与发行 tag 分别记录。同机隔离未覆盖第二台干净 Windows；未调用真实 arXiv、PDF 或 DeepSeek，模型调用与费用均为 0。
+
 ## 2026-10-03：Desktop alpha.7 视觉统一与 A0 应用图标
 
 - 版本升级为 `0.1.0-alpha.7`；首页、历史页和设置页统一为浅灰蓝背景、低对比度卡片边框、8 px 圆角和一致页面间距，API Key 输入框融入同色系并保留聚焦蓝色描边。

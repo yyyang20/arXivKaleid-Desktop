@@ -4,7 +4,7 @@ arXivKaleid Desktop 是面向黑洞与致密天体强引力成像、偏振和新
 
 本仓库包含 Desktop 应用源码、测试、构建配置和项目文档；Windows portable 成品通过 GitHub Releases 提供。
 
-当前版本为 `0.1.0-alpha.7`，统一 Fluent 首页、历史占位页和设置页的浅灰蓝视觉，并接入正式 A0 应用图标。当前最新公开 Windows x64 portable 仍为 alpha 6，下载入口见下方 Release 链接。
+当前版本为 `0.1.0-alpha.7`，统一 Fluent 首页、历史占位页和设置页的浅灰蓝视觉，并接入正式 A0 应用图标。最新公开成品为 [alpha 7 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.7)，下载 ZIP 和同名校验文件后按下述方式核验。
 
 ## 开发方式
 
@@ -49,9 +49,7 @@ API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和脱
 
 Copyright (c) 2026 yyyang20. 自有应用源码、测试、构建脚本、配置、提示词和项目文档采用 **GPL-3.0-only**，完整文本见 [LICENSE](LICENSE)，许可说明见 [EULA.txt](EULA.txt)。本软件无保证；允许使用、研究、修改和分发，包括商业使用。分发受 GPL 覆盖的衍生版本须继续按 GPLv3 提供相应源码，私人修改不要求公开。
 
-最新公开 alpha 6 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.6.zip)包含源码、资源、测试及构建说明；对应 [Windows portable Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.6) 的 `BUILD_INFO.json` 提交与该 tag 一致。alpha 7 当前仅为源码开发版本，不要用浮动 main 代替已发行版本源码。
-
-alpha 7 后续正式发行时的[对应源码入口](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.7.zip)固定为 `v0.1.0-alpha.7`；该 tag 和 portable 尚未创建，只有完成正式构建、验收与发布后才成为可用发行来源。
+公开 alpha 7 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.7.zip)包含源码、资源、测试及构建说明；对应 [Windows portable Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.7) 的 `BUILD_INFO.json` 与 tag 均指向发行提交 `fc7ca1cb0eab1759cdb4c2d1ea0d5d5f2f0a23ce`。匿名下载成品及源码已核验，不要用浮动 main 代替已发行版本源码；发布后的 main 可以包含文档收口提交。
 
 第三方组件保留各自许可，声明见 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)。完整许可文本及实际分发库的固定对应源码随 portable ZIP 提供，清单见 `licenses/components.json`。本版许可不改写既有历史发行资料。
 
