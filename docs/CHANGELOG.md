@@ -2,6 +2,15 @@
 
 本文件保留 Desktop 与通用功能的简短历史。代码解耦前的条目来自原项目：当时的发行来源、构建提交、兼容行为和治理测试仅表示历史事实，不代表当前仓库仍有这些入口或测试。现行行为以代码、配置、测试和 [当前业务规范](PROJECT_SPEC.md) 为准；详细历史通过 Git、PR 和 Issue 查询。
 
+## 2026-10-04：Desktop alpha 7.1 公开发行
+
+- 已公开 [v0.1.0-alpha.7.1 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.7.1)，仅上传 Windows x64 ZIP 和 `.sha256`；发行 tag 与 BUILD_INFO 均指向干净 main 提交 `8ad5826861d1490545dbec068ba0451343bccb39`，用途为 public-release。
+- ZIP 为 118,592,717 字节，SHA-256 为 `db706f06c38f646c271df82227f8147b94a2a9958165523608a551d0a4b8b231`；匿名下载成品、校验文件和 tag 源码通过，82 个源码文件与发行提交逐字节一致，GitHub asset digest 与本地摘要一致。
+- 三项非空 evidence 回归在缺失导入时全部失败，补充导入后通过；[PR #10](https://github.com/yyyang20/arXivKaleid-Desktop/pull/10) 冻结提交及发行 main 均通过 133 项完整离线测试、零跳过、44 个 Python 文件 AST、Prompt 哈希和差异检查，Windows GUI 与合成 DPAPI 实际执行。
+- 技术与正式包分别通过原生 DPR 1.5、模拟 100/125/150/200% 的每组 13 状态 GUI、三次普通重启、合成 DPAPI 恢复、资源缺失拒绝及运行目录占用拒绝；冻结 EXE 执行非空证据校验，严格 DLL 来源检查未放宽。诊断仅隔离自身线程的输入法服务，不改变系统设置或普通 GUI，不覆盖真实输入法交互。
+- 依赖未安装或升级；许可收集仅在构建进程中映射项目内已核验的公开 alpha 7 许可副本，不修改环境元数据。227 个第三方许可与对应源码文件与 alpha 7 逐字节一致；资源 allowlist、八组固定源码及隐私扫描通过。
+- alpha 1～7 的历史 tag、Release 正文和资产身份与发布前基线一致；旧 alpha 7 ZIP 与校验文件匿名核验通过后，按授权仅删除 `release/` 中这两个本地旧文件，保留 alpha 7.1 成品及其他材料。本条为发布后文档收口，不重建或替换已发布资产；最终 main 与发行 tag 分别记录。仅完成本机 Windows 离线验收，未覆盖第二台干净 Windows 或真实服务；未读取真实 Key，未调用真实 arXiv、PDF 或 DeepSeek，模型调用与费用均为 0。
+
 ## 2026-10-04：Desktop alpha 7.1 非空证据校验修复
 
 - 补充 `unicodedata` 标准库导入，修复 Round 1 模型返回非空证据后，本地校验触发未预见异常的问题；筛选逻辑、Prompt、GUI、模型配置和依赖保持不变。
