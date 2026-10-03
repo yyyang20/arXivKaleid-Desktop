@@ -31,7 +31,7 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 
 ## Portable 用户
 
-发行后解压 `arXivKaleid-<version>-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。当前公开成品为 [alpha 7](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.7)，从合并后的干净 main 提交 `fc7ca1cb0eab1759cdb4c2d1ea0d5d5f2f0a23ce` 重建，已完成完整 portable 零模型验证、图标验收与匿名 ZIP/源码校验。源码 GUI 在设置页输入自己的 DeepSeek API Key，首页先获取候选，再执行分析。
+发行后解压 `arXivKaleid-<version>-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。当前公开成品为 [alpha 7.1](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.7.1)，从合并后的干净 main 提交 `8ad5826861d1490545dbec068ba0451343bccb39` 重建，已完成完整 portable 零模型验证、非空证据路径及匿名 ZIP/源码校验。源码 GUI 在设置页输入自己的 DeepSeek API Key，首页先获取候选，再执行分析。
 
 所有用户数据都在 EXE 同级 `runtime/`，诊断日志位于 `runtime/logs/`。删除整个 portable 目录相当于卸载并删除运行数据；当前版本不自动轮换或删除旧日志。不要把包含个人 `runtime/` 的已使用目录重新发给其他人，应发送构建生成的干净 ZIP。DPAPI 绑定 Windows 用户与电脑，复制文件夹给另一个用户/电脑后，旧 `secret.dat` 通常无法解密，需要重新输入 Key。
 
