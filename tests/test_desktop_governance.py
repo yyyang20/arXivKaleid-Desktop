@@ -370,6 +370,7 @@ class DesktopGovernanceTests(unittest.TestCase):
             'Round 2 策略': f"`{literal_constant('main.py', 'ROUND2_SELECTION_POLICY')}`",
             'Round 2 输出传输': f"`{literal_constant('main.py', 'ROUND2_OUTPUT_TRANSPORT')}`",
             'Desktop 主工作 SQLite': f"schema v{literal_constant('main.py', 'DESKTOP_SCHEMA_VERSION')}",
+            'Desktop 独立历史 SQLite': f"schema v{literal_constant('desktop/history.py', 'SCHEMA_VERSION')}",
         }
         self.assertEqual(identity_errors(read_utf8('docs/PROJECT_SPEC.md'), expected), [])
 

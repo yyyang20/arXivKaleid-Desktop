@@ -4,7 +4,7 @@ arXivKaleid Desktop 是面向黑洞与致密天体强引力成像、偏振和新
 
 本仓库包含 Desktop 应用源码、测试、构建配置和项目文档；Windows portable 成品通过 GitHub Releases 提供。
 
-当前版本为 `0.1.0-alpha.8`，支持选择北京时间首次提交日期，并将全部去重候选放入同一次 Round 1；保留现有模型安全限制。最新公开成品为 [alpha 8 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.8)，下载 ZIP 和同名校验文件后按下述方式核验。
+当前版本为 `0.1.0-alpha.9`，增加成功日报的本地历史保存、查看和确认删除；保留日期选择、全量候选两轮分析与现有模型安全限制。alpha 9 当前为本地技术候选，尚未公开发布。最新公开成品仍为 [alpha 8 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.8)，下载 ZIP 和同名校验文件后按下述方式核验。
 
 ## 开发方式
 
@@ -38,6 +38,8 @@ Get-FileHash -Algorithm SHA256 .\arXivKaleid-<version>-windows-x64.zip
 候选抓取不需要 API Key。首页默认“抓取今天”，旁边日历可选择今天及此前 365 天的日期；选择后点击主按钮才开始抓取，只查询所选日期，不自动回退。论文按 `published` 首次提交时间换算成北京时间归属日期，同日稍后重新抓取可能得到更多候选。Key 位于设置页，“开始两轮分析”仍是独立入口。两轮分析使用你自己的 DeepSeek API Key，可能产生费用；开始分析前应用会显示数据发送告知，只有同意后才会调用模型。
 
 API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和脱敏诊断日志位于 EXE 同级 `runtime/` 目录。GUI 会显示失败阶段、稳定错误代码、影响、建议和日志关联；日志不上传，应用没有维护者服务器中转或遥测。不要转发已使用过的 portable 目录。
+
+alpha 9 的历史保存当次完整原始 Markdown，重启后无需 Key 即可查看。同日多次成功分析分别保留，正常零推荐也保存；历史保存失败会单独提示，分析成功和本次日报仍保留。历史正文以明文存于 `runtime/history/history.sqlite`，不自动清理；确认删除只删除该日报，不删除 PDF、日志或 Key。
 
 详细数据说明见 [PRIVACY.md](PRIVACY.md)，使用本软件前请阅读 [EULA.txt](EULA.txt)。
 

@@ -2,6 +2,13 @@
 
 本文件保留 Desktop 与通用功能的简短历史。代码解耦前的条目来自原项目：当时的发行来源、构建提交、兼容行为和治理测试仅表示历史事实，不代表当前仓库仍有这些入口或测试。现行行为以代码、配置、测试和 [当前业务规范](PROJECT_SPEC.md) 为准；详细历史通过 Git、PR 和 Issue 查询。
 
+## 2026-10-05：Desktop alpha 9 本地历史功能
+
+- 成功生成的原始日报与完成时间、候选数和最终推荐数保存在独立历史 schema v1；同日多次分别保留，正常零推荐也保存。工作库、筛选规则、配置与 Prompt 身份不变。
+- 历史页提供倒序分批列表、原始 Markdown 详情和默认取消的确认删除；无需 Key，不重新运行分析，不增加搜索、筛选、导出、收藏、重试保存或崩溃恢复。历史保存失败单独提示，不改写分析成功。
+- 补充存储事务、跨进程、排序分页、故障与 GUI 回归；源码及冻结诊断由合成数据库经过真实日报生成器与 QThread，覆盖列表、详情、零推荐、删除、保存失败及重启。合成数据只留在隔离验证副本。
+- 第一阶段仅构建绑定本地冻结 commit 的干净 Windows portable 技术候选，供人工验收；不执行远程协作或正式发行，公开下载入口仍指向 alpha 8。
+
 ## 2026-10-04：Desktop alpha 8 公开发行
 
 - 已公开 [v0.1.0-alpha.8 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.8)，仅上传正式 Windows x64 ZIP 和 `.sha256`；[功能 PR #12](https://github.com/yyyang20/arXivKaleid-Desktop/pull/12) 合并后，发行 tag 与 BUILD_INFO 均固定到干净 main 提交 `271097ef7a50f4446663fba767d9b656451e213f`，用途为 public-release。

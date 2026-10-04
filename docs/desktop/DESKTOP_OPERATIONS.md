@@ -12,7 +12,7 @@
 python -B -m desktop.app
 ```
 
-当前版本为 `0.1.0-alpha.8`，使用 PySide6 / Qt `6.9.2`、PySide6-Fluent-Widgets `1.11.3` 基础版、PySideSix-Frameless-Window `0.8.2`、darkdetect `0.8.0`、Windows pywin32 `312`，均固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。不安装 full 的 scipy、pillow、colorthief。该文件同时引入 [requirements.txt](../../requirements.txt) 中的 pypdf 核心运行依赖；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
+当前版本为 `0.1.0-alpha.9`，使用 PySide6 / Qt `6.9.2`、PySide6-Fluent-Widgets `1.11.3` 基础版、PySideSix-Frameless-Window `0.8.2`、darkdetect `0.8.0`、Windows pywin32 `312`，均固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。不安装 full 的 scipy、pillow、colorthief。该文件同时引入 [requirements.txt](../../requirements.txt) 中的 pypdf 核心运行依赖；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
 
 仅在用户已授权且已核实为本项目专用的 Conda 环境中，才可安装 Desktop 依赖：
 
@@ -94,6 +94,8 @@ Qt `QDomDocument.setContent` 弃用提示暂为非阻塞已知问题，以冻结
 
 当前分析主库为 `work/arxiv_kaleid.sqlite`，全文库为 `work/round2_inputs.sqlite`。每个新 attempt 只重置这两个已知文件及 `-journal`、`-wal`、`-shm` sidecar；不得手工删除其他运行数据。`work/analysis.lock` 使用进程文件锁，其他分析运行时安全拒绝；正常退出或进程退出均释放锁。PDF 保留在 `pdfs/<候选日期>/`，继续使用完整 arXiv ID 和 version 安全文件名。
 
+alpha 9 历史库独立位于 `history/history.sqlite`，以明文保存当次原始日报与最小元数据，不存 Key 或提取全文工作数据，不参与工作库重置。无 Key 也可查看历史；正常零推荐保留，同日多次分别保留。确认删除只删除该条历史，不删除 PDF、日志或凭据，不提供恢复。历史不自动清理，升级 alpha 8 后不会从旧工作库补造记录。数据库损坏、未知版本或读写失败时保留原文件并单独提示；保存失败不否定分析成功，不人工重试或重新调用模型。
+
 输入框失去焦点或按回车会自动加密保存，下次启动自动恢复。解密失败时重新输入；保存失败时检查项目运行目录权限。不要展示、复制或读取用户真实 Secret 来排错。
 
 网络、XML 或分页错误后界面保留阶段、稳定代码、影响和建议，旧候选不会继续用于分析；不自动重跑。HTTP 状态与 curl exit code 在日志 details 中，不形成逐数值错误代码。抓取或分析期间需等当前工作结束后关闭窗口。
@@ -108,7 +110,9 @@ Qt `QDomDocument.setContent` 弃用提示暂为非阻塞已知问题，以冻结
 
 ## 离线验证
 
-隔离视觉 QA 使用已有环境运行 `python -X utf8 -B scripts/visual_qa_desktop.py`，执行前按下述方式限制 TEMP/TMP。该入口不调用正式 main、不读取用户 Secret、不运行真实候选或分析；内存假 Key、合成快照/事件/Markdown 驱动真实 QThread 与 GUI，urllib/socket/子进程网络入口硬禁止。截图与 qa.json 写入 `.codex-validation/alpha8-visual-qa/capture-*/`，包含初始、抓取、成功收缩/展开、分析、日报、设置/禁改、历史、最小窗口及失败。Windows 使用当前进程 `QT_QPA_PLATFORM=windows`；可分别以 `QT_SCALE_FACTOR=1` 和 `1.5` 复核不同缩放，包含日期弹层、边界月份和最小窗口日历；实际 DPR 在 qa.json 中记录，不改变持久系统设置。
+隔离视觉 QA 使用已有环境运行 `python -X utf8 -B scripts/visual_qa_desktop.py`，执行前按下述方式限制 TEMP/TMP。该入口不启动正式业务、不读取用户 Secret、不运行真实网络或模型；内存假 Key、合成快照/事件与 SQLite 事实经过真实校验器、日报生成器、QThread 与 GUI，urllib/socket/子进程网络入口硬禁止。截图与 qa.json 写入 `.codex-validation/alpha9-visual-qa/capture-*/`，包含初始、抓取、成功收缩/展开、分析、真实生成日报、设置/禁改、历史空态/列表/详情/零推荐、确认删除及保存失败、最小窗口和较大字体。Windows 使用当前进程 `QT_QPA_PLATFORM=windows`；可分别以 `QT_SCALE_FACTOR=1` 和 `1.5` 复核不同缩放，包含日期弹层、边界月份和最小窗口日历；实际 DPR 在 qa.json 中记录，不改变持久系统设置。
+
+alpha 9 第一步仅交付 `release/arXivKaleid-0.1.0-alpha.9-windows-x64.zip` 和同名 `.sha256`，绑定本地冻结 commit，用途为 `local-portable-technical-validation`；不生成未发布 tag 源码链接。合成历史、Key 和截图只存在于自动验证副本，不回流干净 ZIP，不额外交付人工验收副本。第一步验证通过后，按用户已明确授权的准确路径将旧 alpha 8 ZIP 与校验文件移入本次项目内构建审计目录保留；不删除其他历史材料，不执行远程操作。后续正式发行另按发布检查清单执行。
 
 在项目根目录及已有匹配依赖的环境中运行；临时目录只作用于当前 PowerShell 进程及其子进程，结束后恢复原值，不修改用户或系统的持久设置。先使用已有路径检查函数确认临时目录仍在项目内且没有目录链接：
 

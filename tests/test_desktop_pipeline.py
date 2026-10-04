@@ -62,12 +62,12 @@ class IsolatedDesktopTest(unittest.TestCase):
         directory = self.stack.enter_context(tempfile.TemporaryDirectory(dir=scratch))
         self.root = Path(directory)
         self.stack.enter_context(patch.object(pipeline, "PROJECT_ROOT", self.root))
-        # 真网络、模型、PDF、数据库和旧 Secret 入口一旦触发即失败。
+        # 抓取测试禁止工作库；GUI 允许独立历史库，但仍禁止模型和 PDF。
         self.forbidden = [self.stack.enter_context(patch(target, side_effect=AssertionError(target))) for target in (
             "main.DeepSeekClient", "pdf_processing.download_selected_papers",
             "main.sqlite3.connect",
             "main.subprocess.run",
-        )]
+        ) if target != "main.sqlite3.connect" or not getattr(self, "ALLOW_HISTORY_DATABASE", False)]
 
     def assert_no_analysis(self):
         for operation in self.forbidden:
@@ -295,8 +295,10 @@ class DesktopPipelineTests(IsolatedDesktopTest):
                 elif isinstance(node, ast.ImportFrom):
                     imports.add(node.module.split(".")[0])
             # Fluent 只允许进入 GUI 模块，候选/分析/凭据等业务模块继续独立于界面。
-            gui_modules = {"app.py", "pages.py", "style.py", "task_panel.py", "date_picker.py"}
+            gui_modules = {"app.py", "pages.py", "style.py", "task_panel.py", "date_picker.py", "history_page.py"}
             module_allowed = allowed | ({"qfluentwidgets"} if source.name in gui_modules else set())
+            if source.name == "history.py":
+                module_allowed |= {"contextlib"}  # 标准库事务连接，不扩展业务依赖。
             self.assertFalse(imports - module_allowed, source.name)
 
 

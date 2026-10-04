@@ -10,31 +10,183 @@ import os
 from pathlib import Path
 import threading
 import time
+import hashlib
+import sqlite3
+from contextlib import closing
 
-from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QUrl
+from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QFont
+from PySide6.QtWidgets import QMessageBox
 from desktop import app
 from desktop.errors import make_issue
 from desktop.progress import ProgressEvent
 from desktop.secrets import SecretError
 from desktop.date_picker import qt_date
+from desktop import paths, pipeline
+from desktop.history import HistoryError
+from desktop.report import build_desktop_report
+import main
+import run_round2
+import round2_fulltext_state as fulltext
 
 
-MARKDOWN = """# arXiv 日报（离线合成验收数据）
+def synthetic_snapshot(day):
+    """完整元数据只用于隔离诊断，不通过任何网络入口取得。"""
+    papers = tuple(dict(
+        arxiv_id=f"2610.{i:05d}", version=1, id=f"https://arxiv.org/abs/2610.{i:05d}v1",
+        title=f"离线合成论文 {i}：Polarized images of compact objects",
+        authors="Synthetic Author", summary="Offline synthetic abstract for GUI validation.",
+        categories="gr-qc", primary_category="gr-qc",
+        published=f"{day}T00:00:00Z", updated=f"{day}T01:00:00Z",
+        abs_url=f"https://arxiv.org/abs/2610.{i:05d}v1",
+        pdf_url=f"https://arxiv.org/pdf/2610.{i:05d}v1",
+    ) for i in range(117))
+    return app.CandidateSnapshot(day, datetime.now(timezone.utc), 126, 117, papers)
 
-## Round 2 最新推荐（4 篇）
 
-本内容仅用于冻结 GUI 验收，不代表真实抓取或模型分析。
+def synthetic_analysis_result(attempt, source_root=None, *, recommendation_count=4):
+    """合成 SQLite 事实经真实校验器和日报生成器；不手写日报模板。"""
+    source_root = source_root if source_root is not None else pipeline.PROJECT_ROOT
+    destination = paths.runtime_path(source_root, "work", "synthetic-report", attempt.operation_id)
+    destination.mkdir(parents=True)
+    config, *_ = run_round2.read_round2_context(paths.resource_root(pipeline.PROJECT_ROOT))
+    papers = [dict(p) for p in attempt.snapshot.papers]
+    database = destination / "main.sqlite"
+    fulltext_database = destination / "fulltext.sqlite"
+    with closing(main.init_database(database)) as connection, closing(sqlite3.connect(fulltext_database)) as inputs:
+        inputs.row_factory = sqlite3.Row
+        fulltext.initialize_fulltext_schema(inputs)
+        run_id = main.start_run(connection, main.current_time_iso())
+        main.insert_papers(connection, papers)
+        round1, _ = main.validate_round1_result(dict(
+            task_type="round1_abstract_screening", profile_version="profile_v2",
+            prompt_version="round1_v20", selection_policy="top_k_daily_budget",
+            selection_policy_version="top_k_daily_budget_v4",
+            selected_papers=[dict(candidate_index=i + 1, content_label="成像", reason="离线合成验证：黑洞偏振图像。") for i in range(10)],
+        ), papers, max_selected=10, profile_version="profile_v2", prompt_version="round1_v20",
+            selection_policy_version="top_k_daily_budget_v4")
+        assert round1["batch_valid"]
+        selected = round1["selected_papers"]
+        main.save_round1_screening_results(connection, run_id, selected, config, selection_audit=round1["selection_audit"])
+        main.save_round1_completion_statuses(connection, run_id, papers, selected, config)
+        for paper in selected:
+            fulltext.save_fulltext_result(inputs, fulltext.PdfFullTextResult(
+                paper["arxiv_id"], paper["version"], "0" * 64, 2,
+                fulltext.PAGE_GATE_ELIGIBLE, fulltext.EXTRACTION_EXTRACTED,
+                ("Synthetic offline page one", "Synthetic offline page two"),
+            ))
+        fulltext.replace_input_decisions(inputs, [dict(arxiv_id=p["arxiv_id"], version=p["version"],
+                                                      decision="full_text", page_count=2) for p in selected])
+        round2, _ = main.validate_round2_result(dict(
+            task_type=main.ROUND2_TASK_TYPE, selection_policy=main.ROUND2_SELECTION_POLICY,
+            profile_version="profile_v2", prompt_version="round2_v15",
+            final_recommendations=[dict(arxiv_id=p["arxiv_id"], version=p["version"],
+                                        content_label="成像", reason="离线合成验证：推荐正文与保存快照一致。")
+                                   for p in selected[:recommendation_count]],
+        ), selected, max_recommendations=5, profile_version="profile_v2", prompt_version="round2_v15")
+        assert round2["batch_valid"]
+        recommendations = round2["final_recommendations"]
+        main.save_round2_screening_results(connection, run_id, recommendations, config, selection_audit=round2["selection_audit"])
+        main.finish_run(connection, run_id, "success", "离线合成验证", main.current_time_iso())
+        markdown = build_desktop_report(connection, fulltext_database, run_id, attempt.snapshot)
+    return app.AnalysisResult(run_id, markdown, len(recommendations), operation_id=attempt.operation_id,
+                              snapshot_id=attempt.snapshot.snapshot_id, candidate_count=attempt.snapshot.round1_count,
+                              report_completed_at=datetime.now(timezone.utc))
 
-1. **Strong gravity imaging — synthetic paper**
-   - 内容标签：成像
-   - 推荐理由：检查中文、英文、粗体与安全链接的 Markdown 渲染。
-   - [arXiv](https://arxiv.org/abs/2610.00001)
 
-## Round 1 入围详情
+def exercise_history(application, window, capture, wait, source_root=None):
+    """源码和冻结 QA 共用真实 QThread/确认对话框；合成数据留在验证目录。"""
+    original_run = app.AnalysisAttempt.run
+    original_save = window.history_store.save
+    try:
+        first = window.history_store.list_records()[0].record_id
+        window.switch_page(window.home_page)
+        window.start_fetch()
+        wait(lambda: window.worker is None)
+        app.AnalysisAttempt.run = lambda attempt, _key, _progress: synthetic_analysis_result(
+            attempt, source_root, recommendation_count=0)
+        window.start_analysis()
+        wait(lambda: window.worker is None)
+        assert "最终推荐 0 篇" in window.status.text()
+        window.switch_page(window.history_page)
+        wait(lambda: window.history_worker is None and not window._history_jobs)
+        assert window.history_page.model.rowCount() == 2
+        capture("10-history")
+        zero = window.history_page.model.rows[0].record_id
+        for record_id, name in ((first, "10b-history-detail"), (zero, "10c-history-zero")):
+            record = window.history_store.read(record_id)
+            window.open_history_record(record_id)
+            wait(lambda: window.history_worker is None)
+            assert "arXivKaleid Desktop 日报" in window.history_page.report.toPlainText()
+            assert record.summary.candidate_count == 117
+            capture(name)
+            window.back_to_history()
+            wait(lambda: window.history_worker is None)
+        # 第三条真实生成日报仅用于确认删除，不预置到干净 ZIP。
+        window.switch_page(window.home_page)
+        window.start_fetch()
+        wait(lambda: window.worker is None)
+        app.AnalysisAttempt.run = original_run
+        window.start_analysis()
+        wait(lambda: window.worker is None)
+        window.switch_page(window.history_page)
+        wait(lambda: window.history_worker is None)
+        deleted_id = window.history_page.model.rows[0].record_id
+        assert window.history_page.model.rowCount() == 3
 
-所有篇数为诊断合成数据；未发送任何业务网络请求。
-"""
+        def answer(value):
+            dialog = application.activeModalWidget()
+            assert isinstance(dialog, QMessageBox)
+            assert dialog.standardButton(dialog.defaultButton()) == QMessageBox.StandardButton.No
+            if value == QMessageBox.StandardButton.No:
+                capture("10d-history-delete-confirm")
+                image = dialog.grab()
+                destination = paths.runtime_path(source_root or pipeline.PROJECT_ROOT, "work", "history-delete-confirm.png")
+                assert image.save(str(destination))
+            dialog.button(value).click()
+
+        QTimer.singleShot(150, lambda: answer(QMessageBox.StandardButton.No))
+        window.delete_history_record(deleted_id)
+        assert window.history_page.model.rowCount() == 3 and window.history_store.read(deleted_id) is not None
+        QTimer.singleShot(150, lambda: answer(QMessageBox.StandardButton.Yes))
+        window.delete_history_record(deleted_id)
+        wait(lambda: window.history_worker is None)
+        assert window.history_page.model.rowCount() == 2 and window.history_store.read(deleted_id) is None
+        capture("10e-history-deleted")
+        window.resize(850, 680)
+        window.history_page.setFont(QFont("Microsoft YaHei UI", 12))
+        capture("10f-history-large-font-small-window")
+        window.open_history_record(first)
+        wait(lambda: window.history_worker is None)
+        capture("10g-history-detail-small-window")
+        window.resize(1060, 820)
+        # 保存故障只发生一次；正常分析和当次日报仍完成。
+        window.switch_page(window.home_page)
+        window.start_fetch()
+        wait(lambda: window.worker is None)
+        calls = []
+
+        def fail_save(result):
+            calls.append(result.operation_id)
+            raise HistoryError(make_issue("AKD-HISTORY-SAVE_FAILED"))
+
+        window.history_store.save = fail_save
+        window.start_analysis()
+        wait(lambda: window.worker is None)
+        assert len(calls) == 1 and "分析成功，历史保存失败" in window.status.text()
+        assert "arXivKaleid Desktop 日报" in window.report.toPlainText()
+        assert window.history_store.read(calls[0]) is None
+        capture("10h-history-save-failed")
+        records = window.history_store.list_records()
+        assert len(records) == 2
+        return {"exact_generated_reports": True, "normal_zero_saved": True, "delete_default_cancel": True,
+                "delete_committed": True, "save_failure_keeps_success": True, "deleted_id": deleted_id,
+                "records": [{"id": row.record_id, "recommendation_count": row.recommendation_count,
+                             "sha256": hashlib.sha256(window.history_store.read(row.record_id).markdown.encode("utf-8")).hexdigest()}
+                            for row in records]}
+    finally:
+        app.AnalysisAttempt.run = original_run
+        window.history_store.save = original_save
 
 
 def loaded_libraries(root):
@@ -126,8 +278,7 @@ def exercise(application, window, root, synthetic_key):
                                message=f'正在查询北京时间 {day.isoformat()} · 分类 2 / 3：astro-ph.HE\n当前已获取 67 条有效记录',
                                current_date=day, category='astro-ph.HE', category_index=2, category_total=3, processed=67))
         assert gate.wait(15)
-        return app.CandidateSnapshot(day, datetime.now(timezone.utc).astimezone(app.ZoneInfo('Asia/Shanghai')),
-                                     126, 117, tuple({'arxiv_id': f'2610.{i:05d}', 'version': 1} for i in range(117)))
+        return synthetic_snapshot(day)
 
     def analyze(attempt, _key, progress):
         for stage, state, message in [('round1', 'completed', 'Round 1 完成 · 有效入围 10 篇'),
@@ -138,8 +289,7 @@ def exercise(application, window, root, synthetic_key):
         for stage, message in [('fulltext', '全文提取完成 · 已处理 9 / 9'),
                                ('round2', 'Round 2 完成 · 最终推荐 4 篇'), ('report', '日报生成完成')]:
             progress(ProgressEvent(task_type='analysis', stage=stage, state='completed', message=message))
-        return app.AnalysisResult(1, MARKDOWN, 4, operation_id=attempt.operation_id,
-                                  snapshot_id=attempt.snapshot.snapshot_id)
+        return synthetic_analysis_result(attempt)
 
     originals = app.fetch_candidates_for_date, app.AnalysisAttempt.run, QDesktopServices.openUrl
     app.fetch_candidates_for_date = fetch
@@ -153,6 +303,11 @@ def exercise(application, window, root, synthetic_key):
         window.task_panel.hide()
         window.show()
         capture('01-initial')
+        window.switch_page(window.history_page)
+        wait(lambda: window.history_worker is None)
+        assert window.history_page.model.rowCount() == 0
+        capture('01e-history-empty')
+        window.switch_page(window.home_page)
         window.open_date_picker()
         capture('01b-calendar')
         today = window.beijing_today()
@@ -187,7 +342,7 @@ def exercise(application, window, root, synthetic_key):
         gate.set()
         wait(lambda: window.worker is None)
         assert window.snapshot.analysis_attempted and not window.task_panel.expanded
-        assert 'Round 2 最新推荐' in window.report.toPlainText()
+        assert 'Round 2 最终推荐' in window.report.toPlainText()
         capture('07-completed')
         window.task_panel.set_expanded(True)
         capture('08-analysis-details')
@@ -198,8 +353,7 @@ def exercise(application, window, root, synthetic_key):
         window.api_key.editingFinished.emit()
         assert not window.api_key.isModified() and window.secret_store.load() == synthetic_key
         capture('09-settings')
-        window.switch_page(window.history_page)
-        capture('10-history')
+        history = exercise_history(application, window, capture, wait)
         window.switch_page(window.home_page)
         window.task_panel.set_expanded(False)
         window.resize(850, 680)
@@ -259,6 +413,7 @@ def exercise(application, window, root, synthetic_key):
         if window.worker is not None:
             window.worker.wait(20000)
             pump()
+        wait(lambda: window.history_worker is None and not window._history_jobs)
         app.fetch_candidates_for_date, app.AnalysisAttempt.run, QDesktopServices.openUrl = originals
     # 预热后重复创建和释放窗口，检查持有对象与 Windows 内存使用；不删除运行数据。
     window.hide()
@@ -275,7 +430,7 @@ def exercise(application, window, root, synthetic_key):
         samples.append(memory_bytes())
     assert samples[-1] - samples[3] < 32 * 1024 * 1024, 'portable_window_memory_growth'
     assert not gc.garbage
-    return {'captures': captures, 'qt_platform': application.platformName(),
+    return {'captures': captures, 'history': history, 'qt_platform': application.platformName(),
             'screen': screen.name(),
             'style': application.style().objectName(), 'loaded_libraries': loaded_libraries(root),
             'autosave': True, 'save_failure': True, 'key_locked': True, 'safe_links': True, 'log_directory_action': True,

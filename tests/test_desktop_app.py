@@ -24,7 +24,7 @@ HAS_QT = (importlib.util.find_spec("PySide6") is not None
 if HAS_QT:
     # 仅当前测试进程使用 offscreen，不修改用户或系统环境。
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
-    from PySide6.QtCore import QCoreApplication, QEvent, QThread, Qt
+    from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QThread, Qt
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QLineEdit
     from desktop import app
@@ -33,6 +33,7 @@ if HAS_QT:
 
 @unittest.skipUnless(HAS_QT, "Desktop GUI dependencies PySide6 / qfluentwidgets are absent")
 class DesktopAppTests(IsolatedDesktopTest):
+    ALLOW_HISTORY_DATABASE = True
     @classmethod
     def setUpClass(cls):
         cls.application = QApplication.instance() or QApplication([])
@@ -48,6 +49,7 @@ class DesktopAppTests(IsolatedDesktopTest):
         if self.window.worker is not None:
             self.window.worker.wait(5000)
             self.application.processEvents()
+        self.wait_until(lambda: self.window.history_worker is None and not self.window._history_jobs)
         self.window.close()
         self.window.deleteLater()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
@@ -95,7 +97,7 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.assertEqual((margins.left(), margins.top(), margins.right(), margins.bottom()),
                          (24, 18, 24, 18))
 
-    def test_pages_and_versions_use_the_single_source_without_history_storage(self):
+    def test_pages_and_versions_use_the_single_source_and_history_without_key(self):
         from desktop import __version__
         self.assertEqual(self.window.pages.count(), 3)
         self.assertIn(f"v{__version__}", self.window.windowTitle())
@@ -138,7 +140,8 @@ class DesktopAppTests(IsolatedDesktopTest):
             progress(ProgressEvent(task_type="analysis", stage="pdf", state="running",
                                    message="已处理 2 / 3", processed=2, total=3))
             gate.wait(3)
-            return app.AnalysisResult(7, "# 测试日报", 0, operation_id="synthetic-operation")
+            return app.AnalysisResult(7, "# 测试日报", 0, operation_id="synthetic-operation",
+                                      candidate_count=1, report_completed_at=datetime.now(timezone.utc))
 
         with patch.object(app.AnalysisAttempt, "run", analyze):
             self.window.start_analysis()
@@ -492,7 +495,9 @@ class DesktopAppTests(IsolatedDesktopTest):
                 message="日报生成完成",
             ))
             gate.wait(3)
-            return app.AnalysisResult(1, "# 测试日报\n\n**推荐内容**", 1)
+            return app.AnalysisResult(1, "# 测试日报\n\n**推荐内容**", 1,
+                                      operation_id=attempt.operation_id, candidate_count=1,
+                                      report_completed_at=datetime.now(timezone.utc))
 
         with patch.object(app.AnalysisAttempt, "run", analyze):
             self.window.show()
@@ -569,6 +574,7 @@ class DesktopAppTests(IsolatedDesktopTest):
             7, "# synthetic", 1,
             operation_id="operation-safe-id",
             snapshot_id=self.result.snapshot_id,
+            candidate_count=1, report_completed_at=datetime.now(timezone.utc),
         )
         with patch.object(app.AnalysisAttempt, "run", return_value=result), patch.object(
             self.window.report, "setMarkdown", side_effect=RuntimeError("private renderer")
@@ -579,6 +585,151 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.assertIn("日报展示失败", self.window.status.text())
         self.assertNotIn("private", self.window.diagnostic_text.text())
         self.assertFalse(self.window.analyze_button.isEnabled())
+
+    def history_result(self, record_id="history-one", count=0):
+        return app.AnalysisResult(7, "# 实际原始日报\n\n## 原有章节\n\n**中文**\n\n", count,
+                                  operation_id=record_id, candidate_count=41,
+                                  report_completed_at=datetime.now(timezone.utc))
+
+    def show_history(self):
+        self.window.switch_page(self.window.history_page)
+        self.wait_until(lambda: self.window.history_worker is None and not self.window._history_jobs)
+
+    def test_history_success_zero_exact_body_and_render_failure_still_persist(self):
+        self.prepare_analysis()
+        result = self.history_result()
+        with patch.object(app.AnalysisAttempt, "run", return_value=result), patch.object(
+            self.window.report, "setMarkdown", side_effect=RuntimeError("synthetic render failure")
+        ):
+            self.window.start_analysis()
+            self.wait_until(lambda: self.window.worker is None)
+        self.assertEqual(self.window.history_store.read(result.operation_id).markdown, result.markdown)
+        self.show_history()
+        self.assertEqual(self.window.history_page.model.rows[0].recommendation_count, 0)
+        with patch.object(self.window.history_page.report, "setMarkdown", wraps=self.window.history_page.report.setMarkdown) as render, \
+                patch("desktop.report.build_desktop_report", side_effect=AssertionError("history must not regenerate")), \
+                patch("urllib.request.urlopen", side_effect=AssertionError("history must stay offline")):
+            self.window.open_history_record(result.operation_id)
+            self.wait_until(lambda: self.window.history_worker is None)
+            render.assert_called_once_with(result.markdown)
+        self.assertIn("实际原始日报", self.window.history_page.report.toPlainText())
+        self.assert_no_analysis()
+
+    def test_history_save_failure_preserves_success_and_no_retry(self):
+        self.prepare_analysis()
+        result = self.history_result()
+        with patch.object(app.AnalysisAttempt, "run", return_value=result), patch.object(
+            self.window.history_store, "save", side_effect=RuntimeError("private key and body")
+        ) as save:
+            self.window.start_analysis()
+            self.wait_until(lambda: self.window.worker is None)
+            self.show_history()
+            self.window.start_analysis()
+            save.assert_called_once_with(result)
+        self.assertIn("分析成功，历史保存失败", self.window.status.text())
+        self.assertNotIn("private", self.window.status.text() + self.window.diagnostic_text.text())
+        self.assertIn("实际原始日报", self.window.report.toPlainText())
+        self.assertTrue(self.window.fetch_button.isEnabled())
+        self.assertEqual(self.window.history_store.list_records(), ())
+
+    def test_history_failed_analysis_or_completed_round1_never_saves(self):
+        self.prepare_analysis()
+
+        def failed(_attempt, _key, progress):
+            progress(ProgressEvent(task_type="analysis", stage="round1", state="completed", message="Round 1 完成"))
+            raise RuntimeError("synthetic failed after round1")
+
+        with patch.object(app.AnalysisAttempt, "run", failed), patch.object(self.window.history_store, "save") as save:
+            self.window.start_analysis()
+            self.wait_until(lambda: self.window.worker is None)
+            save.assert_not_called()
+        self.assertEqual(self.window.history_store.list_records(), ())
+
+    def test_history_body_and_delete_clicks_are_independent_and_default_cancel(self):
+        self.window.history_store.save(self.history_result())
+        self.window.show()
+        self.show_history()
+        page = self.window.history_page
+        index = page.model.index(0, 0)
+        rect = page.list_view.visualRect(index)
+        with patch("desktop.app.QMessageBox.question", return_value=app.QMessageBox.StandardButton.No) as confirm:
+            QTest.mouseClick(page.list_view.viewport(), Qt.MouseButton.LeftButton,
+                             pos=page.delegate.delete_rect(rect).center())
+            self.application.processEvents()
+            confirm.assert_called_once()
+            self.assertEqual(confirm.call_args.args[-1], app.QMessageBox.StandardButton.No)
+        self.assertEqual(page.stack.currentIndex(), 0)
+        self.assertEqual(page.model.rowCount(), 1)
+        self.assertIsNotNone(self.window.history_store.read("history-one"))
+        QTest.mouseClick(page.list_view.viewport(), Qt.MouseButton.LeftButton, pos=rect.topLeft() + QPoint(80, 30))
+        self.wait_until(lambda: self.window.history_worker is None)
+        self.assertEqual(page.stack.currentIndex(), 1)
+        self.assertIn("实际原始日报", page.report.toPlainText())
+
+    def test_history_delete_success_and_failure_update_only_after_transaction(self):
+        self.window.history_store.save(self.history_result())
+        self.window.history_store.save(self.history_result("history-two"))
+        self.show_history()
+        with patch.object(self.window, "confirm_history_delete", return_value=True):
+            with patch.object(self.window.history_store, "delete", side_effect=RuntimeError("private SQL")):
+                self.window.delete_history_record("history-one")
+                self.wait_until(lambda: self.window.history_worker is None)
+            self.assertEqual(self.window.history_page.model.rowCount(), 2)
+            self.assertIn("删除", self.window.history_page.message.text())
+            self.assertNotIn("private", self.window.history_page.message.text())
+            self.window.delete_history_record("history-one")
+            self.wait_until(lambda: self.window.history_worker is None)
+        self.assertEqual(self.window.history_page.model.rowCount(), 1)
+        self.assertIsNone(self.window.history_store.read("history-one"))
+        self.assertIsNotNone(self.window.history_store.read("history-two"))
+
+    def test_history_loading_is_background_and_close_waits_and_stale_result_discarded(self):
+        gate = threading.Event()
+        self.addCleanup(gate.set)
+        calls = []
+
+        def load(_cursor):
+            calls.append(QThread.currentThread())
+            gate.wait(3)
+            return ()
+
+        with patch.object(self.window.history_store, "list_records", side_effect=load):
+            self.window.show()
+            self.window.switch_page(self.window.history_page)
+            self.wait_until(lambda: bool(calls))
+            self.assertNotEqual(calls[0], self.application.thread())
+            self.assertFalse(self.window.close())
+            self.window.switch_page(self.window.home_page)
+            gate.set()
+            self.wait_until(lambda: self.window.history_worker is None)
+        self.assertIs(self.window.pages.currentWidget(), self.window.home_page)
+        self.assertEqual(self.window.history_page.model.rowCount(), 0)
+
+    def test_history_paging_retains_cursor_after_loaded_rows_deleted(self):
+        from PySide6.QtCore import QModelIndex
+        for index in range(55):
+            self.window.history_store.save(self.history_result(f"history-{index}"))
+        self.show_history()
+        model = self.window.history_page.model
+        self.assertEqual(model.rowCount(), 50)
+        loaded = [row.record_id for row in model.rows]
+        # 删除事务及 GUI QThread 已独立覆盖；此处只隔离分页游标边界。
+        for record_id in loaded:
+            self.window.history_store.delete(record_id)
+            model.remove_record(record_id)
+        model.fetchMore(QModelIndex())
+        self.wait_until(lambda: self.window.history_worker is None)
+        self.assertEqual({row.record_id for row in model.rows}, {f"history-{i}" for i in range(5)})
+        self.assertFalse(model.has_more)
+
+    def test_history_read_failure_does_not_disable_analysis_or_destroy_database(self):
+        self.window.history_store.save(self.history_result())
+        before = self.window.history_store.database.read_bytes()
+        with patch.object(self.window.history_store, "list_records", side_effect=RuntimeError("private body")):
+            self.show_history()
+        self.assertIn("读取", self.window.history_page.message.text())
+        self.assertTrue(self.window.fetch_button.isEnabled())
+        self.assertEqual(self.window.history_store.database.read_bytes(), before)
 
     def test_key_save_failure_blocks_analysis_without_consuming(self):
         self.prepare_analysis()

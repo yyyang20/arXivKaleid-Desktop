@@ -14,12 +14,12 @@ import tempfile
 import threading
 import time
 import urllib.request
-from datetime import date, datetime
+from datetime import date
 from unittest.mock import patch
-from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "packaging/windows"))
 
 from PySide6.QtCore import QPoint, QRect
 from PySide6.QtGui import QColor, QFont, QImage, QPainter
@@ -28,8 +28,9 @@ from PySide6.QtWidgets import QApplication
 from desktop import app
 from desktop.diagnostics import DesktopDiagnostics
 from desktop.paths import checked_path
-from desktop.pipeline import CandidateSnapshot
 from desktop.progress import ProgressEvent
+from desktop.history import HistoryStore
+from portable_visual import synthetic_snapshot as report_snapshot, synthetic_analysis_result, exercise_history
 
 
 class MemorySecretStore:
@@ -42,43 +43,7 @@ class MemorySecretStore:
 
 
 def synthetic_snapshot():
-    papers = tuple({"arxiv_id": f"2610.{i:05d}", "version": 1} for i in range(117))
-    return CandidateSnapshot(
-        date(2026, 10, 1), datetime(2026, 10, 2, 2, 6, tzinfo=ZoneInfo("Asia/Shanghai")),
-        126, 117, papers,
-    )
-
-
-MARKDOWN = """# arXiv 日报（2026-10-01）
-
-> 离线视觉 QA 合成数据，不是实际业务结果。
-
-- Round 1 输入：117 篇；有效入围：10 篇
-- Round 2 合格全文：6 篇；最终推荐：4 篇
-- 实际模型、Token、费用在正式日报中由 SQLite 事实提供。
-
-## Round 2 最新推荐（4 篇）
-
-### 1. Polarized images of compact objects
-
-**标签：成像** · **推荐级别：deep_read**
-
-推荐理由：讨论强引力背景下的偏振图像与光子环，适合进一步阅读。
-
-[arXiv 摘要](https://arxiv.org/abs/2610.00001v1) · [PDF](https://arxiv.org/pdf/2610.00001v1)
-
-公开摘要：This synthetic paper explores polarized images near compact objects.
-
-### 2. A new spacetime for strong gravity imaging
-
-**标签：成像｜新解** · **推荐级别：skim_read**
-
-推荐理由：比较新时空背景中的阴影轮廓与偏振分布。
-
-## Round 1 入围详情
-
-此处在正式日报中显示当前 run 的实际入围结果与全文门控事实。
-"""
+    return report_snapshot(date(2026, 10, 1))
 
 
 def compose_captures(output, filename, items, columns):
@@ -107,12 +72,12 @@ def compose_captures(output, filename, items, columns):
 
 
 def main():
-    scratch = checked_path(ROOT, ".codex-validation", "alpha8-visual-qa")
+    scratch = checked_path(ROOT, ".codex-validation", "alpha9-visual-qa")
     scratch.mkdir(parents=True, exist_ok=True)
     output = Path(tempfile.mkdtemp(prefix="capture-", dir=scratch))
     application = QApplication.instance() or QApplication([])
     diagnostics = DesktopDiagnostics(output)
-    window = app.DesktopWindow(MemorySecretStore(), diagnostics)
+    window = app.DesktopWindow(MemorySecretStore(), diagnostics, history_store=HistoryStore(output))
     window.winId()
     window.windowHandle().setScreen(application.primaryScreen())
     origin = application.primaryScreen().availableGeometry().topLeft()
@@ -177,8 +142,7 @@ def main():
             ("report", "日报生成完成"),
         ):
             progress(ProgressEvent(task_type="analysis", stage=stage, state="completed", message=message))
-        return app.AnalysisResult(1, MARKDOWN, 4, operation_id=attempt.operation_id,
-                                  snapshot_id=attempt.snapshot.snapshot_id)
+        return synthetic_analysis_result(attempt, output)
 
     # 多层禁止网络和子进程传输，避免辅助入口意外触达真实 arXiv/DeepSeek。
     forbidden = AssertionError("visual_qa_network_forbidden")
@@ -191,6 +155,11 @@ def main():
                 patch.object(app.AnalysisAttempt, "run", analyze):
             window.show()
             capture("01-initial")
+            window.switch_page(window.history_page)
+            wait_until(lambda: window.history_worker is None)
+            assert window.history_page.model.rowCount() == 0
+            capture("01e-history-empty")
+            window.switch_page(window.home_page)
             window.open_date_picker()
             capture("01b-calendar")
             from datetime import timedelta
@@ -225,14 +194,13 @@ def main():
             gate.set()
             wait_until(lambda: window.worker is None)
             assert window.snapshot.analysis_attempted and "分析完成" in window.status.text()
-            assert "Round 2 最新推荐" in window.report.toPlainText()
+            assert "Round 2 最终推荐" in window.report.toPlainText()
             capture("07-completed")
             window.task_panel.set_expanded(True)
             capture("08-analysis-details")
             window.switch_page(window.settings_page)
             capture("09-settings")
-            window.switch_page(window.history_page)
-            capture("10-history")
+            history = exercise_history(application, window, capture, wait_until, output)
             window.switch_page(window.home_page)
             window.task_panel.set_expanded(False)
             window.resize(850, 680)
@@ -256,11 +224,12 @@ def main():
         if window.worker is not None:
             window.worker.wait(20000)
             application.processEvents()
+        wait_until(lambda: window.history_worker is None and not window._history_jobs)
         window.close()
         diagnostics.close()
     (output / "qa.json").write_text(json.dumps({
         "version": app.__version__, "qt_platform": application.platformName(),
-        "offline_synthetic": True, "captures": captures,
+        "offline_synthetic": True, "history": history, "captures": captures,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     compose_captures(output, "overview.png", [
         ("01-initial", "初始状态"), ("02-fetching", "正在获取候选"),
@@ -269,7 +238,9 @@ def main():
     ], 3)
     compose_captures(output, "details-history-failure.png", [
         ("04-fetch-details", "候选展开详情"), ("08-analysis-details", "分析展开详情"),
-        ("10-history", "历史占位页"), ("12-failure", "失败状态 / 安全诊断"),
+        ("10-history", "历史列表"), ("10b-history-detail", "历史日报详情"),
+        ("10c-history-zero", "零推荐日报"), ("10h-history-save-failed", "历史保存失败 / 分析成功"),
+        ("12-failure", "失败状态 / 安全诊断"),
     ], 2)
     print(output)
 

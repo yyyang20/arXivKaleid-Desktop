@@ -10,8 +10,10 @@
 | `desktop/paths.py` | application/resource/runtime 根、路径安全、时区与 bundled curl 校验 |
 | `desktop/errors.py` | 稳定错误和 outcome、GUI 文案及按实际影响范围判定 paper/system 的纯模型 |
 | `desktop/diagnostics.py` | session/operation/snapshot/fetch/run 关联、脱敏 JSONL、安全 traceback、计时与内存降级 |
-| `desktop/app.py` | QApplication、主窗口导航与业务连接、首次告知、Key 保存、现有 Fetch/Analysis QThread 和生命周期 |
-| `desktop/pages.py` | 首页、设置页、历史占位页；抓取信息卡、密码框、About 和 Markdown/空态布局 |
+| `desktop/app.py` | QApplication、导航、首次告知、Key 保存、抓取/分析/历史 QThread、成功后独立保存历史与生命周期 |
+| `desktop/pages.py` | 首页、设置页与历史页入口；抓取信息卡、密码框、About 和 Markdown/空态布局 |
+| `desktop/history.py` | 无 Qt 的独立历史 schema v1、事务保存、元数据游标分页、原始正文读取和删除 |
+| `desktop/history_page.py` | 历史列表模型与卡片委托、主体/删除命中区、列表/详情切换与 Markdown 展示 |
 | `desktop/date_picker.py` | 首页 Qt 月历弹层、365 天范围、月份导航限制、今天标记和屏幕内定位 |
 | `desktop/style.py` | alpha 7 三页共享灰蓝调色板、输入框样式与低对比度卡片绘制 |
 | `desktop/task_panel.py` | 可复用任务状态组件；运行展开、成功收缩、失败诊断、真实事件与快照/结果详情 |
@@ -39,6 +41,7 @@
 | `tests/test_desktop_secrets.py` | 密文落盘、错误、路径和 Windows DPAPI 假值往返 |
 | `tests/test_desktop_app.py` | 可选 offscreen GUI 状态、首次分析告知拒绝边界、线程及凭据交互 |
 | `tests/test_desktop_analysis.py` | mock HTTP 两轮集成、门控、预算、一次性分析、工作数据隔离和日报事实 |
+| `tests/test_desktop_history.py` | 原始正文、跨进程、同日多次、游标排序、事务故障、锁、schema 与路径边界 |
 | `tests/test_desktop_diagnostics.py` | JSONL schema、关联身份、作用域、线程安全、内存降级和隐私 canary |
 | `tests/test_desktop_config.py` | 当前配置、预算、协议和 Prompt 哈希契约 |
 | `tests/test_desktop_decoupling.py` | alpha.4 行为基线、schema v1、缓存、预算和独立源码运行 |
@@ -59,6 +62,8 @@ portable 根目录包含直接来自仓库根的 GPLv3 `LICENSE`。应用源码�
 │     └─ last_request_time.txt
 ├─ logs/
 │  └─ desktop-<UTC>-<session_id>.jsonl
+├─ history/
+│  └─ history.sqlite
 ├─ work/
 │  ├─ analysis.lock
 │  ├─ arxiv_kaleid.sqlite
@@ -69,4 +74,4 @@ portable 根目录包含直接来自仓库根的 GPLv3 `LICENSE`。应用源码�
 
 Secret 保存过程中可暂存同目录下的随机命名密文 `.tmp` 文件，成功后原子替换；测试临时数据可以使用 `test-temp/`。整个目录被忽略，不进入 Git，也不得进入 portable ZIP；`logs/` 不写入 `_internal/`、AppData、Documents 或 home。
 
-候选快照只存在当前进程内；分析时复制到当前工作库，不跨运行去重。全文仅存于独立全文库，PDF 保留。日报字符串传给 GUI，不写根 `reports/`。`run_round2.py` 使用显式 Key 注入，主库/全文库通过连接参数传入。根核心模块只保留 Desktop 所需功能，不依赖 Online 模块或资源。完整项目结构见 [PROJECT_STRUCTURE.md](../PROJECT_STRUCTURE.md)。
+候选快照只存在当前进程内；分析时复制到当前工作库，不跨运行去重。全文仅存于独立全文库，PDF 保留。成功日报字符串原样保存到独立历史库，重启后仍可查看；不写根 `reports/`。`run_round2.py` 使用显式 Key 注入，主库/全文库通过连接参数传入。根核心模块只保留 Desktop 所需功能，不依赖 Online 模块或资源。完整项目结构见 [PROJECT_STRUCTURE.md](../PROJECT_STRUCTURE.md)。

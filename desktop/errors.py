@@ -75,6 +75,22 @@ def classify_failure_scope(boundary: FailureBoundary) -> str:
 
 
 _ISSUE_TEXT: dict[str, tuple[str, str, str, str]] = {
+    "AKD-HISTORY-SAVE_FAILED": (
+        "history", "历史保存失败。", "分析成功，本次日报尚未持久保存；关闭后不会保留。",
+        "请检查运行目录权限和磁盘空间；不会重新调用模型或重试保存。",
+    ),
+    "AKD-HISTORY-READ_FAILED": (
+        "history", "无法读取历史记录。", "已有历史未被删除；正常分析仍可使用。",
+        "请检查运行目录及历史库；不要发送整个 runtime 排查。",
+    ),
+    "AKD-HISTORY-DELETE_FAILED": (
+        "history", "历史记录删除失败。", "未确认删除成功，列表保留原记录。",
+        "请检查运行目录权限或其他窗口是否正在使用历史库。",
+    ),
+    "AKD-HISTORY-INCOMPATIBLE": (
+        "history", "历史库格式不受当前版本支持。", "原历史库保持原样；不会清空或重建。",
+        "请使用匹配的程序版本；正常分析仍可使用。",
+    ),
     "AKD-STARTUP-RUNTIME_NOT_WRITABLE": (
         "startup", "运行目录不可写；请将完整程序目录放在可写位置。", "应用无法安全保存本次运行数据。",
         "请把完整程序目录移到当前用户可写位置后重新启动。",

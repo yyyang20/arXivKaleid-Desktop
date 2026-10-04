@@ -17,6 +17,7 @@ from desktop.style import (
 )
 from desktop.task_panel import TaskPanel, wrapping_label
 from desktop.date_picker import DatePickerPopup
+from desktop.history_page import HistoryPage
 
 
 def card(title, parent=None):
@@ -159,21 +160,3 @@ class SettingsPage(ScrollArea):
         self.viewport().setStyleSheet(
             "QWidget#settingsViewport {background: #eef3f8; border: none;}"
         )
-
-
-class HistoryPage(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("historyPage")
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 18, 24, 18)
-        layout.addWidget(TitleLabel("历史"))
-        layout.addStretch()
-        title = SubtitleLabel("历史功能尚未开放")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title)
-        message = wrapping_label("本版仅提供页面占位。当前候选和日报只在本次会话展示。")
-        message.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(message)
-        layout.addStretch()
-        self.setStyleSheet(PAGE_STYLE)
