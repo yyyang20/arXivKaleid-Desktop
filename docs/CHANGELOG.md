@@ -2,6 +2,14 @@
 
 本文件保留 Desktop 与通用功能的简短历史。代码解耦前的条目来自原项目：当时的发行来源、构建提交、兼容行为和治理测试仅表示历史事实，不代表当前仓库仍有这些入口或测试。现行行为以代码、配置、测试和 [当前业务规范](PROJECT_SPEC.md) 为准；详细历史通过 Git、PR 和 Issue 查询。
 
+## 2026-10-04：Desktop alpha 8 公开发行
+
+- 已公开 [v0.1.0-alpha.8 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.8)，仅上传正式 Windows x64 ZIP 和 `.sha256`；[功能 PR #12](https://github.com/yyyang20/arXivKaleid-Desktop/pull/12) 合并后，发行 tag 与 BUILD_INFO 均固定到干净 main 提交 `271097ef7a50f4446663fba767d9b656451e213f`，用途为 public-release。
+- ZIP 为 118,603,647 字节，SHA-256 为 `fde47bc66d829f7c26afe7dde1f4018f6e96e79735958371f6b2002f06d9f286`；匿名下载成品、校验文件和 tag 源码通过，83 个源码文件与发行提交的 Git blob 逐字节一致，GitHub asset digest 与本地摘要一致。
+- 人工验收的开发冻结提交与正式 main 文件树一致，均通过 147 项完整离线测试、零跳过、45 个 Python 文件 AST、配置/Prompt 哈希、治理与差异检查；Windows GUI 和合成 DPAPI 实际执行。正式 portable 重建后完成原生 DPR 1.5、模拟 100/125/150/200% 的每组 19 个窗口状态，包含日历、最小窗口、较大字体、分轮停止、三次普通重启、12 次窗口生命周期及严格 DLL 来源检查。
+- 正式包与技术包的差异仅涉及 EXE、BUILD_INFO、用途化 README 和标准库 ZIP 的成员顺序，154 个标准库文件内容一致。227 个第三方许可及对应源码文件与 alpha 7.1 一致；许可收集仅在构建进程内映射已核验的项目内副本，不修改环境元数据、不安装依赖。
+- alpha 1～7.1 的历史 tag、Release 正文及资产身份与发布前基线一致；第一阶段技术包、人工验收副本和审计材料保留。本条为发布后文档收口，不重建或替换已发布资产；最终 main 与发行 tag 分别核验记录。未读取真实 Key，未调用真实 arXiv、PDF 或 DeepSeek，模型调用与费用均为 0；未覆盖第二台干净 Windows 或真实服务。
+
 ## 2026-10-04：Desktop alpha 8 本地功能
 
 - 首页可选择今天及此前 365 天的北京时间自然日；按首次提交 `published` 精确过滤，只查询所选日期，完整分页后按 ID/版本合并。无候选正常结束，可同日再次抓取，不回退或等待。
