@@ -186,12 +186,11 @@ class TaskPanel(SurfaceCard):
 
     def show_snapshot(self, snapshot, categories):
         self.fetch_details.setText(
-            f"候选日期（UTC）：{snapshot.candidate_date.isoformat()}\n"
+            f"抓取日期（北京时间）：{snapshot.candidate_date.isoformat()}\n"
             f"抓取完成时间：{snapshot.completed_time_text}\n"
             f"分类来源：{' · '.join(categories)}\n"
-            f"原始 {snapshot.raw_count} 条 → 去重 {snapshot.unique_count} 条 → "
-            f"锁定 Round 1 候选 {snapshot.round1_count} 篇\n"
-            "快照仅锁定于当前会话；尚未分析。可点击“开始两轮分析”。"
+            f"原始 {snapshot.raw_count} 条 → 去重后候选 {snapshot.unique_count} 篇\n"
+            "去重后候选将全部进入 Round 1；尚未分析。"
         )
 
     def show_result(self, result):

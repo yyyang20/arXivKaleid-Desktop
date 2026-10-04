@@ -114,6 +114,8 @@ def _analysis_issue(stage: str, exc: BaseException) -> DesktopIssue:
     if isinstance(exc, DesktopOperationError):
         return exc.issue
     code = str(exc).split(":", 1)[0]
+    if stage in {"round1", "round2"} and code == "desktop_usage_or_cost_unconfirmed":
+        return make_issue(f"AKD-{'R1' if stage == 'round1' else 'R2'}-USAGE_UNCONFIRMED")
     if stage == "prepare":
         if code == "desktop_missing_key":
             return make_issue("AKD-KEY-EMPTY")
@@ -192,17 +194,25 @@ def validate_budget(connection, run_id, config, stage, messages):
             run_round2.build_round2_result_tool(config)
         )
     output = int(stage_config["max_output_tokens"])
-    if (
-        stage_config["max_retries"] != 0
-        or tokens > int(config["limits"][f"max_{stage}_request_tokens"])
-        or tokens + output > config["limits"]["model_context_tokens"] - config["limits"]["context_safety_margin_tokens"]
-        or output > config["limits"]["model_max_output_tokens"]
-    ):
-        raise RuntimeError("desktop_token_budget_exceeded")
+    def stop(suffix):
+        # 这里只在发送本轮请求前使用；不能把上一轮已发生调用描述为未调用。
+        raise DesktopOperationError(make_issue(
+            f"AKD-{'R1' if stage == 'round1' else 'R2'}-{suffix}",
+            details={"model_request_sent": False, "input_tokens": tokens, "output_tokens": output},
+        ))
+    if tokens > int(config["limits"][f"max_{stage}_request_tokens"]):
+        stop("INPUT_LIMIT")
+    if tokens + output > config["limits"]["model_context_tokens"] - config["limits"]["context_safety_margin_tokens"]:
+        stop("CONTEXT_LIMIT")
+    if stage_config["max_retries"] != 0 or output > config["limits"]["model_max_output_tokens"]:
+        stop("CONFIG_INVALID")
     price = model_usage.price_snapshot_from_config(config, stage=stage, conservative=True)
     if price is None or price.currency != "CNY":
-        raise RuntimeError("desktop_price_unavailable")
-    usage = checked_usage(connection, run_id, config)
+        stop("PRICE_UNAVAILABLE")
+    try:
+        usage = checked_usage(connection, run_id, config)
+    except RuntimeError:
+        stop("USAGE_UNCONFIRMED")
     spent = usage.known_cost if usage else Decimal(0)
     worst = (
         Decimal(tokens) * price.cache_miss_input_price_per_million
@@ -210,7 +220,7 @@ def validate_budget(connection, run_id, config, stage, messages):
     ) / Decimal(1_000_000)
     cap = batch_cost_limit(config)
     if not worst.is_finite() or spent + worst > cap:
-        raise RuntimeError("desktop_cost_budget_exceeded")
+        stop("COST_LIMIT")
 
 
 def checked_usage(connection, run_id, config):
@@ -363,7 +373,8 @@ class AnalysisAttempt:
             # 唯一候选来源就是此对象；复制扁平 metadata，不查询或重排历史。
             papers = [dict(p) for p in self.snapshot.papers]
             keys = [(p["arxiv_id"], p["version"]) for p in papers]
-            if len(papers) > pipeline.MAX_CANDIDATES or len(set(keys)) != len(keys):
+            if (len(set(keys)) != len(keys) or self.snapshot.unique_count != len(papers)
+                    or self.snapshot.raw_count < len(papers)):
                 raise RuntimeError("desktop_snapshot_invalid")
             work_lock = lock_work_directory()
             database, fulltext_database = initialize_work_paths()

@@ -21,7 +21,7 @@ from zoneinfo import ZoneInfo
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from PySide6.QtCore import QRect
+from PySide6.QtCore import QPoint, QRect
 from PySide6.QtGui import QColor, QFont, QImage, QPainter
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
@@ -42,7 +42,7 @@ class MemorySecretStore:
 
 
 def synthetic_snapshot():
-    papers = tuple({"arxiv_id": f"2610.{i:05d}", "version": 1} for i in range(100))
+    papers = tuple({"arxiv_id": f"2610.{i:05d}", "version": 1} for i in range(117))
     return CandidateSnapshot(
         date(2026, 10, 1), datetime(2026, 10, 2, 2, 6, tzinfo=ZoneInfo("Asia/Shanghai")),
         126, 117, papers,
@@ -53,7 +53,7 @@ MARKDOWN = """# arXiv 日报（2026-10-01）
 
 > 离线视觉 QA 合成数据，不是实际业务结果。
 
-- Round 1 输入：100 篇；有效入围：10 篇
+- Round 1 输入：117 篇；有效入围：10 篇
 - Round 2 合格全文：6 篇；最终推荐：4 篇
 - 实际模型、Token、费用在正式日报中由 SQLite 事实提供。
 
@@ -107,12 +107,16 @@ def compose_captures(output, filename, items, columns):
 
 
 def main():
-    scratch = checked_path(ROOT, ".codex-validation", "alpha7-visual-qa")
+    scratch = checked_path(ROOT, ".codex-validation", "alpha8-visual-qa")
     scratch.mkdir(parents=True, exist_ok=True)
     output = Path(tempfile.mkdtemp(prefix="capture-", dir=scratch))
     application = QApplication.instance() or QApplication([])
     diagnostics = DesktopDiagnostics(output)
     window = app.DesktopWindow(MemorySecretStore(), diagnostics)
+    window.winId()
+    window.windowHandle().setScreen(application.primaryScreen())
+    origin = application.primaryScreen().availableGeometry().topLeft()
+    window.move(origin.x() + 40, origin.y() + 40)
     captures = []
     gate = threading.Event()
 
@@ -136,11 +140,17 @@ def main():
                          "report_height": window.home_page.report_stack.height(),
                          "task_height": window.task_panel.height(),
                          "detail_height": window.task_panel.details_scroll.height()})
+        popup = window.date_picker
+        if popup.isVisible():
+            available = window.rect().translated(window.mapToGlobal(QPoint(0, 0))).intersected(window.screen().availableGeometry())
+            assert available.contains(popup.geometry()), "qa_calendar_outside_window"
+            assert popup.grab().save(str(output / (name + "-popup.png")))
+            captures[-1]["calendar_geometry"] = [popup.x(), popup.y(), popup.width(), popup.height()]
 
     def fetch(day, progress, **_kwargs):
         progress(ProgressEvent(
             task_type="fetch", stage="category", state="running",
-            message="正在检查 UTC 2026-10-01 · 分类 2 / 3：astro-ph.HE\n当前日期已获取 67 条有效记录",
+            message=f"正在查询北京时间 {day.isoformat()} · 分类 2 / 3：astro-ph.HE\n当前日期已获取 67 条有效记录",
             current_date=day, category="astro-ph.HE", category_index=2,
             category_total=3, processed=67,
         ))
@@ -177,10 +187,22 @@ def main():
                 patch.object(socket.socket, "connect", side_effect=forbidden), \
                 patch.object(subprocess, "run", side_effect=forbidden), \
                 patch.object(subprocess, "Popen", side_effect=forbidden), \
-                patch.object(app, "fetch_latest_candidates", side_effect=fetch), \
+                patch.object(app, "fetch_candidates_for_date", side_effect=fetch), \
                 patch.object(app.AnalysisAttempt, "run", analyze):
             window.show()
             capture("01-initial")
+            window.open_date_picker()
+            capture("01b-calendar")
+            from datetime import timedelta
+            from desktop.date_picker import qt_date
+            today = window.beijing_today()
+            earliest = today - timedelta(days=365)
+            window.date_picker.prepare(today, earliest)
+            assert not window.date_picker.previous.isEnabled()
+            capture("01c-calendar-earliest")
+            window.date_picker._choose(qt_date(today - timedelta(days=3)))
+            assert window.worker is None and window.snapshot is None
+            capture("01d-selected-date")
             window.start_fetch()
             wait_until(lambda: "67" in window.fetch_progress_text.text())
             capture("02-fetching")
@@ -217,6 +239,10 @@ def main():
             capture("11-minimum-size")
             window.task_panel.set_expanded(True)
             capture("11b-minimum-expanded")
+            window.home_page.layout().itemAt(0).widget().setFont(QFont("Microsoft YaHei UI", 12))
+            window.open_date_picker()
+            capture("11c-minimum-calendar")
+            window.date_picker.hide()
             window.resize(1060, 820)
             # 真实失败槽使用合成异常；不恢复已消费快照或重试。
             window.start_fetch()

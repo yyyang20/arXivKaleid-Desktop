@@ -32,6 +32,7 @@ _DETAIL_KEYS = {
     "page_count", "size_bytes", "network_attempted", "input_mode",
     "candidate_count", "selected_count", "eligible_count", "recommendation_count",
     "paper_issue_count", "outcome_count", "log_failure_kind",
+    "model_request_sent", "input_tokens", "output_tokens",
 }
 _HEADER_KEYS = {
     "date", "server", "via", "age", "content-type", "content-length",

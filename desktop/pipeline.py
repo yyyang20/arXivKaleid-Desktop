@@ -26,8 +26,6 @@ from desktop.progress import ProgressCallback, ProgressEvent, emit_progress
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CATEGORIES = ("gr-qc", "astro-ph.HE", "astro-ph.GA")
-LOOKBACK_DAYS = 14
-MAX_CANDIDATES = 100
 PAGE_SIZE = 1000
 
 
@@ -125,14 +123,14 @@ def _fetch_issue(exc: BaseException, transport: Mapping[str, object] | None = No
     return make_issue("AKD-FETCH-UNEXPECTED")
 
 
-def fetch_latest_candidates(
-    start_date_utc: date,
+def fetch_candidates_for_date(
+    target_date: date,
     progress: ProgressCallback | None = None,
     *,
     diagnostics: DesktopDiagnostics | None = None,
     operation_id: str | None = None,
 ) -> CandidateFetchResult:
-    """完整获取最近非空 UTC 提交日，再冻结前 100 篇；不读取历史状态。"""
+    """只获取指定北京时间首次提交日，完整分页后冻结全部有效候选。"""
     import main
 
     # 独立且不向根 logger 传播；Desktop 不创建日志文件。
@@ -141,7 +139,7 @@ def fetch_latest_candidates(
     logger.propagate = False
     operation_id = operation_id or (diagnostics.operation_id() if diagnostics else new_id())
     timer = StageTimer()
-    current_day = start_date_utc
+    current_day = target_date
     categories = tuple(CATEGORIES)
     category_positions = {category: index for index, category in enumerate(categories, start=1)}
     current_day_count = 0
@@ -150,12 +148,12 @@ def fetch_latest_candidates(
         if diagnostics:
             diagnostics.event(
                 operation_id=operation_id, operation_type="fetch", stage="fetch",
-                state="start", counts={"lookback_days": LOOKBACK_DAYS + 1},
+                state="start", counts={"date_count": 1},
             )
         emit_progress(progress, ProgressEvent(
             task_type="fetch", stage="date_scan", state="running",
-            message=f"候选抓取中 · 正在检查 UTC {start_date_utc.isoformat()}",
-            current_date=start_date_utc,
+            message=f"候选抓取中 · 北京时间 {target_date.isoformat()}",
+            current_date=target_date,
         ))
         # 先检查时区数据，缺失时在发出网络请求前安全失败。
         beijing = ZoneInfo("Asia/Shanghai")
@@ -196,22 +194,14 @@ def fetch_latest_candidates(
                 diagnostic_observer=observe,
                 emit_success_transport_diagnostic=True,
             )
-            return main.parse_arxiv_feed(xml, logger)
+            return main.ArxivFeedPage(xml, logger)
 
         def fetch_category(category: str, day: date):
             nonlocal current_day, current_day_count
-            if day != current_day:
-                current_day = day
-                current_day_count = 0
-                emit_progress(progress, ProgressEvent(
-                    task_type="fetch", stage="date_scan", state="running",
-                    message=f"候选抓取中 · 正在检查 UTC {day.isoformat()}",
-                    current_date=day,
-                ))
             category_index = category_positions[category]
             emit_progress(progress, ProgressEvent(
                 task_type="fetch", stage="category", state="running",
-                message=(f"候选抓取中 · UTC {day.isoformat()} · "
+                message=(f"候选抓取中 · 北京时间 {day.isoformat()} · "
                          f"分类 {category_index} / {len(categories)}：{category} · "
                          f"当前日期已获取 {current_day_count} 篇"),
                 current_date=day, category=category,
@@ -225,13 +215,10 @@ def fetch_latest_candidates(
                 fetch_page=fetch_page,
                 logger=logger,
             )
-            current_day_count += sum(
-                main.parse_utc_submission_date(paper.get("published")) == day
-                for paper in category_papers
-            )
+            current_day_count += len(category_papers)
             emit_progress(progress, ProgressEvent(
                 task_type="fetch", stage="category", state="running",
-                message=(f"候选抓取中 · UTC {day.isoformat()} · "
+                message=(f"候选抓取中 · 北京时间 {day.isoformat()} · "
                          f"分类 {category_index} / {len(categories)}：{category} · "
                          f"当前日期已获取 {current_day_count} 篇"),
                 current_date=day, category=category,
@@ -240,17 +227,16 @@ def fetch_latest_candidates(
             ))
             return category_papers
 
-        day, papers, duplicates, _, _ = main.find_recent_nonempty_submission_batch(
-            start_date_utc=start_date_utc,
-            lookback_days=LOOKBACK_DAYS,
-            categories=list(categories),
-            fetch_category=fetch_category,
-        )
-        if day is None or not papers:
+        day = target_date
+        groups = [fetch_category(category, day) for category in categories]
+        papers, duplicates = main.merge_papers_by_identity(groups)
+        completed_at = datetime.now(timezone.utc).astimezone(beijing)
+        if not papers:
             normal = outcome(
                 "AKO-FETCH-NO_CANDIDATES", "fetch",
-                "当天及向前 14 天内没有可用候选。",
-                candidate_count=0,
+                f"北京时间 {day.isoformat()} 无候选。",
+                candidate_count=0, target_date=day.isoformat(),
+                completed_time=completed_at.strftime("%Y-%m-%d %H:%M:%S 北京时间"),
             )
             if diagnostics:
                 diagnostics.outcome(
@@ -263,10 +249,10 @@ def fetch_latest_candidates(
             ))
             return CandidateFetchResult(outcome=normal, operation_id=operation_id)
         # 核心解析器 metadata 为扁平字符串/整数；复制并只读包装防止后续修改。
-        frozen = tuple(MappingProxyType(dict(p)) for p in papers[:MAX_CANDIDATES])
+        frozen = tuple(MappingProxyType(dict(p)) for p in papers)
         snapshot = CandidateSnapshot(
             candidate_date=day,
-            completed_at=datetime.now(timezone.utc).astimezone(beijing),
+            completed_at=completed_at,
             raw_count=len(papers) + duplicates,
             unique_count=len(papers),
             papers=frozen,
@@ -274,8 +260,8 @@ def fetch_latest_candidates(
         )
         emit_progress(progress, ProgressEvent(
             task_type="fetch", stage="complete", state="completed",
-            message=(f"候选抓取完成 · UTC {day.isoformat()} · "
-                     f"锁定 {snapshot.round1_count} 篇"),
+            message=(f"候选获取完成 · 北京时间 {day.isoformat()} · "
+                     f"{snapshot.round1_count} 篇候选"),
             current_date=day, processed=snapshot.round1_count,
             total=snapshot.round1_count, result_count=snapshot.round1_count,
             operation_id=operation_id, snapshot_id=snapshot.snapshot_id,

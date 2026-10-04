@@ -9,7 +9,7 @@ import os
 import threading
 import time
 import unittest
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 from zoneinfo import ZoneInfo
 
@@ -114,7 +114,7 @@ class DesktopAppTests(IsolatedDesktopTest):
 
     def test_fetch_success_collapses_and_expands_only_real_snapshot_details(self):
         self.window.show()
-        with patch("desktop.app.fetch_latest_candidates", return_value=self.result):
+        with patch("desktop.app.fetch_candidates_for_date", return_value=self.result):
             self.window.start_fetch()
             self.assertTrue(self.window.task_panel.expanded)
             self.assertFalse(self.window.task_panel.toggle.isEnabled())
@@ -124,7 +124,7 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.window.task_panel.toggle.click()
         self.assertTrue(self.window.task_panel.expanded)
         details = self.window.task_panel.fetch_details.text()
-        self.assertIn("原始 2 条 → 去重 1 条", details)
+        self.assertIn("原始 2 条 → 去重后候选 1 篇", details)
         self.assertIn("尚未分析", details)
         self.assertNotIn(".json", details)
         self.assertNotIn("费用", details)
@@ -202,7 +202,7 @@ class DesktopAppTests(IsolatedDesktopTest):
             ))
             return self.result
 
-        with patch("desktop.app.fetch_latest_candidates", side_effect=fetch) as fetch_mock:
+        with patch("desktop.app.fetch_candidates_for_date", side_effect=fetch) as fetch_mock:
             self.window.fetch_button.click()
             self.wait_until(lambda: self.window.worker is None)
             self.assertIs(self.window.snapshot, self.result)
@@ -230,14 +230,108 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.assertNotIn("private", self.window.status.text())
         self.assert_no_analysis()
 
-    def test_click_captures_utc_date_before_worker_runs(self):
+    def test_click_captures_beijing_date_before_worker_runs(self):
         clock = Mock()
         clock.now.return_value = datetime(2026, 9, 24, 23, 59, tzinfo=timezone.utc)
-        with patch("desktop.app.datetime", clock), patch("desktop.app.fetch_latest_candidates", return_value=self.result) as fetch:
+        with patch("desktop.app.datetime", clock), patch("desktop.app.fetch_candidates_for_date", return_value=self.result) as fetch:
             self.window.start_fetch()
             self.wait_until(lambda: self.window.worker is None)
         clock.now.assert_called_once_with(timezone.utc)
-        self.assertEqual(fetch.call_args.args[0].isoformat(), "2026-09-24")
+        self.assertEqual(fetch.call_args.args[0].isoformat(), "2026-09-25")
+
+    def test_calendar_selection_is_offline_and_invalidates_only_changed_target(self):
+        today = date(2026, 10, 4)
+        with patch.object(self.window, "beijing_today", return_value=today), patch.object(app, "fetch_candidates_for_date") as fetch:
+            self.window.show()
+            self.window.open_date_picker()
+            self.assertTrue(self.window.date_picker.isVisible())
+            self.window.snapshot = self.result
+            self.window.analyze_button.setEnabled(True)
+            self.window.select_date(today)
+            self.assertIs(self.window.snapshot, self.result)
+            self.window.select_date(date(2026, 10, 1))
+            self.assertIsNone(self.window.snapshot)
+            self.assertFalse(self.window.analyze_button.isEnabled())
+            self.assertEqual(self.window.fetch_button.text(), "抓取 2026-10-01")
+            self.assertFalse(self.window.date_picker.isVisible())
+            self.window.select_date(today)
+            self.assertEqual(self.window.fetch_button.text(), "抓取今天")
+            fetch.assert_not_called()
+
+    def test_calendar_full_month_bounds_leap_year_and_navigation(self):
+        from desktop.date_picker import qt_date
+        for today in (date(2026, 10, 4), date(2024, 3, 1)):
+            popup = self.window.date_picker
+            popup.prepare(today, today)
+            calendar = popup.calendar
+            for weekday in (Qt.DayOfWeek.Saturday, Qt.DayOfWeek.Sunday):
+                self.assertEqual(calendar.weekdayTextFormat(weekday).foreground().color().name(), "#5f6f82")
+            earliest = today - timedelta(days=365)
+            self.assertEqual(calendar.minimumDate().toPython(), earliest)
+            self.assertEqual(calendar.maximumDate().toPython(), today)
+            calendar.setCurrentPage(earliest.year, earliest.month)
+            self.assertFalse(popup.previous.isEnabled())
+            calendar.showPreviousMonth()
+            self.assertEqual((calendar.yearShown(), calendar.monthShown()), (earliest.year, earliest.month))
+            calendar.setCurrentPage(today.year + 1, today.month)
+            self.assertEqual((calendar.yearShown(), calendar.monthShown()), (today.year, today.month))
+            self.assertFalse(popup.next.isEnabled())
+            chosen = []
+            popup.date_chosen.connect(chosen.append)
+            popup._choose(qt_date(earliest - timedelta(days=1)))
+            popup._choose(qt_date(today + timedelta(days=1)))
+            self.assertFalse(chosen)
+            popup._choose(qt_date(earliest))
+            self.assertEqual(chosen[-1], earliest)
+            popup.date_chosen.disconnect(chosen.append)
+
+    def test_today_intent_tracks_midnight_and_expired_history_resets(self):
+        with patch.object(self.window, "beijing_today", return_value=date(2026, 10, 4)):
+            self.window.refresh_target_date()
+            self.window.snapshot = self.result
+        with patch.object(self.window, "beijing_today", return_value=date(2026, 10, 5)):
+            self.assertEqual(self.window.refresh_target_date(), date(2026, 10, 5))
+            self.assertIsNone(self.window.snapshot)
+            self.window.selected_date = date(2025, 10, 4)
+            self.window.refresh_target_date()
+            self.assertIsNone(self.window.selected_date)
+            self.assertEqual(self.window.fetch_button.text(), "抓取今天")
+
+    def test_calendar_busy_and_startup_disabled_and_popup_fits_minimum_window(self):
+        self.window.show()
+        self.window.resize(850, 680)
+        self.application.processEvents()
+        self.window.open_date_picker()
+        popup = self.window.date_picker
+        self.application.processEvents()
+        from PySide6.QtCore import QPoint
+        client = self.window.rect().translated(self.window.mapToGlobal(QPoint(0, 0)))
+        self.assertTrue(client.contains(popup.geometry()))
+        QTest.keyClick(popup, Qt.Key.Key_Escape)
+        self.assertFalse(popup.isVisible())
+        self.window.calendar_button.setEnabled(False)
+        self.window.open_date_picker()
+        self.assertFalse(popup.isVisible())
+
+    def test_selected_history_fetch_empty_is_normal_and_does_not_enable_analysis(self):
+        selected = date(2026, 10, 1)
+        result = app.CandidateFetchResult(outcome=app.DesktopOutcome(
+            "AKO-FETCH-NO_CANDIDATES", "fetch", "北京时间 2026-10-01 无候选。",
+            {"target_date": selected.isoformat(), "completed_time": "2026-10-04 12:00:00 北京时间"},
+        ))
+        with patch.object(self.window, "beijing_today", return_value=date(2026, 10, 4)), patch.object(app, "fetch_candidates_for_date", return_value=result) as fetch:
+            self.window.select_date(selected)
+            self.window.start_fetch()
+            self.assertFalse(self.window.calendar_button.isEnabled())
+            self.wait_until(lambda: self.window.worker is None)
+            fetch.assert_called_once()
+            self.assertEqual(fetch.call_args.args[0], selected)
+            self.assertIsNone(self.window.snapshot)
+            self.assertFalse(self.window.analyze_button.isEnabled())
+            self.assertEqual(self.window.statistics["抓取日期（北京时间）"].text(), selected.isoformat())
+            self.assertEqual(self.window.statistics["去重后候选数"].text(), "0")
+            self.assertTrue(self.window.calendar_button.isEnabled())
+            self.assert_no_analysis()
 
     def test_edit_finished_saves_and_next_window_restores_key(self):
         self.window.api_key.setText("fake-key-only")
@@ -288,7 +382,7 @@ class DesktopAppTests(IsolatedDesktopTest):
         def fetch(_day, _progress):
             gate.wait(3)
             return self.result
-        with patch("desktop.app.fetch_latest_candidates", side_effect=fetch):
+        with patch("desktop.app.fetch_candidates_for_date", side_effect=fetch):
             self.window.show()
             self.window.start_fetch()
             self.assertFalse(self.window.close())
@@ -322,7 +416,7 @@ class DesktopAppTests(IsolatedDesktopTest):
             gate.wait(3)
             return self.result
 
-        with patch("desktop.app.fetch_latest_candidates", side_effect=fetch):
+        with patch("desktop.app.fetch_candidates_for_date", side_effect=fetch):
             self.window.start_fetch()
             self.wait_until(lambda: "1 / 4" in self.window.fetch_progress_text.text())
             self.assertEqual(self.window.fetch_progress.maximum(), 0)
@@ -406,6 +500,7 @@ class DesktopAppTests(IsolatedDesktopTest):
             self.assertTrue(self.result.analysis_attempted)
             self.assertFalse(self.window.analyze_button.isEnabled())
             self.assertFalse(self.window.fetch_button.isEnabled())
+            self.assertFalse(self.window.calendar_button.isEnabled())
             self.assertFalse(self.window.close())
             self.window.start_fetch()
             self.window.start_analysis()
@@ -429,7 +524,7 @@ class DesktopAppTests(IsolatedDesktopTest):
         with patch.object(app.AnalysisAttempt, "run") as again:
             self.window.start_analysis()
             again.assert_not_called()
-        with patch("desktop.app.fetch_latest_candidates", return_value=self.result):
+        with patch("desktop.app.fetch_candidates_for_date", return_value=self.result):
             self.window.start_fetch()
             self.assertEqual(self.window.report.toPlainText(), "")
             self.wait_until(lambda: self.window.worker is None)
@@ -447,6 +542,26 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.assertNotIn("private", self.window.status.text())
         self.assertTrue(self.window.task_panel.expanded)
         self.assertIn("AKD-PREPARE-WORKSPACE_FAILED", self.window.diagnostic_text.text())
+
+    def test_round2_safety_stop_preserves_completed_round1_display(self):
+        from desktop.errors import make_issue
+        self.prepare_analysis()
+
+        def stopped(_attempt, _key, progress):
+            for stage in ("round1", "pdf", "fulltext"):
+                progress(ProgressEvent(task_type="analysis", stage=stage,
+                                       state="completed", message=f"{stage} 已完成"))
+            raise app.AnalysisError(make_issue("AKD-R2-COST_LIMIT"))
+
+        with patch.object(app.AnalysisAttempt, "run", stopped):
+            self.window.start_analysis()
+            self.wait_until(lambda: self.window.worker is None)
+        self.assertTrue(self.window.analysis_steps["round1"].text().startswith("✓"))
+        self.assertTrue(self.window.analysis_steps["round2"].text().startswith("✕"))
+        self.assertIn("未调用本轮模型", self.window.status.text())
+        self.assertIn("Round 1 已发生的结果与费用仍保留", self.window.diagnostic_text.text())
+        self.assertEqual(self.window.report.toPlainText(), "")
+        self.assertFalse(self.window.analyze_button.isEnabled())
 
     def test_markdown_render_failure_preserves_analysis_success_semantics(self):
         self.prepare_analysis()

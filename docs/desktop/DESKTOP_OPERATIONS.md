@@ -1,5 +1,7 @@
 # Desktop 运行与验证
 
+alpha 8 本地技术候选尚未公开发布；最新公开成品仍为 alpha 7.1。
+
 本文档维护源码启动、依赖、本机构建、portable 验证及运行排错细节。开发与公开发布流程见根 [运行手册](../OPERATIONS.md)，安全、授权和完成要求以根 [AGENTS.md](../../AGENTS.md) 为准，阅读与更新路由见 [文档索引](../README.md)。
 
 ## 源码启动
@@ -10,7 +12,7 @@
 python -B -m desktop.app
 ```
 
-当前版本为 `0.1.0-alpha.7.1`，使用 PySide6 / Qt `6.9.2`、PySide6-Fluent-Widgets `1.11.3` 基础版、PySideSix-Frameless-Window `0.8.2`、darkdetect `0.8.0`、Windows pywin32 `312`，均固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。不安装 full 的 scipy、pillow、colorthief。该文件同时引入 [requirements.txt](../../requirements.txt) 中的 pypdf 核心运行依赖；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
+当前版本为 `0.1.0-alpha.8`，使用 PySide6 / Qt `6.9.2`、PySide6-Fluent-Widgets `1.11.3` 基础版、PySideSix-Frameless-Window `0.8.2`、darkdetect `0.8.0`、Windows pywin32 `312`，均固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。不安装 full 的 scipy、pillow、colorthief。该文件同时引入 [requirements.txt](../../requirements.txt) 中的 pypdf 核心运行依赖；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
 
 仅在用户已授权且已核实为本项目专用的 Conda 环境中，才可安装 Desktop 依赖：
 
@@ -62,7 +64,7 @@ alpha 7 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windo
 
 发行根目录另外从 `docs/public_release/` 的固定 allowlist 复制 `README.md`、`EULA.txt`、`PRIVACY.md` 和 `SECURITY.md`；根仓库 README 不作为打包 README。`RELEASE_CHECKLIST.md` 只供开发与发布核对，不进入 ZIP。第三方声明继续从 `packaging/windows/THIRD_PARTY_NOTICES.txt` 收集，不维护第二份源文本。
 
-根目录 LICENSE 是应用许可唯一源，单独复制到 portable 根目录。应用对应源码通过 README 与 Release 正文指向同一版本 tag 的免费源码归档提供，包含配置、Prompt 和构建说明；源码 tag 的提交必须等于 BUILD_INFO.json 的冻结提交。第三方源码覆盖、独立执行平台/工具与系统库的排除理由见 THIRD_PARTY_NOTICES.txt；不能仅因某组件随包分发就要求全部构建环境源码。
+根目录 LICENSE 是应用许可唯一源，单独复制到 portable 根目录。打包 README 的源码说明由构建器按用途填入：本地技术候选绑定本地冻结 commit，标明未公开发布；正式发行才生成同版本 tag 的免费源码链接，tag 提交必须等于 BUILD_INFO.json。第三方源码覆盖、独立执行平台/工具与系统库的排除理由见 THIRD_PARTY_NOTICES.txt。
 
 ## Portable 零模型验证
 
@@ -98,7 +100,7 @@ Qt `QDomDocument.setContent` 弃用提示暂为非阻塞已知问题，以冻结
 
 ## 使用与费用
 
-先在首页点击“获取最新候选”，查看冻结日期与数量；在设置页输入有效 Key 并确保加密保存成功，再回首页点击“开始两轮分析”。两轮各最多一次 HTTP 请求，不额外 self check；全批费用上限 ¥3.00。正常结果在窗口中渲染显示，零入围或无合格全文会明确说明 Round 2 未调用。
+首页默认点击“抓取今天”，或通过旁边日历选择日期后点击“抓取 YYYY-MM-DD”；日期选择本身不联网。查看北京时间抓取日期和两个统计，在设置页输入有效 Key 并确保加密保存成功，再点击“开始两轮分析”。全部候选进入同一次 Round 1，安全超限时停止，不截断或拆批。两轮各最多一次 HTTP 请求，不额外 self check；全批费用上限 ¥3.00。零入围或无合格全文会明确说明 Round 2 未调用。
 
 每次启动后的首次分析会在消费快照和创建分析线程前显示数据发送、费用和本地保存告知，默认选项为拒绝。拒绝后当前候选仍可再次决定，不会调用模型或产生模型费用。
 
@@ -106,7 +108,7 @@ Qt `QDomDocument.setContent` 弃用提示暂为非阻塞已知问题，以冻结
 
 ## 离线验证
 
-隔离视觉 QA 使用已有环境运行 `python -X utf8 -B scripts/visual_qa_desktop.py`，执行前按下述方式限制 TEMP/TMP。该入口不调用正式 main、不读取用户 Secret、不运行真实候选或分析；内存假 Key、合成快照/事件/Markdown 驱动真实 QThread 与 GUI，urllib/socket/子进程网络入口硬禁止。截图与 qa.json 写入 `.codex-validation/alpha7-visual-qa/capture-*/`，包含初始、抓取、成功收缩/展开、分析、日报、设置/禁改、历史、最小窗口及失败。Windows 使用当前进程 `QT_QPA_PLATFORM=windows`；可分别以 `QT_SCALE_FACTOR=1` 和 `1.5` 复核不同缩放，实际 DPR 在 qa.json 中记录，不改变持久系统设置。
+隔离视觉 QA 使用已有环境运行 `python -X utf8 -B scripts/visual_qa_desktop.py`，执行前按下述方式限制 TEMP/TMP。该入口不调用正式 main、不读取用户 Secret、不运行真实候选或分析；内存假 Key、合成快照/事件/Markdown 驱动真实 QThread 与 GUI，urllib/socket/子进程网络入口硬禁止。截图与 qa.json 写入 `.codex-validation/alpha8-visual-qa/capture-*/`，包含初始、抓取、成功收缩/展开、分析、日报、设置/禁改、历史、最小窗口及失败。Windows 使用当前进程 `QT_QPA_PLATFORM=windows`；可分别以 `QT_SCALE_FACTOR=1` 和 `1.5` 复核不同缩放，包含日期弹层、边界月份和最小窗口日历；实际 DPR 在 qa.json 中记录，不改变持久系统设置。
 
 在项目根目录及已有匹配依赖的环境中运行；临时目录只作用于当前 PowerShell 进程及其子进程，结束后恢复原值，不修改用户或系统的持久设置。先使用已有路径检查函数确认临时目录仍在项目内且没有目录链接：
 

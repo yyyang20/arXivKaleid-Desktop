@@ -9,13 +9,14 @@ from PySide6.QtWidgets import (
 )
 from qfluentwidgets import (
     BodyLabel, FluentIcon, PasswordLineEdit, PrimaryPushButton,
-    ScrollArea, SubtitleLabel, TitleLabel,
+    ScrollArea, SubtitleLabel, TitleLabel, ToolButton,
 )
 from desktop import __version__
 from desktop.style import (
     API_KEY_STYLE, PAGE_STYLE, SUBTLE_BACKGROUND, SUBTLE_BORDER, TEXT_PRIMARY, SurfaceCard,
 )
 from desktop.task_panel import TaskPanel, wrapping_label
+from desktop.date_picker import DatePickerPopup
 
 
 def card(title, parent=None):
@@ -37,18 +38,18 @@ class HomePage(QWidget):
         fetch_card, fetch = card("抓取信息")
         self.statistics = {}
         form = QFormLayout()
-        for name in ("候选日期（UTC）", "抓取完成时间"):
+        for name in ("抓取日期（北京时间）", "抓取完成时间"):
             label = wrapping_label("—")
             self.statistics[name] = label
             form.addRow(name, label)
         fetch.addLayout(form)
         counts = QHBoxLayout()
-        for name in ("原始条目数", "去重后候选数", "本次进入 Round 1 数量"):
+        for name in ("原始条目数", "去重后候选数"):
             tile = QWidget()
             tile.setObjectName("statTile")
             tile.setMinimumHeight(78)
             column = QVBoxLayout(tile)
-            caption = wrapping_label("锁定 Round 1 候选" if name == "本次进入 Round 1 数量" else name)
+            caption = wrapping_label(name)
             caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
             column.addWidget(caption)
             value = wrapping_label("—")
@@ -59,12 +60,21 @@ class HomePage(QWidget):
             counts.addWidget(tile, 1)
         fetch.addLayout(counts)
         buttons = QHBoxLayout()
-        self.fetch_button = PrimaryPushButton(FluentIcon.DOWNLOAD, "获取最新候选")
+        self.fetch_button = PrimaryPushButton(FluentIcon.DOWNLOAD, "抓取今天")
+        self.calendar_button = ToolButton(FluentIcon.CALENDAR)
+        self.calendar_button.setFixedSize(38, 38)
+        self.calendar_button.setToolTip("选择抓取日期（北京时间）")
+        self.calendar_button.setAccessibleName("选择抓取日期（北京时间）")
+        self.date_picker = DatePickerPopup(self)
+        left = QHBoxLayout()
+        left.addWidget(self.fetch_button, 1)
+        left.addWidget(self.calendar_button)
+        buttons.addLayout(left, 1)
         self.analyze_button = PrimaryPushButton(FluentIcon.PLAY, "开始两轮分析")
         self.analyze_button.setEnabled(False)
         for button in (self.fetch_button, self.analyze_button):
             button.setMinimumHeight(38)
-            buttons.addWidget(button, 1)
+        buttons.addWidget(self.analyze_button, 1)
         fetch.addLayout(buttons)
         # 使用当前字体/DPI 的实时 sizeHint，避免父窗口字体变化后旧高度裁切按钮。
         fetch_card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)

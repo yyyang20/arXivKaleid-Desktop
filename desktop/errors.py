@@ -262,6 +262,28 @@ _ISSUE_TEXT: dict[str, tuple[str, str, str, str]] = {
 }
 
 
+# 两轮复用同一预检规则，文案明确标出尚未发送的是哪一轮。
+for _round, _stage in (("R1", "round1"), ("R2", "round2")):
+    _title = "Round 1" if _round == "R1" else "Round 2"
+    for _suffix, _reason in {
+        "INPUT_LIMIT": "输入超过当前 Token 安全上限",
+        "CONTEXT_LIMIT": "请求超过当前模型上下文安全上限",
+        "COST_LIMIT": "预计累计费用超过本次 ¥3.00 上限",
+        "PRICE_UNAVAILABLE": "模型价格无法确认",
+        "CONFIG_INVALID": "模型安全配置无效",
+    }.items():
+        _ISSUE_TEXT[f"AKD-{_round}-{_suffix}"] = (
+            _stage, f"{_title} {_reason}，分析已停止，未调用本轮模型。",
+            "未调用模型。" if _round == "R1" else "Round 1 已发生的结果与费用仍保留；Round 2 未发送。",
+            "请保留诊断日志；应用不会截断候选、拆批、提高限额或自动重试。",
+        )
+    _ISSUE_TEXT[f"AKD-{_round}-USAGE_UNCONFIRMED"] = (
+        _stage, f"{_title} 的 Token 或累计费用无法确认，分析已停止。",
+        "已发生的调用和费用记录仍保留，不再发送后续模型请求。",
+        "请保留诊断日志并检查供应商 usage；应用不会自动重试。",
+    )
+
+
 def make_issue(
     code: str,
     *,

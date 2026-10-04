@@ -4,7 +4,7 @@ arXivKaleid Desktop 是面向黑洞与致密天体强引力成像、偏振和新
 
 本文档说明 Windows portable 的下载和使用方式。
 
-当前版本为 `0.1.0-alpha.7.1`，修复 Round 1 非空摘要证据校验导致的异常，筛选规则、Prompt 和界面行为保持不变；第三方原许可、版权声明和固定对应源码随包提供。
+当前版本为 `0.1.0-alpha.8`，支持选择北京时间首次提交日期，完整候选进入同一次 Round 1；第三方原许可、版权声明和固定对应源码随包提供。是否为本地技术候选，以本包 `BUILD_INFO.json` 的用途为准。
 
 ## 开发方式
 
@@ -35,7 +35,7 @@ Get-FileHash -Algorithm SHA256 .\arXivKaleid-<version>-windows-x64.zip
 
 ## 费用与数据
 
-候选抓取不需要 API Key。Key 位于设置页，首页保留“获取最新候选”和“开始两轮分析”两个独立按钮；历史页本版仅占位。两轮分析使用你自己的 DeepSeek API Key，可能产生费用；开始分析前应用会显示数据发送告知，只有同意后才会调用模型。
+候选抓取不需要 API Key。首页默认“抓取今天”，可点击旁边日历选择今天及此前 365 天内的日期；选日期不会联网，随后点击抓取按钮才查询。论文按首次提交时间 `published` 换算成北京时间归属日期，同一天再次抓取可能得到更多候选；查不到就显示无候选，不查询其他日期。去重后候选全部进入同一次 Round 1，超过现有模型安全限制时停止，不截断或拆批。Key 位于设置页，历史页本版仅占位。两轮分析使用你自己的 DeepSeek API Key，可能产生费用；开始分析前应用会显示数据发送告知，只有同意后才会调用模型。
 
 API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和脱敏诊断日志位于 EXE 同级 `runtime/` 目录。GUI 会显示失败阶段、稳定错误代码、影响、建议和日志关联；日志不上传，应用没有维护者服务器中转或遥测。不要转发已使用过的 portable 目录。
 
@@ -49,7 +49,9 @@ API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和脱
 
 Copyright (c) 2026 yyyang20. 应用采用 **GPL-3.0-only**，完整许可文本见 portable 根目录的 `LICENSE`，说明见 [EULA.txt](EULA.txt)。本软件无保证；允许使用、研究、修改和分发，包括商业使用。分发受 GPL 覆盖的修改版本须按 GPLv3 提供相应源码，私人修改不要求公开。
 
-本版[对应源码下载](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.7.1.zip)固定到 `v0.1.0-alpha.7.1`，包含应用源码、配置、Prompt、测试、构建脚本及说明，对应 `BUILD_INFO.json` 中的提交。源码归档用于研究、修改和构建，不是可直接运行的 Windows 成品；公开成品下载见 [Releases](https://github.com/yyyang20/arXivKaleid-Desktop/releases)。
+{{APPLICATION_SOURCE_NOTICE}}
+
+构建器按用途填入对应源码说明；本地技术候选不生成虚假的公开下载链接。源码归档用于研究、修改和构建，不是可直接运行的 Windows 成品；已公开成品下载见 [Releases](https://github.com/yyyang20/arXivKaleid-Desktop/releases)。
 
 第三方组件保留各自许可；声明见 `THIRD_PARTY_NOTICES.txt`，许可文本位于 `licenses/`，QtBase、QtSvg、PySide/Shiboken、pypdf、Fluent、frameless、darkdetect 和 pywin32 固定源码位于 `licenses/sources/`。来源、版本与哈希见 `licenses/components.json`；Fluent GPLv3 元数据与上游商业用途措辞的歧义，以及通用执行平台、独立工具和系统库的范围说明见第三方声明。既有历史发行资料不变。
 

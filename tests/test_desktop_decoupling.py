@@ -84,9 +84,14 @@ class DesktopDecouplingTests(unittest.TestCase):
                     FROM screening_results ORDER BY task_type, result_rank
                 ''').fetchall()
                 usage = model_usage.load_run_usage_summary(conn, result.run_id)
+                self.assertIn("- 抓取日期（北京时间）：", result.markdown)
+                # alpha 8 只改日期标题；归一化这一处后仍核对旧请求、结果、费用与正文基线。
+                baseline_markdown = result.markdown.replace(
+                    "- 抓取日期（北京时间）：", "- 本次候选日期（UTC）："
+                )
                 actual = {
                     'requests': [[stage, digest(payload)] for stage, payload in case.requests],
-                    'markdown_sha256': hashlib.sha256(result.markdown.encode('utf-8')).hexdigest(),
+                    'markdown_sha256': hashlib.sha256(baseline_markdown.encode('utf-8')).hexdigest(),
                     'results': [list(row) for row in rows],
                     'pdf_urls': case.pdf_urls,
                     'usage': {'attempts': usage.api_attempt_count, 'tokens': usage.known_total_tokens,

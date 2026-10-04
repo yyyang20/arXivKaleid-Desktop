@@ -61,7 +61,7 @@ def build_desktop_report(
         raise RuntimeError("desktop_report_snapshot_count_mismatch")
     lines = [
         "# arXivKaleid Desktop 日报", "",
-        f"- 本次候选日期（UTC）：{snapshot.candidate_date.isoformat()}",
+        f"- 抓取日期（北京时间）：{snapshot.candidate_date.isoformat()}",
         f"- 候选数量：{snapshot.round1_count}",
         f"- Round 1 输入数量：{completed}",
         f"- Round 1 入围数量：{len(round1)}",
