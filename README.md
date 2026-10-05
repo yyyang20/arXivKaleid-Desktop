@@ -4,7 +4,7 @@ arXivKaleid Desktop 是面向黑洞与致密天体强引力成像、偏振和新
 
 本仓库包含 Desktop 应用源码、测试、构建配置和项目文档；Windows portable 成品通过 GitHub Releases 提供。
 
-当前版本为 `0.1.0-alpha.9`，增加成功日报的本地历史保存、查看和确认删除；保留日期选择、全量候选两轮分析与现有模型安全限制。alpha 9 当前为本地技术候选，尚未公开发布。最新公开成品仍为 [alpha 8 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.8)，下载 ZIP 和同名校验文件后按下述方式核验。
+当前版本为 `0.1.0-alpha.9`，增加成功日报的本地历史保存、查看和确认删除；历史卡片分别显示抓取时间与论文日期，保留日期选择、全量候选两轮分析与现有模型安全限制。最新公开成品为 [alpha 9 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.9)，下载 ZIP 和同名校验文件后按下述方式核验。
 
 ## 开发方式
 
@@ -51,7 +51,7 @@ alpha 9 的历史保存当次完整原始 Markdown，重启后无需 Key 即可�
 
 Copyright (c) 2026 yyyang20. 自有应用源码、测试、构建脚本、配置、提示词和项目文档采用 **GPL-3.0-only**，完整文本见 [LICENSE](LICENSE)，许可说明见 [EULA.txt](EULA.txt)。本软件无保证；允许使用、研究、修改和分发，包括商业使用。分发受 GPL 覆盖的衍生版本须继续按 GPLv3 提供相应源码，私人修改不要求公开。
 
-公开 alpha 8 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.8.zip)包含源码、资源、测试及构建说明；对应 [Windows portable Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.8) 的 `BUILD_INFO.json` 与 tag 均指向发行提交 `271097ef7a50f4446663fba767d9b656451e213f`。匿名下载成品及源码已核验，不要用浮动 main 代替已发行版本源码；发布后的 main 可以包含文档收口提交。
+公开 alpha 9 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.9.zip)包含源码、资源、测试及构建说明；对应 [Windows portable Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.9) 的 `BUILD_INFO.json` 与 tag 均指向发行提交 `8afcc98c8ebb321de2b46eccfdd4b89f3cc16bd1`。匿名下载成品及源码已核验，不要用浮动 main 代替已发行版本源码；发布后的 main 可以包含文档收口提交。
 
 第三方组件保留各自许可，声明见 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)。完整许可文本及实际分发库的固定对应源码随 portable ZIP 提供，清单见 `licenses/components.json`。本版许可不改写既有历史发行资料。
 

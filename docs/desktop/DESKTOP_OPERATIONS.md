@@ -1,6 +1,6 @@
 # Desktop 运行与验证
 
-最新公开成品为 alpha 8 Windows x64 portable，下载与运行方式见下文。
+最新公开成品为 alpha 9 Windows x64 portable，下载与运行方式见下文。
 
 本文档维护源码启动、依赖、本机构建、portable 验证及运行排错细节。开发与公开发布流程见根 [运行手册](../OPERATIONS.md)，安全、授权和完成要求以根 [AGENTS.md](../../AGENTS.md) 为准，阅读与更新路由见 [文档索引](../README.md)。
 
@@ -33,7 +33,7 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 
 ## Portable 用户
 
-发行后解压 `arXivKaleid-<version>-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。当前公开成品为 [alpha 8](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.8)，从合并后的干净 main 提交 `271097ef7a50f4446663fba767d9b656451e213f` 重建，已完成日期弹层、全量候选、分轮安全停止等 portable 零模型验证及匿名 ZIP/源码校验。源码 GUI 在设置页输入自己的 DeepSeek API Key，首页先获取候选，再执行分析。
+发行后解压 `arXivKaleid-<version>-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。当前公开成品为 [alpha 9](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.9)，从合并后的干净 main 提交 `8afcc98c8ebb321de2b46eccfdd4b89f3cc16bd1` 重建，已完成历史日期、原始日报、零推荐、确认删除、保存失败和跨进程恢复等 portable 零模型验证及匿名 ZIP/源码校验。源码 GUI 在设置页输入自己的 DeepSeek API Key，首页先获取候选，再执行分析。
 
 所有用户数据都在 EXE 同级 `runtime/`，诊断日志位于 `runtime/logs/`。删除整个 portable 目录相当于卸载并删除运行数据；当前版本不自动轮换或删除旧日志。不要把包含个人 `runtime/` 的已使用目录重新发给其他人，应发送构建生成的干净 ZIP。DPAPI 绑定 Windows 用户与电脑，复制文件夹给另一个用户/电脑后，旧 `secret.dat` 通常无法解密，需要重新输入 Key。
 
@@ -96,7 +96,7 @@ Qt `QDomDocument.setContent` 弃用提示暂为非阻塞已知问题，以冻结
 
 alpha 9 历史库独立位于 `history/history.sqlite`，以明文保存当次原始日报与最小元数据，不存 Key 或提取全文工作数据，不参与工作库重置。无 Key 也可查看历史；正常零推荐保留，同日多次分别保留。确认删除只删除该条历史，不删除 PDF、日志或凭据，不提供恢复。历史不自动清理，升级 alpha 8 后不会从旧工作库补造记录。数据库损坏、未知版本或读写失败时保留原文件并单独提示；保存失败不否定分析成功，不人工重试或重新调用模型。
 
-卡片分别显示实际抓取完成时间（北京时间）和本次论文日期，列表仍按日报完成时间倒序。当前独立历史 schema 为 v2，不迁移未公开 alpha 9 前一技术候选的测试历史；验收新候选时解压到新的可写目录，不复制旧 `runtime/`，也不自动清空旧目录。
+卡片分别显示实际抓取完成时间（北京时间）和本次论文日期，列表仍按日报完成时间倒序。当前独立历史 schema 为 v2，不迁移前一未公开 alpha 9 技术候选的 schema v1 测试历史；从该候选升级时解压到新的可写目录，不复制旧 `runtime/`，也不自动清空旧目录。
 
 输入框失去焦点或按回车会自动加密保存，下次启动自动恢复。解密失败时重新输入；保存失败时检查项目运行目录权限。不要展示、复制或读取用户真实 Secret 来排错。
 
@@ -113,8 +113,6 @@ alpha 9 历史库独立位于 `history/history.sqlite`，以明文保存当次�
 ## 离线验证
 
 隔离视觉 QA 使用已有环境运行 `python -X utf8 -B scripts/visual_qa_desktop.py`，执行前按下述方式限制 TEMP/TMP。该入口不启动正式业务、不读取用户 Secret、不运行真实网络或模型；内存假 Key、合成快照/事件与 SQLite 事实经过真实校验器、日报生成器、QThread 与 GUI，urllib/socket/子进程网络入口硬禁止。截图与 qa.json 写入 `.codex-validation/alpha9-visual-qa/capture-*/`，包含初始、抓取、成功收缩/展开、分析、真实生成日报、设置/禁改、历史空态/列表/详情/零推荐、确认删除及保存失败、最小窗口和较大字体。Windows 使用当前进程 `QT_QPA_PLATFORM=windows`；可分别以 `QT_SCALE_FACTOR=1` 和 `1.5` 复核不同缩放，包含日期弹层、边界月份和最小窗口日历；实际 DPR 在 qa.json 中记录，不改变持久系统设置。
-
-alpha 9 第一步仅交付 `release/arXivKaleid-0.1.0-alpha.9-windows-x64.zip` 和同名 `.sha256`，绑定本地冻结 commit，用途为 `local-portable-technical-validation`；不生成未发布 tag 源码链接。合成历史、Key 和截图只存在于自动验证副本，不回流干净 ZIP，不额外交付人工验收副本。第一步验证通过后，按用户已明确授权的准确路径将旧 alpha 8 ZIP 与校验文件移入本次项目内构建审计目录保留；不删除其他历史材料，不执行远程操作。后续正式发行另按发布检查清单执行。
 
 在项目根目录及已有匹配依赖的环境中运行；临时目录只作用于当前 PowerShell 进程及其子进程，结束后恢复原值，不修改用户或系统的持久设置。先使用已有路径检查函数确认临时目录仍在项目内且没有目录链接：
 

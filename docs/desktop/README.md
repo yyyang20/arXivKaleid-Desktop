@@ -1,6 +1,6 @@
 # Desktop 文档入口
 
-当前版本为 `0.1.0-alpha.9`，新增成功日报历史的保存、查看和确认删除。首页保留北京时间单日选择、两个抓取统计及全量候选的两轮分析入口；沿用基础版 PySide6-Fluent-Widgets、设置页、正式 A0 图标、可收缩进度与安全诊断。Key 与 About 位于设置页。alpha 9 为本地技术候选；最新公开成品仍为 [alpha 8 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.8)，运行与验证方式见运行手册。
+当前版本为 `0.1.0-alpha.9`，新增成功日报历史的保存、查看和确认删除，卡片分别显示抓取时间与论文日期。首页保留北京时间单日选择、两个抓取统计及全量候选的两轮分析入口；沿用基础版 PySide6-Fluent-Widgets、设置页、正式 A0 图标、可收缩进度与安全诊断。Key 与 About 位于设置页。最新公开成品为 [alpha 9 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.9)，运行与验证方式见运行手册。
 
 每次启动后首次开始分析前必须显示模型数据发送、费用、DPAPI 凭据与本地运行数据告知；用户拒绝时不消费快照、不调用模型。
 
