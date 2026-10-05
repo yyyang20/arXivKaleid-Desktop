@@ -1,6 +1,6 @@
 # Desktop 运行与验证
 
-最新公开成品为 alpha 9 Windows x64 portable，下载与运行方式见下文。
+最新公开成品为 alpha 10 Windows x64 portable，下载与运行方式见下文。
 
 本文档维护源码启动、依赖、本机构建、portable 验证及运行排错细节。开发与公开发布流程见根 [运行手册](../OPERATIONS.md)，安全、授权和完成要求以根 [AGENTS.md](../../AGENTS.md) 为准，阅读与更新路由见 [文档索引](../README.md)。
 
@@ -12,7 +12,7 @@
 python -B -m desktop.app
 ```
 
-当前版本为 `0.1.0-alpha.10`，尚未公开发布。使用 PySide6 / Qt `6.9.2`、PySide6-Fluent-Widgets `1.11.3` 基础版、PySideSix-Frameless-Window `0.8.2`、darkdetect `0.8.0`、Windows pywin32 `312`，均固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。不安装 full 的 scipy、pillow、colorthief。该文件同时引入 [requirements.txt](../../requirements.txt) 中的 pypdf 核心运行依赖；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
+当前版本为 `0.1.0-alpha.10`。使用 PySide6 / Qt `6.9.2`、PySide6-Fluent-Widgets `1.11.3` 基础版、PySideSix-Frameless-Window `0.8.2`、darkdetect `0.8.0`、Windows pywin32 `312`，均固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。不安装 full 的 scipy、pillow、colorthief。该文件同时引入 [requirements.txt](../../requirements.txt) 中的 pypdf 核心运行依赖；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
 
 仅在用户已授权且已核实为本项目专用的 Conda 环境中，才可安装 Desktop 依赖：
 
@@ -33,7 +33,7 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 
 ## Portable 用户
 
-发行后解压 `arXivKaleid-<version>-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。当前公开成品为 [alpha 9](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.9)，从合并后的干净 main 提交 `8afcc98c8ebb321de2b46eccfdd4b89f3cc16bd1` 重建，已完成历史日期、原始日报、零推荐、确认删除、保存失败和跨进程恢复等 portable 零模型验证及匿名 ZIP/源码校验。源码 GUI 在设置页输入自己的 DeepSeek API Key，首页先获取候选，再执行分析。
+解压 `arXivKaleid-<version>-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。当前公开成品为 [alpha 10](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.10)，从合并后的干净 main 提交 `89804e2895691d88f6ae62277e219de8f98ef0f9` 重建。正式 portable 已完成五组 DPI 各 43 个 GUI 状态、真实 12/20 pt 字体、整卡点击与键盘、研究要求保存/保护/跨进程恢复、请求哈希及安全边界、历史原文、DPAPI、普通重启与 DLL 来源等零模型验证；匿名 ZIP、校验文件和 94 个 tag 源码文件与发行提交一致。源码 GUI 在设置页输入自己的 DeepSeek API Key，首页先获取候选，再执行分析。
 
 所有用户数据都在 EXE 同级 `runtime/`，诊断日志位于 `runtime/logs/`。删除整个 portable 目录相当于卸载并删除运行数据；当前版本不自动轮换或删除旧日志。不要把包含个人 `runtime/` 的已使用目录重新发给其他人，应发送构建生成的干净 ZIP。DPAPI 绑定 Windows 用户与电脑，复制文件夹给另一个用户/电脑后，旧 `secret.dat` 通常无法解密，需要重新输入 Key。
 
@@ -90,11 +90,11 @@ Qt `QDomDocument.setContent` 弃用提示暂为非阻塞已知问题，以冻结
 
 研究要求在本目录 `config/round1_research_requirements.json` 与 `round2_research_requirements.json` 中以 UTF-8 明文保存。重启生效；损坏或未知格式会阻止分析，不自动覆盖。通过 GUI 确认恢复对应轮默认可修复覆盖记录，内置资源损坏则重新解压。升级到新目录使用新版默认，不复制或迁移旧 `runtime/`。
 
-alpha 10 第一阶段先通过源码离线测试、实际 GUI、请求哈希/缓存/预算与隐私边界验证，再冻结本地中文 commit。构建前核验已有 vendor 固定哈希，缺失或异常时停止，不安装依赖或下载替代材料。自动合成数据只写验证副本；分别验收四页、两轮查看/编辑、保存失败、恢复确认、离开保护、分析禁改、原生 DPI 与模拟 100/125/150/200%，并检查输入法提交中文、滚动及较大字体。提示词入口还须核对实际历史卡片外框、间隔与图标，执行整卡各区域点击及回车/空格进入，检查悬停/聚焦、最小窗口下实际放大文字的换行和裁切。此处输入法事件检查不等于所有第三方 IME 的实机兼容覆盖。
+研究要求变更须先通过源码离线测试、实际 GUI、请求哈希/缓存/预算与隐私边界验证，再冻结本地中文 commit。构建前核验已有 vendor 固定哈希，缺失或异常时停止，不安装依赖或下载替代材料。自动合成数据只写验证副本；分别验收四页、两轮查看/编辑、保存失败、恢复确认、离开保护、分析禁改、原生 DPI 与模拟 100/125/150/200%，并检查输入法提交中文、滚动及较大字体。提示词入口还须核对实际历史卡片外框、间隔与图标，执行整卡各区域点击及回车/空格进入，检查悬停/聚焦、最小窗口下实际放大文字的换行和裁切。此处输入法事件检查不等于所有第三方 IME 的实机兼容覆盖。
 
-干净构建目录与 ZIP 必须无 runtime、测试/个人数据和用户覆盖配置，逐文件核对资源、许可、身份和哈希。`BUILD_INFO.json` 使用 `local-portable-technical-validation`，README 绑定冻结 commit。验收通过后，按准确文件名把旧 ZIP/校验和被替换候选原样移入被忽略的构建审计目录，核对移动前后哈希，不删除历史材料。`release/` 最后只留本阶段 alpha 10 ZIP 与 `.sha256`；不执行公开发布后的清理流程。
+干净构建目录与 ZIP 必须无 runtime、测试/个人数据和用户覆盖配置，逐文件核对资源、许可、身份和哈希。技术候选的 `BUILD_INFO.json` 使用 `local-portable-technical-validation`，README 绑定冻结 commit；正式包使用 `public-release` 并绑定正式 main 与同版 tag。构建器按准确文件名把旧 ZIP/校验和被替换候选原样移入被忽略的构建审计目录，核对留存哈希，不删除历史材料。当前 `release/` 仅保留正式 alpha 10 ZIP 与 `.sha256`，技术候选及历史审计仍留存。
 
-第一阶段到本地技术候选交付即停止，不 push、PR、merge、tag、GitHub Release 或上传资产。正式发布需另行授权，从合并后的干净 main 重建，技术候选不可直接发布。
+本地技术候选交付即停止，不 push、PR、merge、tag、GitHub Release 或上传资产。正式发布需另行授权，从合并后的干净 main 重建，技术候选不可直接发布。发布及匿名核验通过后，仅以文档 PR 收口，不重建或替换已公开资产。
 
 `.desktop-runtime/` 位于项目根目录并被 Git 忽略。源码诊断日志位于 `.desktop-runtime/logs/`；`config/secret.dat` 为当前 Windows 用户的 DPAPI 密文；`cache/arxiv/last_request_time.txt` 为请求间隔记录。候选在当前进程冻结；开始分析后将其写入本次工作库，不作为跨运行历史。
 

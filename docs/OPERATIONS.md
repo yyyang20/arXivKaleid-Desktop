@@ -70,7 +70,7 @@ git status --short
 
 ## Desktop 公开发布
 
-alpha 10 第一阶段仅执行本地开发与技术候选验收，具体停止点见 [Desktop 运行手册](desktop/DESKTOP_OPERATIONS.md#运行目录与凭据)。本阶段不进行任何远程写入；最终 release 仅保留一份干净候选 ZIP/校验，旧文件原样归档到项目内忽略目录，不使用下述正式发布后的删除流程。正式发行须另行授权并从合并后的干净 main 重建。
+本地技术候选仅用于人工验收，验证要求见 [Desktop 运行手册](desktop/DESKTOP_OPERATIONS.md#portable-零模型验证)。技术候选交付即停止，不进行远程写入；正式发行须另获授权并从合并后的干净 main 重建，不得直接上传技术候选。当前 alpha 10 已按本节流程完成公开发行，身份与验证记录见 [CHANGELOG](CHANGELOG.md)。
 
 当前 Desktop 仓库保存应用源码、测试、构建配置和项目文档；Windows portable ZIP 与 `.sha256` 通过本仓库 GitHub Releases 发布，不进入 Git 历史。
 
