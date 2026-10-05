@@ -12,7 +12,7 @@ import sys
 import tempfile
 import unittest
 from contextlib import ExitStack, nullcontext
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from types import MappingProxyType
 from unittest.mock import patch
@@ -326,12 +326,35 @@ class DesktopAnalysisTests(unittest.TestCase):
                 self.assertEqual(worker.result.recommendation_count, 0)
                 self.assertEqual(worker.result.candidate_count, snapshot.round1_count)
                 self.assertIsNotNone(worker.result.report_completed_at.utcoffset())
+                self.assertEqual(worker.result.fetch_completed_at, snapshot.completed_at)
+                self.assertEqual(worker.result.candidate_date, snapshot.candidate_date)
                 record = store.read(attempt.operation_id)
                 self.assertEqual(record.markdown, worker.result.markdown)
                 self.assertNotIn("fake-desktop-key", record.markdown)
                 identities.append(attempt.operation_id)
         # 每次真实分析会重置工作库，独立历史仍保留所有日报。
         self.assertEqual({row.record_id for row in store.list_records()}, set(identities))
+
+    def test_history_dates_stay_bound_to_snapshot_across_midnight(self):
+        from desktop.history import HistoryStore, timestamp_us
+        captured = self.snapshot()
+        fetched = datetime(2026, 10, 4, 15, 59, 58, tzinfo=timezone.utc)
+        completed = datetime(2026, 10, 4, 16, 11, 20, tzinfo=timezone.utc)
+        snapshot = pipeline.CandidateSnapshot(date(2026, 10, 1), fetched, captured.raw_count,
+                                              captured.unique_count, captured.papers)
+        with patch("desktop.analysis.datetime") as clock:
+            clock.now.return_value = completed
+            result = self.run_snapshot(snapshot)
+        self.assertEqual(result.candidate_date, date(2026, 10, 1))
+        self.assertEqual(result.fetch_completed_at, fetched)
+        self.assertEqual(result.report_completed_at, completed)
+        store = HistoryStore(self.root)
+        store.save(result)
+        record = store.read(result.operation_id)
+        self.assertEqual(record.summary.fetch_time_text, "2026-10-04 23:59:58")
+        self.assertEqual(record.summary.time_text, "2026-10-05 00:11:20")
+        self.assertEqual(record.summary.completed_at_us, timestamp_us(completed))
+        self.assertEqual(record.markdown, result.markdown)
 
     def test_history_isolated_after_real_analysis_success_and_failed_reports_not_saved(self):
         import importlib.util

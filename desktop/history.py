@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import sqlite3
 from zoneinfo import ZoneInfo
@@ -16,7 +16,7 @@ from desktop import paths, pipeline
 from desktop.errors import DesktopOperationError, make_issue
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 PAGE_SIZE = 50
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
@@ -39,6 +39,8 @@ class HistorySummary:
     completed_at_us: int
     candidate_count: int
     recommendation_count: int
+    fetch_completed_at_us: int
+    candidate_date: date
 
     @property
     def time_text(self) -> str:
@@ -48,6 +50,11 @@ class HistorySummary:
     @property
     def cursor(self) -> tuple[int, int]:
         return self.completed_at_us, self.sequence
+
+    @property
+    def fetch_time_text(self) -> str:
+        value = EPOCH + timedelta(microseconds=self.fetch_completed_at_us)
+        return value.astimezone(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S")
 
 
 @dataclass(frozen=True)
@@ -88,6 +95,8 @@ class HistoryStore:
                         sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                         record_id TEXT NOT NULL UNIQUE,
                         completed_at_us INTEGER NOT NULL,
+                        fetch_completed_at_us INTEGER NOT NULL,
+                        candidate_date TEXT NOT NULL,
                         candidate_count INTEGER NOT NULL CHECK(candidate_count >= 0),
                         recommendation_count INTEGER NOT NULL CHECK(recommendation_count >= 0),
                         markdown TEXT NOT NULL CHECK(length(markdown) > 0)
@@ -97,7 +106,8 @@ class HistoryStore:
             if connection.execute("PRAGMA user_version").fetchone()[0] != SCHEMA_VERSION:
                 raise HistoryError(make_issue("AKD-HISTORY-INCOMPATIBLE"))
             columns = {row[1] for row in connection.execute("PRAGMA table_info(history)")}
-            if columns != {"sequence", "record_id", "completed_at_us", "candidate_count", "recommendation_count", "markdown"}:
+            if columns != {"sequence", "record_id", "completed_at_us", "fetch_completed_at_us",
+                           "candidate_date", "candidate_count", "recommendation_count", "markdown"}:
                 raise HistoryError(make_issue("AKD-HISTORY-INCOMPATIBLE"))
             yield connection
             if create or operation == "DELETE":
@@ -116,14 +126,18 @@ class HistoryStore:
             if (not isinstance(result.operation_id, str) or not result.operation_id.strip()
                     or type(result.candidate_count) is not int or result.candidate_count < 0
                     or type(result.recommendation_count) is not int or result.recommendation_count < 0
-                    or not isinstance(result.markdown, str) or not result.markdown.strip()):
+                    or not isinstance(result.markdown, str) or not result.markdown.strip()
+                    or type(result.candidate_date) is not date):
                 raise ValueError("history_result_invalid")
             completed = timestamp_us(result.report_completed_at)
+            # 抓取时刻和论文日期只来自冻结快照；日报完成时间仍用于排序。
+            fetched = timestamp_us(result.fetch_completed_at)
             connection.execute("""INSERT INTO history
-                (record_id, completed_at_us, candidate_count, recommendation_count, markdown)
-                VALUES (?, ?, ?, ?, ?)""", (
+                (record_id, completed_at_us, candidate_count, recommendation_count, markdown,
+                 fetch_completed_at_us, candidate_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?)""", (
                 result.operation_id, completed, result.candidate_count,
-                result.recommendation_count, result.markdown,
+                result.recommendation_count, result.markdown, fetched, result.candidate_date.isoformat(),
             ))
 
     @staticmethod
@@ -132,8 +146,13 @@ class HistoryStore:
         if (type(values[0]) is not int or values[0] <= 0 or not isinstance(values[1], str) or not values[1]
                 or any(type(values[i]) is not int for i in (2, 3, 4)) or min(values[3:]) < 0):
             raise ValueError("history_row_invalid")
-        summary = HistorySummary(*values)
+        fetched = row["fetch_completed_at_us"]
+        day = date.fromisoformat(row["candidate_date"])
+        if type(fetched) is not int or day.isoformat() != row["candidate_date"]:
+            raise ValueError("history_fetch_metadata_invalid")
+        summary = HistorySummary(*values, fetched, day)
         summary.time_text  # 提前验证时间范围；不让非法数据进入 GUI。
+        summary.fetch_time_text
         return summary
 
     def list_records(self, cursor: tuple[int, int] | None = None) -> tuple[HistorySummary, ...]:
@@ -146,7 +165,7 @@ class HistoryStore:
                 where = "WHERE (completed_at_us, sequence) < (?, ?)"
                 values = cursor
             rows = connection.execute(f"""SELECT sequence, record_id, completed_at_us,
-                candidate_count, recommendation_count FROM history {where}
+                candidate_count, recommendation_count, fetch_completed_at_us, candidate_date FROM history {where}
                 ORDER BY completed_at_us DESC, sequence DESC LIMIT ?""", (*values, PAGE_SIZE)).fetchall()
             return tuple(self._summary(row) for row in rows)
 

@@ -8,7 +8,7 @@ import logging
 import os
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from threading import Lock
 from typing import Callable
@@ -54,6 +54,8 @@ class AnalysisResult:
     diagnostics_persistent: bool = False
     candidate_count: int = 0
     report_completed_at: datetime | None = None
+    fetch_completed_at: datetime | None = None
+    candidate_date: date | None = None
 
 
 def _call_details(result) -> dict[str, object]:
@@ -883,6 +885,8 @@ class AnalysisAttempt:
                 diagnostics_persistent=(self.diagnostics.persistent if self.diagnostics else False),
                 candidate_count=self.snapshot.round1_count,
                 report_completed_at=report_completed_at,
+                fetch_completed_at=self.snapshot.completed_at,
+                candidate_date=self.snapshot.candidate_date,
             )
         except Exception as exc:
             issue = _analysis_issue(stage, exc)

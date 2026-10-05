@@ -23,7 +23,7 @@ portable 模式的数据位于 `arXivKaleid.exe` 同级 `runtime/` 目录，包�
 - 经 Windows DPAPI 绑定当前 Windows 用户和电脑加密的 `runtime/config/secret.dat`；
 - 候选请求间隔缓存；
 - 当前分析使用的 SQLite 工作库；
-- 独立 `runtime/history/history.sqlite` 中以明文保存的成功日报原始 Markdown、完成时间及候选/推荐数量；正文可能包含论文标题、作者、摘要、推荐理由、费用与本地 PDF 相对路径，但不保存 API Key 或模型原始响应；
+- 独立 `runtime/history/history.sqlite` 中以明文保存的成功日报原始 Markdown、日报完成时间、实际抓取完成时间、论文日期及候选/推荐数量；正文可能包含论文标题、作者、摘要、推荐理由、费用与本地 PDF 相对路径，但不保存 API Key 或模型原始响应；
 - 已下载的论文 PDF 及提取后的全文工作数据。
 - `runtime/logs/` 下按应用会话生成的脱敏 JSONL 诊断，包括阶段、稳定代码、耗时、计数、关联 ID 和安全网络字段。
 

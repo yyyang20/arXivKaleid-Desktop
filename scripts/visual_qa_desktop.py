@@ -121,7 +121,7 @@ def main():
         ))
         if not gate.wait(15):
             raise RuntimeError("qa_fetch_gate_timeout")
-        return synthetic_snapshot()
+        return report_snapshot(day)
 
     def analyze(attempt, _key, progress):
         for stage, message, count, total in (

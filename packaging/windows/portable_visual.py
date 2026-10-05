@@ -3,7 +3,7 @@
 # See LICENSE in the project root for the full license text.
 
 """冻结诊断专用合成状态；不提供正式业务入口、不引入测试库。"""
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import ctypes
 import gc
 import os
@@ -16,14 +16,14 @@ from contextlib import closing
 
 from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QFont
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMessageBox, QStyleOptionViewItem
 from desktop import app
 from desktop.errors import make_issue
 from desktop.progress import ProgressEvent
 from desktop.secrets import SecretError
 from desktop.date_picker import qt_date
 from desktop import paths, pipeline
-from desktop.history import HistoryError
+from desktop.history import HistoryError, timestamp_us
 from desktop.report import build_desktop_report
 import main
 import run_round2
@@ -41,7 +41,8 @@ def synthetic_snapshot(day):
         abs_url=f"https://arxiv.org/abs/2610.{i:05d}v1",
         pdf_url=f"https://arxiv.org/pdf/2610.{i:05d}v1",
     ) for i in range(117))
-    return app.CandidateSnapshot(day, datetime.now(timezone.utc), 126, 117, papers)
+    # 隔离诊断故意拉开抓取与生成时刻，防止两者错误地复用同一字段。
+    return app.CandidateSnapshot(day, datetime.now(timezone.utc) - timedelta(hours=2), 126, 117, papers)
 
 
 def synthetic_analysis_result(attempt, source_root=None, *, recommendation_count=4):
@@ -91,7 +92,9 @@ def synthetic_analysis_result(attempt, source_root=None, *, recommendation_count
         markdown = build_desktop_report(connection, fulltext_database, run_id, attempt.snapshot)
     return app.AnalysisResult(run_id, markdown, len(recommendations), operation_id=attempt.operation_id,
                               snapshot_id=attempt.snapshot.snapshot_id, candidate_count=attempt.snapshot.round1_count,
-                              report_completed_at=datetime.now(timezone.utc))
+                              report_completed_at=datetime.now(timezone.utc),
+                              fetch_completed_at=attempt.snapshot.completed_at,
+                              candidate_date=attempt.snapshot.candidate_date)
 
 
 def exercise_history(application, window, capture, wait, source_root=None):
@@ -101,8 +104,11 @@ def exercise_history(application, window, capture, wait, source_root=None):
     try:
         first = window.history_store.list_records()[0].record_id
         window.switch_page(window.home_page)
+        # 第二次抓取使用另一个论文日期；历史必须记录各自快照，不能读当前日期控件。
+        window.selected_date = window.beijing_today() - timedelta(days=4)
         window.start_fetch()
         wait(lambda: window.worker is None)
+        zero_snapshot = window.snapshot
         app.AnalysisAttempt.run = lambda attempt, _key, _progress: synthetic_analysis_result(
             attempt, source_root, recommendation_count=0)
         window.start_analysis()
@@ -111,8 +117,18 @@ def exercise_history(application, window, capture, wait, source_root=None):
         window.switch_page(window.history_page)
         wait(lambda: window.history_worker is None and not window._history_jobs)
         assert window.history_page.model.rowCount() == 2
+        for row in window.history_page.model.rows:
+            text = window.history_page.model.data(window.history_page.model.index(
+                window.history_page.model.rows.index(row), 0))
+            assert f"抓取时间 {row.fetch_time_text}" in text
+            assert f"论文日期 {row.candidate_date.isoformat()}" in text
+            assert row.fetch_completed_at_us < row.completed_at_us
         capture("10-history")
         zero = window.history_page.model.rows[0].record_id
+        zero_record = window.history_store.read(zero)
+        assert zero_record.summary.fetch_completed_at_us == timestamp_us(zero_snapshot.completed_at)
+        assert zero_record.summary.candidate_date == zero_snapshot.candidate_date
+        assert zero_record.summary.candidate_date != window.history_store.read(first).summary.candidate_date
         for record_id, name in ((first, "10b-history-detail"), (zero, "10c-history-zero")):
             record = window.history_store.read(record_id)
             window.open_history_record(record_id)
@@ -155,6 +171,21 @@ def exercise_history(application, window, capture, wait, source_root=None):
         capture("10e-history-deleted")
         window.resize(850, 680)
         window.history_page.setFont(QFont("Microsoft YaHei UI", 12))
+        window.history_page.list_view.setFont(QFont("Microsoft YaHei UI", 12))
+        # 仅验证副本覆盖 Fluent 的列表字体，确保较大字体场景实际生效。
+        window.history_page.list_view.setStyleSheet(window.history_page.list_view.styleSheet() +
+            "QListView {font-family: 'Microsoft YaHei UI'; font-size: 12pt;}")
+        window.history_page.list_view.doItemsLayout()
+        application.processEvents()
+        for i, row in enumerate(window.history_page.model.rows):
+            option = QStyleOptionViewItem()
+            window.history_page.list_view.initViewItemOption(option)
+            assert option.font.pointSize() == 12
+            option.rect = window.history_page.list_view.visualRect(window.history_page.model.index(i, 0))
+            _, title, caption = window.history_page.delegate.text_layout(option, row, option.rect.width())
+            assert caption.bottom() < option.rect.height() - 5
+            assert title.bottom() < caption.top()
+            assert caption.right() < window.history_page.delegate.delete_rect(option.rect).left()
         capture("10f-history-large-font-small-window")
         window.open_history_record(first)
         wait(lambda: window.history_worker is None)
@@ -179,9 +210,13 @@ def exercise_history(application, window, capture, wait, source_root=None):
         capture("10h-history-save-failed")
         records = window.history_store.list_records()
         assert len(records) == 2
-        return {"exact_generated_reports": True, "normal_zero_saved": True, "delete_default_cancel": True,
+        return {"exact_generated_reports": True, "dates_from_snapshot": True,
+                "normal_zero_saved": True, "delete_default_cancel": True,
                 "delete_committed": True, "save_failure_keeps_success": True, "deleted_id": deleted_id,
                 "records": [{"id": row.record_id, "recommendation_count": row.recommendation_count,
+                             "candidate_date": row.candidate_date.isoformat(),
+                             "fetch_completed_at_us": row.fetch_completed_at_us,
+                             "completed_at_us": row.completed_at_us,
                              "sha256": hashlib.sha256(window.history_store.read(row.record_id).markdown.encode("utf-8")).hexdigest()}
                             for row in records]}
     finally:

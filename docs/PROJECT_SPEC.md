@@ -28,7 +28,7 @@
 | Round 2 策略 | `full_text_budget_exclusion_v3` |
 | Round 2 输出传输 | `responses_named_tool_auto_v2` |
 | Desktop 主工作 SQLite | schema v1 |
-| Desktop 独立历史 SQLite | schema v1 |
+| Desktop 独立历史 SQLite | schema v2 |
 
 两份 Prompt 均自包含完整研究边界，请求不注入独立 Research Profile 内容。`profile_v2` 只作为请求、SQLite 和缓存中的兼容标识，不代表存在独立 Profile 文件或旧请求恢复入口。提示词、模板、策略、提取器或 schema 改变时必须同步对应身份、缓存、兼容读取、测试和文档；历史提示词文件不得覆盖。
 
@@ -111,7 +111,7 @@ Round 2 必须同时阅读门控后的全部合格全文：
 
 这些工作库只服务当前 attempt，不是跨运行历史数据库。固定工作库重置、sidecar、文件锁及 PDF 保留方式见 [一次性两轮分析](desktop/DESKTOP_SPEC.md#一次性两轮分析)。SQLite、PDF、报告、日志和缓存不得提交 Git。
 
-独立历史库 `history/history.sqlite` 使用 schema v1，保存 operation ID、UTC 微秒日报完成时间、候选数、最终推荐数和原始 Markdown；同日多次成功分别保存，按完成时间及入库序号倒序。候选数取冻结快照 `round1_count`，最终推荐数取已校验的分析结果，不解析 Markdown 推算。正常零推荐保存，抓取、分析或日报生成失败不保存。历史写入在最终分析成功后独立尝试一次，失败不改写工作库成功、不触发重新分析；读取、删除及未知 schema 错误也不重建或清空历史。页面、保留与删除规则见 [日报历史](desktop/DESKTOP_SPEC.md#日报历史)。
+独立历史库 `history/history.sqlite` 使用 schema v2，保存 operation ID、UTC 微秒日报完成时间及抓取完成时间、ISO 论文日期、候选数、最终推荐数和原始 Markdown；同日多次成功分别保存，按日报完成时间及入库序号倒序。抓取完成时间与论文日期直接来自本次冻结快照 `completed_at`、`candidate_date`；候选数取快照 `round1_count`，最终推荐数取已校验的分析结果，不解析 Markdown 推算日期或计数。正常零推荐保存，抓取、分析或日报生成失败不保存。历史写入在最终分析成功后独立尝试一次，失败不改写工作库成功、不触发重新分析；读取、删除及未知 schema 错误也不重建或清空历史。页面、保留与删除规则见 [日报历史](desktop/DESKTOP_SPEC.md#日报历史)。
 
 ## Token 与费用
 

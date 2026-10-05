@@ -12,7 +12,7 @@
 | `desktop/diagnostics.py` | session/operation/snapshot/fetch/run 关联、脱敏 JSONL、安全 traceback、计时与内存降级 |
 | `desktop/app.py` | QApplication、导航、首次告知、Key 保存、抓取/分析/历史 QThread、成功后独立保存历史与生命周期 |
 | `desktop/pages.py` | 首页、设置页与历史页入口；抓取信息卡、密码框、About 和 Markdown/空态布局 |
-| `desktop/history.py` | 无 Qt 的独立历史 schema v1、事务保存、元数据游标分页、原始正文读取和删除 |
+| `desktop/history.py` | 无 Qt 的独立历史 schema v2、双时间及论文日期、事务保存、元数据游标分页、原始正文读取和删除 |
 | `desktop/history_page.py` | 历史列表模型与卡片委托、主体/删除命中区、列表/详情切换与 Markdown 展示 |
 | `desktop/date_picker.py` | 首页 Qt 月历弹层、365 天范围、月份导航限制、今天标记和屏幕内定位 |
 | `desktop/style.py` | alpha 7 三页共享灰蓝调色板、输入框样式与低对比度卡片绘制 |

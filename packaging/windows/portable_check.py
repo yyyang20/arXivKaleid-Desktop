@@ -80,11 +80,15 @@ def run_recovery():
             for item in expected['records']:
                 record = store.read(item['id'])
                 assert record.summary.recommendation_count == item['recommendation_count']
+                assert record.summary.candidate_date.isoformat() == item['candidate_date']
+                assert record.summary.fetch_completed_at_us == item['fetch_completed_at_us']
+                assert record.summary.completed_at_us == item['completed_at_us']
                 assert hashlib.sha256(record.markdown.encode('utf-8')).hexdigest() == item['sha256']
                 window.open_history_record(item['id'])
                 wait_history()
                 assert 'arXivKaleid Desktop 日报' in window.history_page.report.toPlainText()
             result['history_restored_exactly'] = True
+            result['history_dates_restored_exactly'] = True
             result['deleted_history_stays_deleted'] = True
         window.close()
         result.update(ok=True, synthetic_dpapi_recovered=True)

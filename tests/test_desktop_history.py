@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from contextlib import closing
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import sqlite3
 import subprocess
@@ -20,6 +20,8 @@ from desktop.history import HistoryError, HistoryStore, PAGE_SIZE, timestamp_us
 
 ROOT = Path(__file__).resolve().parents[1]
 TIME = datetime(2026, 10, 5, 14, 11, 12, 123456, tzinfo=timezone.utc)
+FETCH_TIME = datetime(2026, 10, 4, 21, 11, 20, 654321, tzinfo=timezone.utc)
+PAPER_DATE = date(2026, 10, 1)
 BODY = "# 当次实际日报\n\n## 原有顺序\n\n**中文** 与 `代码`\n\n- [论文](https://arxiv.org/abs/2609.00001v1)\n\n末尾空行\n\n"
 
 
@@ -34,7 +36,8 @@ class DesktopHistoryTests(unittest.TestCase):
 
     def result(self, identity="one", time=TIME, count=3):
         return AnalysisResult(1, BODY, count, operation_id=identity,
-                              candidate_count=41, report_completed_at=time)
+                              candidate_count=41, report_completed_at=time,
+                              fetch_completed_at=FETCH_TIME, candidate_date=PAPER_DATE)
 
     def test_exact_body_metadata_and_new_process_restart(self):
         self.store.save(self.result())
@@ -42,12 +45,23 @@ class DesktopHistoryTests(unittest.TestCase):
         self.assertEqual(record.markdown, BODY)
         self.assertEqual(record.summary.time_text, "2026-10-05 22:11:12")
         self.assertEqual(record.summary.completed_at_us, timestamp_us(TIME))
+        self.assertEqual(record.summary.fetch_time_text, "2026-10-05 05:11:20")
+        self.assertEqual(record.summary.fetch_completed_at_us, timestamp_us(FETCH_TIME))
+        self.assertEqual(record.summary.candidate_date, PAPER_DATE)
         self.assertEqual((record.summary.candidate_count, record.summary.recommendation_count), (41, 3))
         # 新进程真实读库，不依赖当前对象、Qt、Key、工作库或生成器。
-        script = "from pathlib import Path; import sys; from desktop.history import HistoryStore; r=HistoryStore(Path(sys.argv[1])).read('one'); print(r.summary.completed_at_us); print(r.markdown, end='')"
+        script = "from pathlib import Path; import sys; from desktop.history import HistoryStore; r=HistoryStore(Path(sys.argv[1])).read('one'); print(r.summary.completed_at_us); print(r.summary.fetch_completed_at_us); print(r.summary.candidate_date.isoformat()); print(r.markdown, end='')"
         completed = subprocess.run([sys.executable, "-B", "-X", "utf8", "-c", script, str(self.root)],
                                    cwd=ROOT, capture_output=True, encoding="utf-8", check=True)
-        self.assertEqual(completed.stdout, str(timestamp_us(TIME)) + "\n" + BODY)
+        self.assertEqual(completed.stdout, f"{timestamp_us(TIME)}\n{timestamp_us(FETCH_TIME)}\n{PAPER_DATE.isoformat()}\n" + BODY)
+
+    def test_sort_uses_report_time_instead_of_fetch_time_or_paper_date(self):
+        self.store.save(replace(self.result("older"), fetch_completed_at=TIME, candidate_date=date(2026, 10, 5)))
+        self.store.save(replace(self.result("newer", TIME + timedelta(days=1)),
+                                fetch_completed_at=FETCH_TIME - timedelta(days=1), candidate_date=date(2026, 9, 29)))
+        rows = self.store.list_records()
+        self.assertEqual([row.record_id for row in rows], ["newer", "older"])
+        self.assertEqual(rows[0].fetch_time_text, "2026-10-04 05:11:20")
 
     def test_empty_read_and_delete_do_not_create_database(self):
         self.assertEqual(self.store.list_records(), ())
@@ -94,10 +108,43 @@ class DesktopHistoryTests(unittest.TestCase):
         for result in (replace(self.result("two"), markdown=""),
                        replace(self.result("two"), candidate_count=-1),
                        replace(self.result("two"), report_completed_at=None),
-                       replace(self.result("two"), report_completed_at=TIME.replace(tzinfo=None))):
+                       replace(self.result("two"), report_completed_at=TIME.replace(tzinfo=None)),
+                       replace(self.result("two"), fetch_completed_at=None),
+                       replace(self.result("two"), fetch_completed_at=FETCH_TIME.replace(tzinfo=None)),
+                       replace(self.result("two"), candidate_date=None),
+                       replace(self.result("two"), candidate_date="2026-10-01"),
+                       replace(self.result("two"), candidate_date=FETCH_TIME)):
             with self.assertRaises(HistoryError):
                 self.store.save(result)
         self.assertEqual(len(self.store.list_records()), 1)
+
+    def test_invalid_stored_fetch_metadata_is_rejected(self):
+        self.store.save(self.result())
+        for field, value in (("candidate_date", "2026-02-30"), ("candidate_date", "20261001"),
+                             ("fetch_completed_at_us", "invalid")):
+            with self.subTest(field=field, value=value):
+                with closing(sqlite3.connect(self.store.database)) as connection, connection:
+                    connection.execute(f"UPDATE history SET {field}=?", (value,))
+                for operation in (self.store.list_records, lambda: self.store.read("one")):
+                    with self.assertRaises(HistoryError):
+                        operation()
+                with closing(sqlite3.connect(self.store.database)) as connection, connection:
+                    connection.execute("UPDATE history SET candidate_date=?, fetch_completed_at_us=?",
+                                       (PAPER_DATE.isoformat(), timestamp_us(FETCH_TIME)))
+
+    def test_previous_technical_schema_is_preserved_without_migration(self):
+        self.store.database.parent.mkdir(parents=True)
+        with closing(sqlite3.connect(self.store.database)) as connection, connection:
+            connection.execute("CREATE TABLE history (record_id TEXT, markdown TEXT)")
+            connection.execute("INSERT INTO history VALUES ('old', 'preserve old synthetic report')")
+            connection.execute("PRAGMA user_version=1")
+        before = self.store.database.read_bytes()
+        for operation in (self.store.list_records, lambda: self.store.read("old"),
+                          lambda: self.store.delete("old"), lambda: self.store.save(self.result())):
+            with self.assertRaises(HistoryError) as caught:
+                operation()
+            self.assertEqual(caught.exception.issue.code, "AKD-HISTORY-INCOMPATIBLE")
+            self.assertEqual(self.store.database.read_bytes(), before)
 
     def test_commit_failure_rolls_back_save_and_delete(self):
         self.store.save(self.result())

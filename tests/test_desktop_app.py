@@ -141,7 +141,9 @@ class DesktopAppTests(IsolatedDesktopTest):
                                    message="已处理 2 / 3", processed=2, total=3))
             gate.wait(3)
             return app.AnalysisResult(7, "# 测试日报", 0, operation_id="synthetic-operation",
-                                      candidate_count=1, report_completed_at=datetime.now(timezone.utc))
+                                      candidate_count=1, report_completed_at=datetime.now(timezone.utc),
+                                      fetch_completed_at=_attempt.snapshot.completed_at,
+                                      candidate_date=_attempt.snapshot.candidate_date)
 
         with patch.object(app.AnalysisAttempt, "run", analyze):
             self.window.start_analysis()
@@ -497,7 +499,9 @@ class DesktopAppTests(IsolatedDesktopTest):
             gate.wait(3)
             return app.AnalysisResult(1, "# 测试日报\n\n**推荐内容**", 1,
                                       operation_id=attempt.operation_id, candidate_count=1,
-                                      report_completed_at=datetime.now(timezone.utc))
+                                      report_completed_at=datetime.now(timezone.utc),
+                                      fetch_completed_at=attempt.snapshot.completed_at,
+                                      candidate_date=attempt.snapshot.candidate_date)
 
         with patch.object(app.AnalysisAttempt, "run", analyze):
             self.window.show()
@@ -575,6 +579,7 @@ class DesktopAppTests(IsolatedDesktopTest):
             operation_id="operation-safe-id",
             snapshot_id=self.result.snapshot_id,
             candidate_count=1, report_completed_at=datetime.now(timezone.utc),
+            fetch_completed_at=self.result.completed_at, candidate_date=self.result.candidate_date,
         )
         with patch.object(app.AnalysisAttempt, "run", return_value=result), patch.object(
             self.window.report, "setMarkdown", side_effect=RuntimeError("private renderer")
@@ -589,7 +594,46 @@ class DesktopAppTests(IsolatedDesktopTest):
     def history_result(self, record_id="history-one", count=0):
         return app.AnalysisResult(7, "# 实际原始日报\n\n## 原有章节\n\n**中文**\n\n", count,
                                   operation_id=record_id, candidate_count=41,
-                                  report_completed_at=datetime.now(timezone.utc))
+                                  report_completed_at=datetime.now(timezone.utc),
+                                  fetch_completed_at=datetime(2026, 10, 4, 21, 11, 20, tzinfo=timezone.utc),
+                                  candidate_date=date(2026, 10, 1))
+
+    def test_history_card_uses_structured_dates_and_wraps_without_button_overlap(self):
+        from PySide6.QtGui import QFont
+        from PySide6.QtWidgets import QStyleOptionViewItem
+        self.window.history_store.save(self.history_result())
+        self.window.show()
+        self.show_history()
+        page = self.window.history_page
+        index = page.model.index(0, 0)
+        text = index.data(Qt.ItemDataRole.AccessibleTextRole)
+        self.assertIn("抓取时间 2026-10-05 05:11:20 北京时间", text)
+        self.assertIn("论文日期 2026-10-01", text)
+        self.assertIn("候选 41 篇，推荐 0 篇", text)
+        # 使用真实视图矩形验证窄窗口与大字体的布局，而非只检查字符串。
+        for width, size in ((1060, 10), (850, 12), (850, 16)):
+            self.window.resize(width, 680)
+            page.setFont(QFont("Microsoft YaHei UI", size))
+            page.list_view.setFont(QFont("Microsoft YaHei UI", size))
+            # Fluent 样式会覆盖继承字体；在隔离测试中明确放大实际列表字体。
+            page.list_view.setStyleSheet(page.list_view.styleSheet() +
+                                        f"QListView {{font-family: 'Microsoft YaHei UI'; font-size: {size}pt;}}")
+            page.list_view.doItemsLayout()
+            self.application.processEvents()
+            option = QStyleOptionViewItem()
+            page.list_view.initViewItemOption(option)
+            self.assertEqual(option.font.pointSize(), size)
+            option.rect = page.list_view.visualRect(index)
+            _, title, caption = page.delegate.text_layout(option, page.model.rows[0], option.rect.width())
+            button = page.delegate.delete_rect(option.rect)
+            self.assertLess(title.bottom(), caption.top())
+            self.assertLess(caption.bottom(), option.rect.height() - 5)
+            self.assertLess(caption.right(), button.left())
+        record = self.window.history_store.read("history-one")
+        self.window.open_history_record("history-one")
+        self.wait_until(lambda: self.window.history_worker is None)
+        self.assertIn(record.summary.time_text, page.detail_meta.text())
+        self.assertNotIn("抓取时间", page.detail_meta.text())
 
     def show_history(self):
         self.window.switch_page(self.window.history_page)

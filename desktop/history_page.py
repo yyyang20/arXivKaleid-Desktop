@@ -4,7 +4,7 @@
 
 """历史页面与虚拟卡片；只呈现不可变快照，不读取数据库或生成日报。"""
 from PySide6.QtCore import QAbstractListModel, QEvent, QRect, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QPen
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView, QListView, QStackedWidget, QStyledItemDelegate,
     QStyle, QTextBrowser, QVBoxLayout, QWidget,
@@ -33,7 +33,8 @@ class HistoryModel(QAbstractListModel):
             return None
         row = self.rows[index.row()]
         if role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.AccessibleTextRole):
-            return f"{row.time_text} 北京时间，候选 {row.candidate_count} 篇，推荐 {row.recommendation_count} 篇"
+            return (f"抓取时间 {row.fetch_time_text} 北京时间，论文日期 {row.candidate_date.isoformat()}，"
+                    f"候选 {row.candidate_count} 篇，推荐 {row.recommendation_count} 篇")
         if role == Qt.ItemDataRole.UserRole:
             return row
         return None
@@ -83,7 +84,31 @@ class HistoryDelegate(QStyledItemDelegate):
         return QRect(rect.right() - 106, rect.center().y() - 20, 88, 40)
 
     def sizeHint(self, option, index):
-        return QSize(300, max(104, option.fontMetrics.height() * 3 + 30))
+        row = index.data(Qt.ItemDataRole.UserRole)
+        if row is None:
+            return QSize(300, 104)
+        width = self.parent().viewport().width()
+        _, title, caption = self.text_layout(option, row, width)
+        return QSize(300, max(104, caption.bottom() + 26))
+
+    @staticmethod
+    def card_text(row):
+        return (f"抓取时间 {row.fetch_time_text}",
+                f"论文日期 {row.candidate_date.isoformat()}  ·  候选 {row.candidate_count} 篇  ·  推荐 {row.recommendation_count} 篇")
+
+    @classmethod
+    def text_layout(cls, option, row, width):
+        # 绘制与高度计算使用同一字体、宽度和换行规则，避免窄窗口遮住日期或删除按钮。
+        font = QFont(option.font)
+        font.setBold(True)
+        title_text, caption_text = cls.card_text(row)
+        available = max(1, width - 195)
+        flags = Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap
+        title_height = QFontMetrics(font).boundingRect(QRect(0, 0, available, 10000), flags, title_text).height()
+        caption_height = option.fontMetrics.boundingRect(QRect(0, 0, available, 10000), flags, caption_text).height()
+        title = QRect(72, 24, available, title_height)
+        caption = QRect(72, title.bottom() + 11, available, caption_height)
+        return font, title, caption
 
     def paint(self, painter, option, index):
         row = index.data(Qt.ItemDataRole.UserRole)
@@ -98,17 +123,18 @@ class HistoryDelegate(QStyledItemDelegate):
         icon = QRect(rect.left() + 18, rect.center().y() - 18, 36, 36)
         FluentIcon.DOCUMENT.icon(color=QColor(ACCENT)).paint(painter, icon)
         button = self.delete_rect(option.rect)
-        title = QRect(icon.right() + 18, rect.top() + 18, max(0, button.left() - icon.right() - 34), option.fontMetrics.height() + 4)
-        font = option.font
-        font.setBold(True)
+        font, title, caption = self.text_layout(option, row, option.rect.width())
+        title.translate(option.rect.topLeft())
+        caption.translate(option.rect.topLeft())
+        title_text, caption_text = self.card_text(row)
+        flags = Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap
         painter.setFont(font)
         painter.setPen(QColor(TEXT_PRIMARY))
-        painter.drawText(title, Qt.AlignmentFlag.AlignVCenter, row.time_text)
+        painter.drawText(title, flags, title_text)
         font.setBold(False)
         painter.setFont(font)
         painter.setPen(QColor(TEXT_SECONDARY))
-        caption = f"候选 {row.candidate_count} 篇  ·  推荐 {row.recommendation_count} 篇"
-        painter.drawText(title.translated(0, option.fontMetrics.height() + 10), Qt.AlignmentFlag.AlignVCenter, caption)
+        painter.drawText(caption, flags, caption_text)
         painter.setBrush(QColor(CARD_BACKGROUND))
         painter.setPen(QPen(QColor(CARD_BORDER), 1))
         painter.drawRoundedRect(button, 5, 5)
@@ -166,7 +192,8 @@ class HistoryPage(QWidget):
         self.model = HistoryModel(self)
         self.list_view = HistoryList()
         self.list_view.setModel(self.model)
-        self.list_view.setUniformItemSizes(True)
+        self.list_view.setUniformItemSizes(False)
+        self.list_view.setResizeMode(QListView.ResizeMode.Adjust)
         self.list_view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.list_view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.list_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
