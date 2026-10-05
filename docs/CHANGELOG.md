@@ -2,6 +2,12 @@
 
 本文件保留 Desktop 与通用功能的简短历史。代码解耦前的条目来自原项目：当时的发行来源、构建提交、兼容行为和治理测试仅表示历史事实，不代表当前仓库仍有这些入口或测试。现行行为以代码、配置、测试和 [当前业务规范](PROJECT_SPEC.md) 为准；详细历史通过 Git、PR 和 Issue 查询。
 
+## 2026-10-05：Desktop alpha 10 本地开发
+
+- 新增两轮独立研究要求查看、编辑、保存、取消和确认恢复默认；未保存离开保护，分析期间只读。当前目录持久化、损坏记录阻止分析，不跨版本迁移。
+- 新增固定 `round1_v21` / `round2_v16` 与默认研究要求资源，历史 Prompt 保留；保存值冻结进入请求、哈希、缓存及原有 Token/费用预检，配置升级为 `desktop_config_v2`。
+- 历史详情在原日报生成完成时间前增加“生成时间”，原始正文、卡片抓取时间及 schema 不变。补充离线回归、源码/冻结 GUI 和 portable 技术验收入口；本阶段不公开发布。
+
 ## 2026-10-05：Desktop alpha 9 公开发行
 
 - 已公开 [v0.1.0-alpha.9 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.9)。[功能 PR #14](https://github.com/yyyang20/arXivKaleid-Desktop/pull/14) 合并后，从干净 main 提交 `8afcc98c8ebb321de2b46eccfdd4b89f3cc16bd1` 重建正式 Windows x64 portable；tag 与 BUILD_INFO 一致，用途为 public-release，未使用第一阶段技术候选发布。

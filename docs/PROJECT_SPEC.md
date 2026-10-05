@@ -17,12 +17,12 @@
 
 | 项目 | 当前值 |
 |---|---|
-| Desktop 版本 | `0.1.0-alpha.9` |
-| Desktop 配置 | `desktop_config_v1` |
+| Desktop 版本 | `0.1.0-alpha.10` |
+| Desktop 配置 | `desktop_config_v2` |
 | Round 1 模型 | `deepseek-flash` |
 | Round 2 模型 | `deepseek-flash` |
-| Round 1 提示词 | `round1_v20` |
-| Round 2 提示词 | `round2_v15` |
+| Round 1 提示词 | `round1_v21` |
+| Round 2 提示词 | `round2_v16` |
 | 研究画像兼容标识 | `profile_v2` |
 | Round 1 策略 | `top_k_daily_budget_v4` |
 | Round 2 策略 | `full_text_budget_exclusion_v3` |
@@ -30,7 +30,15 @@
 | Desktop 主工作 SQLite | schema v1 |
 | Desktop 独立历史 SQLite | schema v2 |
 
-两份 Prompt 均自包含完整研究边界，请求不注入独立 Research Profile 内容。`profile_v2` 只作为请求、SQLite 和缓存中的兼容标识，不代表存在独立 Profile 文件或旧请求恢复入口。提示词、模板、策略、提取器或 schema 改变时必须同步对应身份、缓存、兼容读取、测试和文档；历史提示词文件不得覆盖。
+两轮采用固定协议与独立研究要求。固定协议作为 system 消息，生效研究要求作为 user JSON 的 `research_requirements` 字符串；默认研究要求资源分别为 `research_requirements_round1_v1.txt` 和 `research_requirements_round2_v1.txt`。四份资源均受配置哈希校验。`profile_v2` 仅为兼容标识，不读取独立 Profile 文件。旧 `round1_v20` / `round2_v15` 原样保留，不作为现行运行或打包资源。
+
+## 研究要求
+
+用户仅自定义研究方向、筛选目标、研究边界、关注/排除条件和阅读价值偏好。标签名称、核心标签限制、数量上限、排序机制、输出字段及身份、安全约束、本地校验、Token 和费用边界不可编辑。默认要求保留拆分前的研究语义；逐条对照见 [Prompt 拆分核对](desktop/PROMPT_SPLIT.md)。研究要求不能作为模板、代码或系统指令执行，也不建立任意标签或通用筛选器。
+
+每轮保存一份当前运行根 `config/roundN_research_requirements.json`，格式 `research_requirements_v1`，正文为字符串或 null；缺失/null 表示内置默认。两轮独立，重启恢复；不跨目录搜索或迁移。文本统一 LF，拒绝空白、NUL、无效 Unicode 和超过 10,000 字符。原子替换成功才更新生效状态；损坏/未知格式保留文件并阻止分析，确认恢复本轮默认后才替换。
+
+告知和必要检查通过后、消费候选快照前读取两轮保存值并冻结进 attempt；未保存草稿和运行中的后续文件变更不进入本批请求。实际文字进入完整请求哈希、Round 2 缓存身份及 Token/上下文/累计费用预检；日志和数据库审计不保存原始要求正文。模型仍可能违反自然语言要求，安全边界最终由现有本地结果校验执行。
 
 ## 候选收集与时间
 
@@ -38,7 +46,7 @@ Desktop 只查询用户所选北京时间自然日：论文首次提交时间 `p
 
 ## Round 1
 
-Round 1 使用同批候选的标题、摘要、分类和 `round1_v20` 内置研究边界：
+Round 1 使用同批候选的标题、摘要、分类、`round1_v21` 固定协议和当次冻结的第一轮研究要求：
 
 - 最多输出 10 篇，可以不足或为 0。
 - 全部去重候选进入同一次请求，没有论文篇数上限；安全预检超限时停止，不截断、抽样、拆批或提高限额。
@@ -72,7 +80,7 @@ Round 2 必须同时阅读门控后的全部合格全文：
 
 ## 内容标签
 
-当前两轮统一使用四类标签：
+当前两轮统一使用四类标签。以下为默认研究要求的语义，自定义要求可调整研究关注和边界，但不能增加标签或使“其他”入围：
 
 | 标签 | 定义 |
 |---|---|

@@ -1,8 +1,8 @@
 # Desktop 规范
 
-当前版本 `0.1.0-alpha.9` 使用 PySide6 与基础版 PySide6-Fluent-Widgets。主窗口采用 Windows 原生标题栏与 Fluent 导航，页面为首页、历史、设置；版本显示统一读取 `desktop.__version__`。
+当前版本 `0.1.0-alpha.10` 使用 PySide6 与基础版 PySide6-Fluent-Widgets。主窗口采用 Windows 原生标题栏与 Fluent 导航，顺序为首页、提示词、历史、设置；版本显示统一读取 `desktop.__version__`。
 
-三页统一使用浅灰蓝背景、略浅的同色卡片、低对比度冷灰边框、8 px 卡片圆角和一致的页面边距；不使用阴影或装饰性渐变。设置页 API Key 输入框使用接近卡片的灰蓝底色与淡边框，仅在聚焦时显示蓝色描边。布局与样式调整不改变页面信息架构、控件语义或业务行为。
+四页统一使用浅灰蓝背景、略浅的同色卡片、低对比度冷灰边框、8 px 卡片圆角和一致的页面边距；不使用阴影或装饰性渐变。设置页 API Key 输入框使用接近卡片的灰蓝底色与淡边框，仅在聚焦时显示蓝色描边。
 
 ## 页面与任务展示
 
@@ -16,7 +16,7 @@
 
 ## Portable 路径与资源
 
-Windows 10/11 x64 发行形式为 PyInstaller one-folder ZIP，解压后双击 `arXivKaleid.exe`。application root 是 EXE 所在目录，只读 bundled resource root 是其 `_internal/`，所有运行数据均在 EXE 同级 `runtime/`。源码模式使用项目根与 `.desktop-runtime/`。两种模式使用同一 `config.json` 和两份现行自包含提示词，资源哈希由 Desktop 配置校验，不依赖独立自动化策略文件。
+Windows 10/11 x64 发行形式为 PyInstaller one-folder ZIP，解压后双击 `arXivKaleid.exe`。application root 是 EXE 所在目录，只读 bundled resource root 是其 `_internal/`，所有运行数据均在 EXE 同级 `runtime/`。源码模式使用项目根与 `.desktop-runtime/`。两种模式使用同一 `config.json`、两份固定协议和两份默认研究要求，四份资源均校验哈希。
 
 正式 A0 图标使用透明画布上的深海军蓝圆角底板和四色几何 K；SVG 母版位于 `assets/app-icon.svg`，Windows ICO 包含 16、24、32、48、64、256 px 图层，其中 16/24 px 使用同一几何的无渐变简化渲染。`assets/app-icon.ico` 同时用于 Qt 应用/窗口图标和 PyInstaller EXE 图标。
 
@@ -77,11 +77,11 @@ portable 的 SQLite、锁、缓存、PDF、诊断日志、DPAPI 密文分别使�
 
 ## 一次性两轮分析
 
-每次启动窗口后，第一次开始分析前显示简短告知：标题、摘要、通过门控后的 PDF 提取全文和 Prompt 内置研究边界会发送到用户自己的 DeepSeek API，并可能产生费用；API Key 在本机由 DPAPI 加密保存，PDF、SQLite 和缓存位于本机，没有维护者服务器中转或遥测。对话框默认为拒绝；拒绝时不创建分析 attempt、不消费快照、不启动线程或模型请求。用户接受后，本次窗口生命周期不重复提示。
+每次启动窗口后，第一次开始分析前显示简短告知：标题、摘要、通过门控后的 PDF 提取全文和已保存研究要求会发送到用户自己的 DeepSeek API，并可能产生费用；API Key 在本机由 DPAPI 加密保存，PDF、SQLite 和缓存位于本机，没有维护者服务器中转或遥测。对话框默认为拒绝；拒绝时不创建分析 attempt、不消费快照、不启动线程或模型请求。用户接受后，本次窗口生命周期不重复提示。
 
 分析前检查冻结快照、尚未尝试标记和 Key。通过检查后立即消费快照并禁用抓取、日历和分析按钮；后台直接按冻结顺序处理全部 `(arxiv_id, version)` 候选，不重新请求 arXiv、不改变日期、不从历史 SQLite 重建候选。
 
-分析使用现行自包含 Prompt、`profile_v2` 兼容标识、模型、严格校验、选择策略、PDF 下载和全文门控函数；不会另行发送 Research Profile 内容。核心筛选规则见 [PROJECT_SPEC.md](../PROJECT_SPEC.md)。Round 1 完成状态和入围结果写入当前工作库，PDF 只处理实际入围论文，Round 2 只接受当前 run 的合格全文，不补位或重排。
+分析使用现行固定协议、冻结研究要求、`profile_v2` 兼容标识、模型、严格校验、选择策略、PDF 下载和全文门控函数；不会另行发送 Research Profile 内容。核心筛选规则见 [PROJECT_SPEC.md](../PROJECT_SPEC.md)。Round 1 完成状态和入围结果写入当前工作库，PDF 只处理实际入围论文，Round 2 只接受当前 run 的合格全文，不补位或重排。
 
 GUI 当前 Key 显式注入两个客户端；Round 2 需要非空 Key override，不读取传统 Secret 文件。Desktop 不执行 DeepSeek self check；每轮最多一次 HTTP attempt，失败不重试。无候选不调用模型，Round 1 零入围或无合格全文不调用 Round 2，两轮均允许零推荐。
 
@@ -111,12 +111,22 @@ PDF 与全文异常按实际影响范围判断：已进入单篇边界、共享�
 
 日报通过 `QTextBrowser.setMarkdown()` 渲染；仅允许打开正常的 HTTPS arXiv 摘要和 PDF 链接，本地 PDF 以相对路径信息显示。日报不写入根 `reports/daily/`，没有编辑或导出功能。分析及日报生成成功后若仅 GUI Markdown 渲染失败，SQLite run 保持成功，界面明确显示“分析成功、日报展示失败”；该日报仍可保存到历史。
 
+## 提示词页面
+
+主页面提供两轮研究要求入口、用途和已保存的默认/自定义状态。详情页采用同一布局：返回、轮次标题、用途、状态、可滚动纯文本正文及底部操作。查看时只读但可选择复制，固定协议不在编辑区域显示。主页面可滚动；最小窗口和较大字体下正文保留独立滚动与可见按钮。
+
+编辑从最后保存值建立草稿；保存成功后退出编辑，失败保留草稿和旧生效值。取消不写磁盘，恢复进入编辑前的保存值。即使自定义文本等于默认，也仍显示自定义状态。恢复默认确认默认为取消；确认后持久替换本轮覆盖记录为 null、丢弃本轮草稿并返回查看，不影响另一轮。
+
+未保存修改单独标记。返回、切页、关闭或开始分析前提供“保存并继续 / 放弃修改 / 留在此页”，默认留在此页；保存失败不能继续离开，没有修改不弹框。分析期间可查看但禁用编辑、保存和恢复默认。候选抓取、页面切换和历史查看不销毁已有任务、候选或日报。
+
+保存格式、读取错误和实际分析取值见 [研究要求](../PROJECT_SPEC.md#研究要求)。
+
 ## 日报历史
 
 - 只保存最终完整成功的分析结果；Round 1 中间成功、仅抓取成功或任何分析/日报生成失败不保存。正常零推荐也是有效日报。
 - 独立标准库 SQLite：源码 `.desktop-runtime/history/history.sqlite`，portable `runtime/history/history.sqlite`，schema v2。元数据与原始 Markdown 在同一事务保存，operation ID 唯一；同日不同成功运行不去重、不覆盖、不合并。
 - 日报完成时间在生成器返回完整正文后取得，保存 UTC 微秒；列表仍按该时间倒序，同时间按入库序号倒序。抓取完成时间取冻结快照 `completed_at`，同样保存 UTC 微秒；论文日期取快照 `candidate_date`，保存 ISO 日期，表示所选北京时间首次提交自然日，不是 arXiv 公告批次日。日期和计数不从 Markdown 解析。
-- 卡片主行显示“抓取时间 YYYY-MM-DD HH:MM:SS”（北京时间），次行显示“论文日期 YYYY-MM-DD · 候选 N 篇 · 推荐 M 篇”；窄窗口或较大字体允许换行，不遮住删除按钮。候选数取冻结快照 `round1_count`，推荐数取分析结果 `recommendation_count`。详情头部继续显示日报完成时间及计数。
+- 卡片主行显示“抓取时间 YYYY-MM-DD HH:MM:SS”（北京时间），次行显示“论文日期 YYYY-MM-DD · 候选 N 篇 · 推荐 M 篇”；窄窗口或较大字体允许换行，不遮住删除按钮。候选数取冻结快照 `round1_count`，推荐数取分析结果 `recommendation_count`。详情头部显示“生成时间 YYYY-MM-DD HH:MM:SS 北京时间 · 候选 N 篇 · 推荐 M 篇”，使用原有日报完成时间；标签只在外层展示，不修改原始 Markdown、卡片抓取时间或 schema。
 - 列表每批读取 50 条元数据并滚动加载，无保存数量上限。卡片主体打开详情，右侧删除单独响应；回车查看、Delete 请求删除。确认默认取消，事务成功后移除卡片。只删除该条元数据与正文，无回收站；不删除 PDF、工作库、日志或 Key。
 - 详情读取保存的原始 Markdown 交给独立 `QTextBrowser.setMarkdown()`；标题、字段、章节和结构不按 GUI 参考图改写。不重新计算、调用模型或生成器，沿用首页 arXiv HTTPS 链接限制。
 - 分析线程在最终成功后单独尝试一次保存。失败提示“分析成功，历史保存失败；关闭后该日报不会保留”，当次日报与分析成功仍有效。没有人工重试、待保存队列、关闭阻拦或崩溃恢复。

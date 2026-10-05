@@ -61,6 +61,11 @@ def run_recovery():
         application.processEvents()
         assert window.isVisible()
         if previous.get('visual_qa'):
+            from desktop.research_requirements import RequirementsStore
+            for stage, digest in previous['visual_qa']['requirements']['saved_sha256'].items():
+                saved = RequirementsStore().load(stage)
+                assert saved.custom and hashlib.sha256(saved.text.encode('utf-8')).hexdigest() == digest
+            result['research_requirements_restored_exactly'] = True
             # 跨进程验证持久化后的原始正文和删除；不生成或重新分析日报。
             from desktop.history import HistoryStore
             store = HistoryStore()
@@ -142,7 +147,8 @@ def run(*, network=False, visual=False):
                            {'source': 'metadata_abstract', 'quote': 'Synthetic abstract'}]
         assert status == 'valid' and discarded == 0
         report['round1_nonempty_evidence'] = True
-        payload = json.loads(main.build_round2_messages(prompt, profile, [], config)[1]['content'])
+        from desktop.research_requirements import RequirementsStore
+        payload = json.loads(main.build_round2_messages(prompt, profile, [], config, research_requirements=RequirementsStore().load('round2').text)[1]['content'])
         assert 'research_profile' not in payload
         from desktop.secrets import SecretStore
         store = SecretStore()
@@ -195,7 +201,7 @@ def run(*, network=False, visual=False):
         window = desktop_app.DesktopWindow(diagnostics=diagnostics)
         assert window.api_key.text() == SYNTHETIC_KEY
         assert window.open_logs_button.isEnabled()
-        assert window.pages.count() == 3 and window.task_panel.isHidden()
+        assert window.pages.count() == 4 and window.task_panel.isHidden()
         assert window.settings_page.isAncestorOf(window.api_key)
         assert desktop_app.__version__ in window.settings_page.version_label.text()
         from PySide6.QtGui import QIcon

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 import socket
 import subprocess
@@ -30,7 +31,7 @@ from desktop.diagnostics import DesktopDiagnostics
 from desktop.paths import checked_path
 from desktop.progress import ProgressEvent
 from desktop.history import HistoryStore
-from portable_visual import synthetic_snapshot as report_snapshot, synthetic_analysis_result, exercise_history
+from portable_visual import synthetic_snapshot as report_snapshot, synthetic_analysis_result, exercise_history, exercise_requirements
 
 
 class MemorySecretStore:
@@ -72,12 +73,17 @@ def compose_captures(output, filename, items, columns):
 
 
 def main():
-    scratch = checked_path(ROOT, ".codex-validation", "alpha9-visual-qa")
+    scratch = checked_path(ROOT, ".codex-validation", "alpha10-visual-qa")
     scratch.mkdir(parents=True, exist_ok=True)
     output = Path(tempfile.mkdtemp(prefix="capture-", dir=scratch))
+    for relative in ('config.json', *json.loads((ROOT / 'config.json').read_text(encoding='utf-8'))['paths'].values()):
+        target = checked_path(output, relative)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / relative, target)
+    from desktop.research_requirements import RequirementsStore
     application = QApplication.instance() or QApplication([])
     diagnostics = DesktopDiagnostics(output)
-    window = app.DesktopWindow(MemorySecretStore(), diagnostics, history_store=HistoryStore(output))
+    window = app.DesktopWindow(MemorySecretStore(), diagnostics, history_store=HistoryStore(output), requirements_store=RequirementsStore(output))
     window.winId()
     window.windowHandle().setScreen(application.primaryScreen())
     origin = application.primaryScreen().availableGeometry().topLeft()
@@ -155,6 +161,7 @@ def main():
                 patch.object(app.AnalysisAttempt, "run", analyze):
             window.show()
             capture("01-initial")
+            requirements = exercise_requirements(application, window, capture, output)
             window.switch_page(window.history_page)
             wait_until(lambda: window.history_worker is None)
             assert window.history_page.model.rowCount() == 0
@@ -188,6 +195,10 @@ def main():
             window.start_analysis()
             wait_until(lambda: "4 / 9" in window.analysis_progress_text.text())
             capture("05-analyzing")
+            window.switch_page(window.prompt_page)
+            window.prompt_page.open_round('round2')
+            assert window.prompt_page.busy and not window.prompt_page.restore_button.isEnabled()
+            capture('05b-prompts-locked')
             window.switch_page(window.settings_page)
             capture("06-settings-locked")
             window.switch_page(window.home_page)
@@ -229,7 +240,7 @@ def main():
         diagnostics.close()
     (output / "qa.json").write_text(json.dumps({
         "version": app.__version__, "qt_platform": application.platformName(),
-        "offline_synthetic": True, "history": history, "captures": captures,
+        "offline_synthetic": True, "history": history, "requirements": requirements, "captures": captures,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     compose_captures(output, "overview.png", [
         ("01-initial", "初始状态"), ("02-fetching", "正在获取候选"),

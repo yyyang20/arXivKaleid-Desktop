@@ -38,7 +38,7 @@ class DesktopAnalysisTests(unittest.TestCase):
         scratch = PROJECT_ROOT / ".codex-validation"
         scratch.mkdir(exist_ok=True)
         self.root = Path(self.stack.enter_context(tempfile.TemporaryDirectory(dir=scratch)))
-        for name in ("config.json", "prompts/relevance_round1_v20.txt", "prompts/relevance_round2_v15.txt"):
+        for name in ("config.json", *json.loads((PROJECT_ROOT / "config.json").read_text(encoding="utf-8"))["paths"].values()):
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((PROJECT_ROOT / name).read_bytes())
@@ -88,7 +88,7 @@ class DesktopAnalysisTests(unittest.TestCase):
             task = json.loads(payload["input"][1]["content"])
             candidates = task["candidate_papers"]
             data = dict(task_type=main.ROUND2_TASK_TYPE, selection_policy=main.ROUND2_SELECTION_POLICY,
-                        profile_version="profile_v2", prompt_version="round2_v15",
+                        profile_version="profile_v2", prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION,
                         final_recommendations=[dict(arxiv_id=p["arxiv_id"], version=p["version"], content_label="成像", reason="全文给出黑洞成像结果。") for p in candidates[:self.recommendations_limit]])
             result = dict(model="deepseek-flash", status="completed",
                           output=[dict(type="function_call", name="submit_round2_results", arguments=json.dumps(data))],
@@ -111,13 +111,13 @@ class DesktopAnalysisTests(unittest.TestCase):
                 item["evidence"] = self.evidence_by_candidate[index]
             selected.append(item)
         return dict(task_type="round1_abstract_screening", profile_version="profile_v2",
-                    prompt_version="round1_v20", selection_policy="top_k_daily_budget",
+                    prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION, selection_policy="top_k_daily_budget",
                     selection_policy_version="top_k_daily_budget_v4", selected_papers=selected)
 
     def validate_round1(self, papers):
         return main.validate_round1_result(
             self.round1_payload(), papers, max_selected=10,
-            profile_version="profile_v2", prompt_version="round1_v20",
+            profile_version="profile_v2", prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION,
             selection_policy_version="top_k_daily_budget_v4",
         )
 

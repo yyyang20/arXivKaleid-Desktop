@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 from contextlib import ExitStack, closing
 from datetime import datetime, timezone
 import hashlib
@@ -49,6 +50,23 @@ def digest(value):
                                      separators=(',', ':')).encode('utf-8')).hexdigest()
 
 
+def legacy_text(value):
+    return value.replace('round1_v21', 'round1_v20').replace('round2_v16', 'round2_v15')
+
+
+def legacy_request(stage, payload):
+    # alpha 10 有意改变 Prompt 及请求身份；归一化这两处后核验旧业务回归。
+    payload = copy.deepcopy(payload)
+    messages = payload['messages' if stage == 'round1' else 'input']
+    old = 'prompts/relevance_round1_v20.txt' if stage == 'round1' else 'prompts/relevance_round2_v15.txt'
+    original = (ROOT / old).read_text(encoding='utf-8-sig')
+    messages[0]['content'] = original.strip() if stage == 'round1' else original
+    task = json.loads(messages[1]['content'])
+    task.pop('research_requirements')
+    messages[1]['content'] = json.dumps(task, ensure_ascii=False, separators=(',', ':'))
+    return json.loads(legacy_text(json.dumps(payload, ensure_ascii=False)))
+
+
 class DesktopDecouplingTests(unittest.TestCase):
     def test_alpha4_requests_reports_results_pdf_order_usage_and_cost_are_identical(self):
         price = model_usage.price_snapshot_from_config
@@ -86,13 +104,13 @@ class DesktopDecouplingTests(unittest.TestCase):
                 usage = model_usage.load_run_usage_summary(conn, result.run_id)
                 self.assertIn("- 抓取日期（北京时间）：", result.markdown)
                 # alpha 8 只改日期标题；归一化这一处后仍核对旧请求、结果、费用与正文基线。
-                baseline_markdown = result.markdown.replace(
+                baseline_markdown = legacy_text(result.markdown).replace(
                     "- 抓取日期（北京时间）：", "- 本次候选日期（UTC）："
                 )
                 actual = {
-                    'requests': [[stage, digest(payload)] for stage, payload in case.requests],
+                    'requests': [[stage, digest(legacy_request(stage, payload))] for stage, payload in case.requests],
                     'markdown_sha256': hashlib.sha256(baseline_markdown.encode('utf-8')).hexdigest(),
-                    'results': [list(row) for row in rows],
+                    'results': [[legacy_text(item) if isinstance(item, str) else item for item in row] for row in rows],
                     'pdf_urls': case.pdf_urls,
                     'usage': {'attempts': usage.api_attempt_count, 'tokens': usage.known_total_tokens,
                               'cost': str(usage.known_cost)} if usage else None,
@@ -135,6 +153,7 @@ class DesktopDecouplingTests(unittest.TestCase):
                 bundle = run_round2.build_round2_input_bundle(
                     conn, config, profile, prompt, run_id=result.run_id,
                     fulltext_connection=fulltext,
+                    research_requirements=_paths['round2_requirements'].read_text(encoding='utf-8'),
                 )
             status, cached, warnings = run_round2.load_valid_round2_cache(conn, bundle, config)
             self.assertEqual(status, 'cache_hit')
@@ -198,7 +217,7 @@ class DesktopDecouplingTests(unittest.TestCase):
             names = list(CORE_MODULES) + ['config.json', 'tests/test_desktop_analysis.py',
                                        'tests/test_desktop_pipeline.py']
             names += [str(p.relative_to(ROOT)) for p in (ROOT / 'desktop').glob('*.py')]
-            names += ['prompts/relevance_round1_v20.txt', 'prompts/relevance_round2_v15.txt']
+            names += list(json.loads((ROOT / 'config.json').read_text(encoding='utf-8'))['paths'].values())
             for name in names:
                 target = isolated / name
                 target.parent.mkdir(parents=True, exist_ok=True)

@@ -34,6 +34,7 @@ from desktop.errors import (
 )
 from desktop.pipeline import CandidateSnapshot, runtime_path
 from desktop.progress import ProgressCallback, ProgressEvent, emit_progress
+from desktop.research_requirements import RequirementsSnapshot, RequirementsStore, normalize
 
 
 class AnalysisError(DesktopOperationError):
@@ -242,13 +243,14 @@ def checked_usage(connection, run_id, config):
 def run_round1(
     connection, run_id, papers, config, profile, prompt, api_key,
     diagnostic_observer: Callable[[str, object], None] | None = None,
+    *, research_requirements: str,
 ):
     if not papers:
         main.save_round1_screening_results(
             connection, run_id, [], config, selection_audit=main.empty_screening_stage_audit()
         )
         return []
-    messages = main.build_round1_messages(prompt, profile, papers, config)
+    messages = main.build_round1_messages(prompt, profile, papers, config, research_requirements=research_requirements)
     validate_budget(connection, run_id, config, "round1", messages)
     stage = main.deepseek_stage_config(config, "round1")
     client = main.DeepSeekClient(
@@ -327,7 +329,11 @@ class AnalysisAttempt:
         self,
         snapshot: CandidateSnapshot,
         diagnostics: DesktopDiagnostics | None = None,
+        *, requirements: RequirementsSnapshot | None = None,
     ):
+        # 在消费快照之前读取保存值，随后后台只使用这份不可变快照。
+        requirements = requirements if requirements is not None else RequirementsStore().snapshot()
+        self.requirements = RequirementsSnapshot(normalize(requirements.round1), normalize(requirements.round2))
         if not snapshot.claim_analysis():
             raise AnalysisError(make_issue("AKD-PREPARE-WORKSPACE_FAILED"))
         self.snapshot = snapshot
@@ -444,6 +450,7 @@ class AnalysisAttempt:
                 connection, run_id, papers, config, profile,
                 main.load_prompt(paths["round1_prompt"]), api_key,
                 diagnostic_observer=observe_round1,
+                research_requirements=self.requirements.round1,
             )
             if not selected:
                 normal = outcome(
@@ -692,6 +699,7 @@ class AnalysisAttempt:
                 bundle = run_round2.build_round2_input_bundle(
                     connection, config, profile, round2_prompt,
                     run_id=run_id, fulltext_connection=fulltext,
+                    research_requirements=self.requirements.round2,
                 )
             else:
                 bundle = run_round2.Round2InputBundle(

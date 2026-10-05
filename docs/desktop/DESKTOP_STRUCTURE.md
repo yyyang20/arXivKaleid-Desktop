@@ -7,6 +7,8 @@
 | `desktop/AGENTS.md` | Desktop 局部协作规则 |
 | `desktop/__init__.py` | 包入口和 Desktop 版本 |
 | `desktop/config.py` | Desktop 只读配置契约、预算和 Prompt 资源哈希校验 |
+| `desktop/research_requirements.py` | 无 Qt 的两轮保存记录、文本校验、原子替换、默认资源及不可变分析快照 |
+| `desktop/prompt_page.py` | 两轮统一详情、纯文本编辑、保存/取消/恢复默认和未保存保护 |
 | `desktop/paths.py` | application/resource/runtime 根、路径安全、时区与 bundled curl 校验 |
 | `desktop/errors.py` | 稳定错误和 outcome、GUI 文案及按实际影响范围判定 paper/system 的纯模型 |
 | `desktop/diagnostics.py` | session/operation/snapshot/fetch/run 关联、脱敏 JSONL、安全 traceback、计时与内存降级 |
@@ -15,7 +17,7 @@
 | `desktop/history.py` | 无 Qt 的独立历史 schema v2、双时间及论文日期、事务保存、元数据游标分页、原始正文读取和删除 |
 | `desktop/history_page.py` | 历史列表模型与卡片委托、主体/删除命中区、列表/详情切换与 Markdown 展示 |
 | `desktop/date_picker.py` | 首页 Qt 月历弹层、365 天范围、月份导航限制、今天标记和屏幕内定位 |
-| `desktop/style.py` | alpha 7 三页共享灰蓝调色板、输入框样式与低对比度卡片绘制 |
+| `desktop/style.py` | 共享灰蓝调色板、输入框样式与低对比度卡片绘制 |
 | `desktop/task_panel.py` | 可复用任务状态组件；运行展开、成功收缩、失败诊断、真实事件与快照/结果详情 |
 | `desktop/analysis.py` | 一次性快照分析、工作库重置和锁、两轮/PDF/全文编排、累计费用预检、结构化进度与安全结果 |
 | `desktop/progress.py` | 抓取与分析共用的不可变结构化进度事件及不影响业务流程的安全派发 |
@@ -44,6 +46,8 @@
 | `tests/test_desktop_history.py` | 原始正文、跨进程、同日多次、游标排序、事务故障、锁、schema 与路径边界 |
 | `tests/test_desktop_diagnostics.py` | JSONL schema、关联身份、作用域、线程安全、内存降级和隐私 canary |
 | `tests/test_desktop_config.py` | 当前配置、预算、协议和 Prompt 哈希契约 |
+| `tests/test_research_requirements.py` | 独立保存、坏配置、冻结取值、哈希/缓存/Token、隐私和历史默认语义 |
+| `docs/desktop/PROMPT_SPLIT.md` | 旧 Prompt 各规则的固定/研究层拆分核对 |
 | `tests/test_desktop_decoupling.py` | alpha.4 行为基线、schema v1、缓存、预算和独立源码运行 |
 | `tests/test_desktop_governance.py` | 根与局部治理、文档路由、当前身份、链接、发行资料副本与发布清单的只读检查 |
 
@@ -56,7 +60,9 @@ portable 根目录包含直接来自仓库根的 GPLv3 `LICENSE`。应用源码�
 ```text
 .desktop-runtime/
 ├─ config/
-│  └─ secret.dat
+│  ├─ secret.dat
+│  ├─ round1_research_requirements.json
+│  └─ round2_research_requirements.json
 ├─ cache/
 │  └─ arxiv/
 │     └─ last_request_time.txt

@@ -52,7 +52,8 @@ docs/
    ├─ README.md
    ├─ DESKTOP_SPEC.md
    ├─ DESKTOP_OPERATIONS.md
-   └─ DESKTOP_STRUCTURE.md
+   ├─ DESKTOP_STRUCTURE.md
+   └─ PROMPT_SPLIT.md
 ```
 
 `docs/` 保存当前有效说明和简短变更记录，不保存旧规范副本。历史内容通过 Git 查询。
@@ -63,9 +64,13 @@ docs/
 
 | 路径 | 职责 |
 |---|---|
-| `desktop/config.py` | `desktop_config_v1` 只读契约、预算边界和资源文本哈希校验 |
-| `prompts/relevance_round1_v20.txt` | 自包含 Round 1 摘要筛选契约 |
-| `prompts/relevance_round2_v15.txt` | 自包含 Round 2 全文筛选契约 |
+| `desktop/config.py` | `desktop_config_v2` 只读契约、预算边界和四份资源文本哈希校验 |
+| `desktop/research_requirements.py` | 两轮独立保存、校验、默认读取及分析快照 |
+| `desktop/prompt_page.py` | 研究要求查看/编辑、保存、取消、恢复与未保存保护 |
+| `prompts/relevance_round1_v21.txt` | Round 1 固定协议 |
+| `prompts/relevance_round2_v16.txt` | Round 2 固定协议 |
+| `prompts/research_requirements_round1_v1.txt`、`prompts/research_requirements_round2_v1.txt` | 两轮版本化默认研究要求 |
+| `prompts/relevance_round1_v20.txt`、`prompts/relevance_round2_v15.txt` | 原样保留的历史身份，不进入运行与打包 |
 
 提示词按版本新增，不覆盖旧文件。当前运行和发行资源只包含 `config.json` 与上述两份 Prompt；不依赖独立自动化策略或 Research Profile 文件。`profile_v2` 保留为请求、SQLite 和缓存兼容标识。
 

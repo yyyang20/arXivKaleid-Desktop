@@ -247,6 +247,6 @@ class HistoryPage(QWidget):
 
     def show_record(self, record: HistoryRecord):
         row = record.summary
-        self.detail_meta.setText(f"{row.time_text} 北京时间  ·  候选 {row.candidate_count} 篇  ·  推荐 {row.recommendation_count} 篇")
+        self.detail_meta.setText(f"生成时间 {row.time_text} 北京时间  ·  候选 {row.candidate_count} 篇  ·  推荐 {row.recommendation_count} 篇")
         self.detail_message.clear()
         self.report.setMarkdown(record.markdown)

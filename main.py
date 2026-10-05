@@ -32,8 +32,8 @@ ROUND2_TASK_TYPE = "round2_batch_ranking"
 ROUND2_ABSTRACT_SOURCE = "papers.summary"
 ROUND2_SELECTION_POLICY = "full_text_budget_exclusion_v3"
 ROUND2_OUTPUT_TRANSPORT = "responses_named_tool_auto_v2"
-CURRENT_ROUND1_PROMPT_VERSION = "round1_v20"
-CURRENT_ROUND2_PROMPT_VERSION = "round2_v15"
+CURRENT_ROUND1_PROMPT_VERSION = "round1_v21"
+CURRENT_ROUND2_PROMPT_VERSION = "round2_v16"
 ROUND1_PRECISION_PROMPT_VERSIONS = {CURRENT_ROUND1_PROMPT_VERSION}
 ROUND2_PRECISION_PROMPT_VERSIONS = {CURRENT_ROUND2_PROMPT_VERSION}
 SELF_CONTAINED_ROUND1_PROMPT_VERSIONS = {CURRENT_ROUND1_PROMPT_VERSION}
@@ -121,6 +121,8 @@ def resolve_configured_paths(
         in {
             "round1_prompt",
             "round2_prompt",
+            "round1_requirements",
+            "round2_requirements",
         }
     }
 
@@ -1041,8 +1043,9 @@ def build_round1_messages(
     research_profile: dict[str, Any],
     papers: list[dict[str, Any]],
     config: dict[str, Any],
+    *, research_requirements: str,
 ) -> list[dict[str, str]]:
-    """构造第一轮同批输入，只包含规范允许发送的公开论文元数据。"""
+    """固定协议与研究要求分别序列化，论文输入仅使用允许的公开元数据。"""
     candidates = [
         {
             "candidate_index": candidate_index,
@@ -1069,12 +1072,13 @@ def build_round1_messages(
         "expected_candidate_ranking_count": len(candidates),
         "research_profile": research_profile,
         "feedback_samples": [],
+        "research_requirements": research_requirements,
         "candidate_papers": candidates,
     }
     if prompt_version in SELF_CONTAINED_ROUND1_PROMPT_VERSIONS:
         task_input.pop("research_profile")
     if prompt_version in ROUND1_PRECISION_PROMPT_VERSIONS:
-        # v19/v20 将 Top 10 视为上限，输出不再承担全候选排序和精确数量回显。
+        # 现行协议将 Top 10 视为上限，不承担全候选排序和精确数量回显。
         task_input.pop("target_selected_count")
         task_input.pop("expected_candidate_ranking_count")
     return [
@@ -1159,6 +1163,7 @@ def build_round2_messages(
     research_profile: dict[str, Any],
     papers: list[dict[str, Any]],
     config: dict[str, Any],
+    *, research_requirements: str,
 ) -> list[dict[str, str]]:
     """构造第二轮同批排序输入；不包含本地路径和被页数门控的长文。"""
     input_mode = "full_text"
@@ -1175,6 +1180,7 @@ def build_round2_messages(
         "abstract_source": ROUND2_ABSTRACT_SOURCE,
         "input_mode": input_mode,
         "pdf_input_fields": ["page_number", "text"],
+        "research_requirements": research_requirements,
         "final_max_recommendations": config["final_max_recommendations"],
         "max_recommendation_count": config["final_max_recommendations"],
         "target_recommendation_count": target_recommendation_count,
@@ -1186,7 +1192,7 @@ def build_round2_messages(
     if prompt_version in SELF_CONTAINED_ROUND2_PROMPT_VERSIONS:
         task_input.pop("research_profile")
     if prompt_version in ROUND2_PRECISION_PROMPT_VERSIONS:
-        # v14/v15 允许少选或零选，数量由安全解析后的数组确定。
+        # 现行协议允许少选或零选，数量由安全解析后的数组确定。
         task_input.pop("max_recommendation_count")
         task_input.pop("target_recommendation_count")
     return [

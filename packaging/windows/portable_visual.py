@@ -15,7 +15,7 @@ import sqlite3
 from contextlib import closing
 
 from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices, QFont
+from PySide6.QtGui import QDesktopServices, QFont, QInputMethodEvent
 from PySide6.QtWidgets import QMessageBox, QStyleOptionViewItem
 from desktop import app
 from desktop.errors import make_issue
@@ -61,10 +61,10 @@ def synthetic_analysis_result(attempt, source_root=None, *, recommendation_count
         main.insert_papers(connection, papers)
         round1, _ = main.validate_round1_result(dict(
             task_type="round1_abstract_screening", profile_version="profile_v2",
-            prompt_version="round1_v20", selection_policy="top_k_daily_budget",
+            prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION, selection_policy="top_k_daily_budget",
             selection_policy_version="top_k_daily_budget_v4",
             selected_papers=[dict(candidate_index=i + 1, content_label="成像", reason="离线合成验证：黑洞偏振图像。") for i in range(10)],
-        ), papers, max_selected=10, profile_version="profile_v2", prompt_version="round1_v20",
+        ), papers, max_selected=10, profile_version="profile_v2", prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION,
             selection_policy_version="top_k_daily_budget_v4")
         assert round1["batch_valid"]
         selected = round1["selected_papers"]
@@ -80,11 +80,11 @@ def synthetic_analysis_result(attempt, source_root=None, *, recommendation_count
                                                       decision="full_text", page_count=2) for p in selected])
         round2, _ = main.validate_round2_result(dict(
             task_type=main.ROUND2_TASK_TYPE, selection_policy=main.ROUND2_SELECTION_POLICY,
-            profile_version="profile_v2", prompt_version="round2_v15",
+            profile_version="profile_v2", prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION,
             final_recommendations=[dict(arxiv_id=p["arxiv_id"], version=p["version"],
                                         content_label="成像", reason="离线合成验证：推荐正文与保存快照一致。")
                                    for p in selected[:recommendation_count]],
-        ), selected, max_recommendations=5, profile_version="profile_v2", prompt_version="round2_v15")
+        ), selected, max_recommendations=5, profile_version="profile_v2", prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION)
         assert round2["batch_valid"]
         recommendations = round2["final_recommendations"]
         main.save_round2_screening_results(connection, run_id, recommendations, config, selection_audit=round2["selection_audit"])
@@ -262,6 +262,89 @@ def memory_bytes():
     return values.private
 
 
+def exercise_requirements(application, window, capture, output):
+    """真实纯文本输入、模态对话框和保存失败；只供隔离验证副本使用。"""
+    from desktop.research_requirements import RequirementsError
+    page = window.prompt_page
+    window.switch_page(page)
+    page.go_back()
+    capture('13-prompts-overview')
+
+    def answer(text, name):
+        def act():
+            dialog = application.activeModalWidget()
+            assert isinstance(dialog, QMessageBox), 'requirements_dialog_missing'
+            assert dialog.grab().save(str(output / (name + '-dialog.png')))
+            button = next(b for b in dialog.buttons() if b.text() == text or
+                          (text == 'yes' and dialog.standardButton(b) == QMessageBox.StandardButton.Yes) or
+                          (text == 'no' and dialog.standardButton(b) == QMessageBox.StandardButton.No))
+            button.click()
+        QTimer.singleShot(120, act)
+
+    saved = {}
+    for stage in ('round1', 'round2'):
+        page.open_round(stage)
+        assert not page.saved.custom and page.editor.isReadOnly()
+        capture('14-' + stage + '-default')
+        page.begin_edit()
+        page.editor.clear()
+        page.editor.setFocus()
+        # 通过 Qt 输入法提交事件验证真实控件处理中文，避免仅 setPlainText 冒充输入。
+        event = QInputMethodEvent()
+        text = '离线合成研究要求 ' + stage + '：重点关注黑洞阴影和偏振图像。\n排除仅关键词相关论文。'
+        event.setCommitString(text)
+        QCoreApplication.sendEvent(page.editor, event)
+        assert page.editor.toPlainText() == text
+        assert page.dirty and not page.saved.custom
+        capture('15-' + stage + '-editing')
+        original = page.store.save
+        def fail(*_args, **_kwargs):
+            raise RequirementsError('研究要求保存失败；原来的生效内容未改变。')
+        page.store.save = fail
+        try:
+            assert not page.save() and page.dirty and not page.saved.custom
+            capture('16-' + stage + '-save-failed')
+        finally:
+            page.store.save = original
+        answer('留在此页', '17-' + stage + '-unsaved')
+        page.go_back()
+        assert page.stack.currentIndex() == 1 and page.dirty
+        assert page.save() and page.saved.custom
+        capture('18-' + stage + '-custom')
+        page.begin_edit()
+        page.editor.appendPlainText('应取消的草稿')
+        page.cancel()
+        assert page.editor.toPlainText() == text
+        answer('no', '19-' + stage + '-restore-cancel')
+        assert not page.restore_default() and page.saved.custom
+        answer('yes', '20-' + stage + '-restore-confirm')
+        assert page.restore_default() and not page.saved.custom
+        page.begin_edit()
+        page.editor.setPlainText(text)
+        assert page.save()
+        saved[stage] = hashlib.sha256(text.encode('utf-8')).hexdigest()
+    normal_font = page.font()
+    page.setFont(QFont('Microsoft YaHei UI', 12))
+    window.resize(850, 680)
+    page.begin_edit()
+    page.editor.appendPlainText('\n'.join('较大字体滚动验证：关注强引力偏振图像。' for _ in range(60)))
+    capture('21-prompts-minimum-large-font')
+    assert page.editor.height() >= 160
+    assert page.restore_button.mapTo(page, page.restore_button.rect().bottomRight()).y() < page.height()
+    assert page.editor.verticalScrollBar().maximum() > 0
+    page.editor.verticalScrollBar().setValue(page.editor.verticalScrollBar().maximum())
+    capture('21b-prompts-scroll')
+    page.cancel()
+    page.setFont(normal_font)
+    window.resize(1060, 820)
+    page.go_back()
+    capture('22-prompts-custom-overview')
+    window.switch_page(window.home_page)
+    return {'saved_sha256': saved, 'chinese_input_method_event': True, 'cancel': True,
+            'restore_confirmed': True, 'restore_cancelled': True, 'dirty_protection': True,
+            'save_failure_kept_draft': True, 'minimum_large_font': True}
+
+
 def exercise(application, window, root, synthetic_key):
     """通过真实窗口槽、真实 QThread 与合成计算驱动状态，业务算法不改变。"""
     output = root / 'runtime/work/visual-qa'
@@ -338,6 +421,7 @@ def exercise(application, window, root, synthetic_key):
         window.task_panel.hide()
         window.show()
         capture('01-initial')
+        requirements = exercise_requirements(application, window, capture, output)
         window.switch_page(window.history_page)
         wait(lambda: window.history_worker is None)
         assert window.history_page.model.rowCount() == 0
@@ -371,6 +455,10 @@ def exercise(application, window, root, synthetic_key):
         wait(lambda: '4 / 9' in window.analysis_progress_text.text())
         assert not window.api_key.isEnabled()
         capture('05-analyzing')
+        window.switch_page(window.prompt_page)
+        window.prompt_page.open_round('round1')
+        assert window.prompt_page.busy and not window.prompt_page.edit_button.isEnabled()
+        capture('05b-prompts-locked')
         window.switch_page(window.settings_page)
         capture('06-settings-locked')
         window.switch_page(window.home_page)
@@ -465,7 +553,7 @@ def exercise(application, window, root, synthetic_key):
         samples.append(memory_bytes())
     assert samples[-1] - samples[3] < 32 * 1024 * 1024, 'portable_window_memory_growth'
     assert not gc.garbage
-    return {'captures': captures, 'history': history, 'qt_platform': application.platformName(),
+    return {'captures': captures, 'history': history, 'requirements': requirements, 'qt_platform': application.platformName(),
             'screen': screen.name(),
             'style': application.style().objectName(), 'loaded_libraries': loaded_libraries(root),
             'autosave': True, 'save_failure': True, 'key_locked': True, 'safe_links': True, 'log_directory_action': True,

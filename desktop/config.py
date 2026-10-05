@@ -15,11 +15,13 @@ from typing import Any
 from desktop.paths import checked_path
 
 
-CONFIG_VERSION = "desktop_config_v1"
+CONFIG_VERSION = "desktop_config_v2"
 MAX_BATCH_COST_CNY = Decimal("3.00")
 PROMPTS = {
-    "round1_prompt": "prompts/relevance_round1_v20.txt",
-    "round2_prompt": "prompts/relevance_round2_v15.txt",
+    "round1_prompt": "prompts/relevance_round1_v21.txt",
+    "round2_prompt": "prompts/relevance_round2_v16.txt",
+    "round1_requirements": "prompts/research_requirements_round1_v1.txt",
+    "round2_requirements": "prompts/research_requirements_round2_v1.txt",
 }
 
 
@@ -71,8 +73,8 @@ def load_config(config_path: Path) -> dict[str, Any]:
     versions = config.get("versions")
     if versions != {
         "research_profile_version": "profile_v2",
-        "round1_prompt_version": "round1_v20",
-        "round2_prompt_version": "round2_v15",
+        "round1_prompt_version": "round1_v21",
+        "round2_prompt_version": "round2_v16",
     }:
         raise RuntimeError("desktop_protocol_identity_invalid")
     limits = config.get("limits")
