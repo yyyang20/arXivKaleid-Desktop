@@ -17,7 +17,7 @@
 
 | 项目 | 当前值 |
 |---|---|
-| Desktop 版本 | `0.1.0-alpha.8` |
+| Desktop 版本 | `0.1.0-alpha.9` |
 | Desktop 配置 | `desktop_config_v1` |
 | Round 1 模型 | `deepseek-flash` |
 | Round 2 模型 | `deepseek-flash` |
@@ -28,6 +28,7 @@
 | Round 2 策略 | `full_text_budget_exclusion_v3` |
 | Round 2 输出传输 | `responses_named_tool_auto_v2` |
 | Desktop 主工作 SQLite | schema v1 |
+| Desktop 独立历史 SQLite | schema v2 |
 
 两份 Prompt 均自包含完整研究边界，请求不注入独立 Research Profile 内容。`profile_v2` 只作为请求、SQLite 和缓存中的兼容标识，不代表存在独立 Profile 文件或旧请求恢复入口。提示词、模板、策略、提取器或 schema 改变时必须同步对应身份、缓存、兼容读取、测试和文档；历史提示词文件不得覆盖。
 
@@ -100,7 +101,7 @@ Round 2 必须同时阅读门控后的全部合格全文：
 - 标签、Rank、PDF 页数、门控状态、usage 和费用来自当前工作库，不显示分数、置信度、入选性质、证据或单篇 Token 估算。
 - Round 2 展示完整公开摘要和可见推荐级别；Round 1 不重复全部摘要。
 - 仅打开正常的 HTTPS arXiv 摘要和 PDF 链接，本地 PDF 以相对路径信息显示。
-- 日报只在 GUI 显示，不写根 `reports/`，没有编辑、导出或历史管理功能。
+- 日报在 GUI 显示，不写根 `reports/`，没有编辑或导出功能。完整分析成功后将当次原始 Markdown 与计数保存到独立历史库，不重新生成历史日报。
 
 数据层负责身份、计数和数据库事实，展示层只负责 Markdown 排版。具体渲染和展示失败处理见 [Desktop 日报](desktop/DESKTOP_SPEC.md#desktop-日报)。
 
@@ -109,6 +110,8 @@ Round 2 必须同时阅读门控后的全部合格全文：
 主工作库 `work/arxiv_kaleid.sqlite` 保存当前分析的论文元数据、运行、两轮结果、审计、缓存、完成状态、PDF 状态、模型调用、usage、费用和阶段耗时；主库 schema 为 v1，未知版本拒绝使用。独立全文库 `work/round2_inputs.sqlite` 保存物理页数、逐页全文和输入门控决定。
 
 这些工作库只服务当前 attempt，不是跨运行历史数据库。固定工作库重置、sidecar、文件锁及 PDF 保留方式见 [一次性两轮分析](desktop/DESKTOP_SPEC.md#一次性两轮分析)。SQLite、PDF、报告、日志和缓存不得提交 Git。
+
+独立历史库 `history/history.sqlite` 使用 schema v2，保存 operation ID、UTC 微秒日报完成时间及抓取完成时间、ISO 论文日期、候选数、最终推荐数和原始 Markdown；同日多次成功分别保存，按日报完成时间及入库序号倒序。抓取完成时间与论文日期直接来自本次冻结快照 `completed_at`、`candidate_date`；候选数取快照 `round1_count`，最终推荐数取已校验的分析结果，不解析 Markdown 推算日期或计数。正常零推荐保存，抓取、分析或日报生成失败不保存。历史写入在最终分析成功后独立尝试一次，失败不改写工作库成功、不触发重新分析；读取、删除及未知 schema 错误也不重建或清空历史。页面、保留与删除规则见 [日报历史](desktop/DESKTOP_SPEC.md#日报历史)。
 
 ## Token 与费用
 

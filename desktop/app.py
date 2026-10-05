@@ -31,6 +31,7 @@ from desktop.progress import ProgressEvent
 from desktop.pages import HomePage, HistoryPage, SettingsPage
 from desktop.style import PAGE_BACKGROUND
 from desktop.task_panel import ANALYSIS_STAGES, STAGE_SYMBOLS
+from desktop.history import HistoryError, HistoryStore
 
 
 ANALYSIS_NOTICE = (
@@ -95,12 +96,15 @@ class FetchWorker(QThread):
 class AnalysisWorker(QThread):
     progress = Signal(object)
 
-    def __init__(self, attempt: AnalysisAttempt, api_key: str, parent=None):
+    def __init__(self, attempt: AnalysisAttempt, api_key: str, parent=None, history_store=None):
         super().__init__(parent)
         self.attempt = attempt
         self._api_key = api_key
         self.result: AnalysisResult | None = None
         self.issue: DesktopIssue | None = None
+        self.history_store = history_store if history_store is not None else HistoryStore()
+        self.history_issue: DesktopIssue | None = None
+        self.history_saved = False
 
     def run(self) -> None:
         try:
@@ -111,6 +115,39 @@ class AnalysisWorker(QThread):
             self.issue = make_issue("AKD-PREPARE-WORKSPACE_FAILED")
         finally:
             self._api_key = ""
+        if self.result is not None:
+            # 分析已经成功返回；保存异常不进入 AnalysisAttempt 的整批失败边界。
+            try:
+                self.history_store.save(self.result)
+                self.history_saved = True
+            except HistoryError as exc:
+                self.history_issue = exc.issue
+            except Exception:
+                self.history_issue = make_issue("AKD-HISTORY-SAVE_FAILED")
+
+
+class HistoryWorker(QThread):
+    """每个短任务独立连接 SQLite；不访问控件或持有长期后台循环。"""
+
+    def __init__(self, store, action, argument, generation, parent=None):
+        super().__init__(parent)
+        self.store, self.action, self.argument = store, action, argument
+        self.generation = generation
+        self.result = None
+        self.issue = None
+
+    def run(self):
+        try:
+            if self.action == "list":
+                self.result = self.store.list_records(self.argument)
+            elif self.action == "read":
+                self.result = self.store.read(self.argument)
+            elif self.action == "delete":
+                self.result = self.store.delete(self.argument)
+        except HistoryError as exc:
+            self.issue = exc.issue
+        except Exception:
+            self.issue = make_issue("AKD-HISTORY-DELETE_FAILED" if self.action == "delete" else "AKD-HISTORY-READ_FAILED")
 
 
 class DesktopWindow(QWidget):
@@ -119,10 +156,15 @@ class DesktopWindow(QWidget):
         secret_store: SecretStore | None = None,
         diagnostics: DesktopDiagnostics | None = None,
         window_icon: QIcon | None = None,
+        history_store: HistoryStore | None = None,
     ):
         super().__init__()
         self.secret_store = secret_store if secret_store is not None else SecretStore()
         self.diagnostics = diagnostics
+        self.history_store = history_store if history_store is not None else HistoryStore()
+        self.history_worker: HistoryWorker | None = None
+        self._history_jobs = []
+        self._history_generation = 0
         self.snapshot: CandidateSnapshot | None = None
         self.worker: FetchWorker | AnalysisWorker | None = None
         self.analysis_notice_accepted = False
@@ -193,6 +235,11 @@ class DesktopWindow(QWidget):
         self.reset_analysis_progress()
         self.report = self.home_page.report
         self.report.anchorClicked.connect(self.open_report_link)
+        self.history_page.report.anchorClicked.connect(self.open_report_link)
+        self.history_page.open_requested.connect(self.open_history_record)
+        self.history_page.delete_requested.connect(self.delete_history_record)
+        self.history_page.more_requested.connect(self.load_more_history)
+        self.history_page.back_requested.connect(self.back_to_history)
         try:
             self.api_key.setText(self.secret_store.load())
         except SecretError:
@@ -215,6 +262,100 @@ class DesktopWindow(QWidget):
     def switch_page(self, page: QWidget) -> None:
         self.pages.setCurrentWidget(page)
         self.navigation.setCurrentItem(page.objectName())
+        if page is self.history_page:
+            self.refresh_history()
+        else:
+            self._history_generation += 1
+
+    def refresh_history(self):
+        self._history_generation += 1
+        # 旧读请求可以丢弃，已经确认的删除仍要完成。
+        self._history_jobs = [job for job in self._history_jobs if job[0] == "delete"]
+        self.history_page.show_list()
+        self.history_page.model.reset()
+        self.history_page.message.setText("正在读取历史…")
+        self.queue_history("list", None)
+
+    def queue_history(self, action, argument):
+        self._history_jobs.append((action, argument, self._history_generation))
+        self.dispatch_history()
+
+    def dispatch_history(self):
+        if self.history_worker is not None or not self._history_jobs:
+            return
+        action, argument, generation = self._history_jobs.pop(0)
+        self.history_worker = HistoryWorker(self.history_store, action, argument, generation, self)
+        self.history_worker.finished.connect(self.finish_history)
+        self.history_worker.start()
+
+    @Slot()
+    def load_more_history(self):
+        cursor = self.history_page.model.cursor
+        if cursor is not None:
+            self.queue_history("list", cursor)
+
+    @Slot(str)
+    def open_history_record(self, record_id):
+        self._history_generation += 1
+        self.history_page.begin_detail(record_id)
+        self.queue_history("read", record_id)
+
+    @Slot()
+    def back_to_history(self):
+        self.refresh_history()
+
+    def confirm_history_delete(self, record_id):
+        row = next((row for row in self.history_page.model.rows if row.record_id == record_id), None)
+        if row is None:
+            return False
+        answer = QMessageBox.question(
+            self, "删除历史记录", f"删除 {row.time_text} 北京时间生成的日报？\n删除后无法恢复。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    @Slot(str)
+    def delete_history_record(self, record_id):
+        if self.confirm_history_delete(record_id):
+            self.history_page.message.setText("正在删除历史记录…")
+            self.queue_history("delete", record_id)
+
+    @Slot()
+    def finish_history(self):
+        worker = self.history_worker
+        if worker is None:
+            return
+        if worker.issue is not None and self.diagnostics:
+            self.diagnostics.issue(operation_id=self.diagnostics.operation_id(), operation_type="history", issue=worker.issue)
+        if worker.generation == self._history_generation and self.pages.currentWidget() is self.history_page:
+            page = self.history_page
+            if worker.issue is not None:
+                message = f"{worker.issue.reason}\n{worker.issue.impact}"
+                (page.detail_message if worker.action == "read" else page.message).setText(message)
+                if worker.action == "list":
+                    page.model.loading = False
+                    page.model.has_more = False
+            elif worker.action == "list":
+                page.model.append(worker.result)
+                page.message.setText("" if page.model.rows else "暂无历史记录；成功生成的日报将自动保存。")
+            elif worker.action == "read" and page.current_record_id == worker.argument:
+                if worker.result is None:
+                    page.detail_message.setText("该历史记录已不存在，请返回历史列表。")
+                else:
+                    try:
+                        page.show_record(worker.result)
+                    except Exception:
+                        page.report.clear()
+                        page.detail_message.setText("日报展示失败，保存的原始内容未被修改。")
+                        if self.diagnostics:
+                            self.diagnostics.issue(operation_id=self.diagnostics.operation_id(), operation_type="history", issue=make_issue("AKD-DISPLAY-MARKDOWN_RENDER_FAILED"))
+            elif worker.action == "delete":
+                page.model.remove_record(worker.argument)
+                page.message.setText("" if page.model.rows else "暂无历史记录；成功生成的日报将自动保存。")
+        self.history_worker = None
+        worker.deleteLater()
+        self.dispatch_history()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -524,7 +665,7 @@ class DesktopWindow(QWidget):
         self.status.setText("正在准备分析…")
         self.reset_analysis_progress()
         self.analysis_progress_text.setText("正在准备分析…")
-        self.worker = AnalysisWorker(attempt, self.api_key.text(), self)
+        self.worker = AnalysisWorker(attempt, self.api_key.text(), self, self.history_store)
         self.worker.progress.connect(self.handle_progress)
         self.worker.finished.connect(self.finish_analysis)
         self.worker.start()
@@ -586,6 +727,16 @@ class DesktopWindow(QWidget):
             else:
                 self.status.setText("分析失败，已停止。")
             self.task_panel.finish(failed=True)
+        if worker.result is not None:
+            if worker.history_issue is not None:
+                self.status.setText(self.status.text() + "\n分析成功，历史保存失败；关闭后该日报不会保留。")
+                self.diagnostic_text.setText(self.diagnostic_text.text() + f"\n{worker.history_issue.code}：{worker.history_issue.reason}")
+                self.task_panel.reveal_issue()
+                if self.diagnostics:
+                    self.diagnostics.issue(operation_id=worker.result.operation_id, operation_type="history", issue=worker.history_issue,
+                                           run_id=worker.result.run_id, snapshot_id=worker.result.snapshot_id)
+            elif self.pages.currentWidget() is self.history_page:
+                self.refresh_history()
         self.fetch_button.setEnabled(True)
         self.calendar_button.setEnabled(True)
         self.analyze_button.setEnabled(False)
@@ -609,8 +760,9 @@ class DesktopWindow(QWidget):
 
     def closeEvent(self, event) -> None:
         # 不强行终止 curl 或销毁尚在运行的 QThread；主界面继续响应。
-        if self.worker is not None:
+        if self.worker is not None or self.history_worker is not None:
             self.status.setText("任务正在运行，请等待结束后关闭窗口。")
+            self.history_page.message.setText("历史读写正在运行，请等待结束后关闭窗口。")
             event.ignore()
             return
         if not self.save_key():

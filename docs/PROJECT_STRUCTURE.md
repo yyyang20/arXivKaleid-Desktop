@@ -94,7 +94,7 @@ docs/
 源码运行数据位于 `.desktop-runtime/`，portable 对应 EXE 同级 `runtime/`；详细目录见 [Desktop 当前运行数据](desktop/DESKTOP_STRUCTURE.md#当前运行数据)。
 
 - 工作库、锁、PDF、DPAPI 密文、请求缓存和会话日志的具体路径及职责见 [Desktop 当前运行数据](desktop/DESKTOP_STRUCTURE.md#当前运行数据)；SQLite 数据边界见 [当前业务规范](PROJECT_SPEC.md#sqlite-工作数据)。
-- 候选快照只在内存中冻结；日报字符串传给 GUI，不写根 `reports/`，不形成跨运行历史数据库。
+- 候选快照只在内存中冻结；成功日报的原始 Markdown 与计数进入独立 `history/history.sqlite`，不写根 `reports/`，不参与后续候选、筛选或工作库重置。
 - `build/`、`dist/`、`release/`、`.desktop-build/`、`.codex-validation/`、`.codex-audit-*/`、Python 缓存及运行数据被 Git 忽略。
 - `release/` 在构建和验证期间保留候选及旧成品；正式发布和远端核验成功后只保留最新正式 ZIP 与 `.sha256`，历史正式版本存于 GitHub Releases。授权、核验和精确清理边界见 [本地历史 portable 收口](OPERATIONS.md#本地历史-portable-收口)，不清理其他忽略材料。
 - `.gitignore` 仍保护旧 `config/local_secret.json`、`data/` 数据库、PDF、`reports/` 和日志等路径；这些忽略规则不表示旧运行入口仍然存在。

@@ -8,6 +8,7 @@ import logging
 import os
 import sqlite3
 from dataclasses import dataclass
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from threading import Lock
 from typing import Callable
@@ -51,6 +52,10 @@ class AnalysisResult:
     outcomes: tuple[DesktopOutcome, ...] = ()
     log_relative_path: str | None = None
     diagnostics_persistent: bool = False
+    candidate_count: int = 0
+    report_completed_at: datetime | None = None
+    fetch_completed_at: datetime | None = None
+    candidate_date: date | None = None
 
 
 def _call_details(result) -> dict[str, object]:
@@ -839,6 +844,7 @@ class AnalysisAttempt:
             ))
             from desktop.report import build_desktop_report
             markdown = build_desktop_report(connection, fulltext_database, run_id, self.snapshot)
+            report_completed_at = datetime.now(timezone.utc)
             main.finish_run(connection, run_id, "success", "Desktop 分析完成", main.current_time_iso())
             if self.diagnostics:
                 self.diagnostics.event(
@@ -877,6 +883,10 @@ class AnalysisAttempt:
                 paper_issues=tuple(paper_issues), outcomes=tuple(outcomes),
                 log_relative_path=(self.diagnostics.relative_log_path if self.diagnostics else None),
                 diagnostics_persistent=(self.diagnostics.persistent if self.diagnostics else False),
+                candidate_count=self.snapshot.round1_count,
+                report_completed_at=report_completed_at,
+                fetch_completed_at=self.snapshot.completed_at,
+                candidate_date=self.snapshot.candidate_date,
             )
         except Exception as exc:
             issue = _analysis_issue(stage, exc)

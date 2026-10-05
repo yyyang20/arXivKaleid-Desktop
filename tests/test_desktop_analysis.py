@@ -11,8 +11,8 @@ import sqlite3
 import sys
 import tempfile
 import unittest
-from contextlib import ExitStack
-from datetime import datetime, timezone
+from contextlib import ExitStack, nullcontext
+from datetime import date, datetime, timezone
 from pathlib import Path
 from types import MappingProxyType
 from unittest.mock import patch
@@ -301,6 +301,87 @@ class DesktopAnalysisTests(unittest.TestCase):
         result = self.run_snapshot()
         self.assertIn("Round 2 最终推荐数量：0", result.markdown)
         self.assertEqual(len(self.requests), 2)
+
+    def test_all_normal_zero_outcomes_generate_and_save_exact_reports(self):
+        import importlib.util
+        if importlib.util.find_spec("qfluentwidgets") is None:
+            self.skipTest("Desktop GUI dependencies are absent")
+        from desktop.app import AnalysisWorker
+        from desktop.history import HistoryStore
+        store = HistoryStore(self.root)
+        identities = []
+        for scenario in ("round1_zero", "round2_zero", "no_fulltext", "empty_snapshot"):
+            with self.subTest(scenario=scenario):
+                self.selected_indices = [] if scenario == "round1_zero" else [1, 2, 3]
+                self.recommendations_limit = 0 if scenario == "round2_zero" else 5
+                snapshot = self.snapshot(0 if scenario == "empty_snapshot" else 4)
+                self.fail_pdf = {p["pdf_url"] for p in snapshot.papers} if scenario == "no_fulltext" else set()
+                self.fail_extract = {f"{p['arxiv_id']}v{p['version']}" for p in snapshot.papers} if scenario == "no_fulltext" else set()
+                attempt = analysis.AnalysisAttempt(snapshot)
+                worker = AnalysisWorker(attempt, "fake-desktop-key", history_store=store)
+                worker.run()
+                self.assertIsNone(worker.issue)
+                self.assertIsNone(worker.history_issue)
+                self.assertTrue(worker.history_saved)
+                self.assertEqual(worker.result.recommendation_count, 0)
+                self.assertEqual(worker.result.candidate_count, snapshot.round1_count)
+                self.assertIsNotNone(worker.result.report_completed_at.utcoffset())
+                self.assertEqual(worker.result.fetch_completed_at, snapshot.completed_at)
+                self.assertEqual(worker.result.candidate_date, snapshot.candidate_date)
+                record = store.read(attempt.operation_id)
+                self.assertEqual(record.markdown, worker.result.markdown)
+                self.assertNotIn("fake-desktop-key", record.markdown)
+                identities.append(attempt.operation_id)
+        # 每次真实分析会重置工作库，独立历史仍保留所有日报。
+        self.assertEqual({row.record_id for row in store.list_records()}, set(identities))
+
+    def test_history_dates_stay_bound_to_snapshot_across_midnight(self):
+        from desktop.history import HistoryStore, timestamp_us
+        captured = self.snapshot()
+        fetched = datetime(2026, 10, 4, 15, 59, 58, tzinfo=timezone.utc)
+        completed = datetime(2026, 10, 4, 16, 11, 20, tzinfo=timezone.utc)
+        snapshot = pipeline.CandidateSnapshot(date(2026, 10, 1), fetched, captured.raw_count,
+                                              captured.unique_count, captured.papers)
+        with patch("desktop.analysis.datetime") as clock:
+            clock.now.return_value = completed
+            result = self.run_snapshot(snapshot)
+        self.assertEqual(result.candidate_date, date(2026, 10, 1))
+        self.assertEqual(result.fetch_completed_at, fetched)
+        self.assertEqual(result.report_completed_at, completed)
+        store = HistoryStore(self.root)
+        store.save(result)
+        record = store.read(result.operation_id)
+        self.assertEqual(record.summary.fetch_time_text, "2026-10-04 23:59:58")
+        self.assertEqual(record.summary.time_text, "2026-10-05 00:11:20")
+        self.assertEqual(record.summary.completed_at_us, timestamp_us(completed))
+        self.assertEqual(record.markdown, result.markdown)
+
+    def test_history_isolated_after_real_analysis_success_and_failed_reports_not_saved(self):
+        import importlib.util
+        if importlib.util.find_spec("qfluentwidgets") is None:
+            self.skipTest("Desktop GUI dependencies are absent")
+        from desktop.app import AnalysisWorker
+        from desktop.history import HistoryStore
+        store = HistoryStore(self.root)
+        for scenario in ("round1", "round2", "report"):
+            self.fail_stage = scenario if scenario != "report" else None
+            boundary = patch("desktop.report.build_desktop_report", side_effect=RuntimeError("synthetic failed report")) if scenario == "report" else nullcontext()
+            with self.subTest(scenario=scenario), boundary, patch.object(store, "save") as save:
+                worker = AnalysisWorker(analysis.AnalysisAttempt(self.snapshot()), "fake-desktop-key", history_store=store)
+                worker.run()
+                self.assertIsNone(worker.result)
+                self.assertIsNotNone(worker.issue)
+                save.assert_not_called()
+        self.fail_stage = None
+        with patch.object(store, "save", side_effect=OSError("synthetic history failure")) as save:
+            worker = AnalysisWorker(analysis.AnalysisAttempt(self.snapshot()), "fake-desktop-key", history_store=store)
+            worker.run()
+            save.assert_called_once_with(worker.result)
+        self.assertIsNone(worker.issue)
+        self.assertIsNotNone(worker.history_issue)
+        self.assertEqual(worker._api_key, "")
+        self.assertIn("Round 2 最终推荐", worker.result.markdown)
+        self.assertEqual(self.connect().execute("SELECT status FROM runs WHERE run_id=?", (worker.result.run_id,)).fetchone()[0], "success")
 
     def test_structured_progress_uses_real_pdf_and_fulltext_work_counts(self):
         events = []

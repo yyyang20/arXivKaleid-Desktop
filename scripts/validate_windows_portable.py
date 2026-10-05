@@ -102,7 +102,9 @@ def main():
         recovery = subprocess.run([str(copy / 'arXivKaleid.exe'), '--portable-recovery-check'],
                                   cwd=work, env=env, timeout=30, creationflags=0x08000000)
         assert recovery.returncode == 0
-        assert json.loads((copy / 'runtime/work/recovery-check.json').read_text())['synthetic_dpapi_recovered']
+        restored = json.loads((copy / 'runtime/work/recovery-check.json').read_text())
+        assert restored['synthetic_dpapi_recovered']
+        assert restored['history_restored_exactly'] and restored['deleted_history_stays_deleted']
         for _ in range(3):
             process = subprocess.Popen([str(copy / 'arXivKaleid.exe')], cwd=work, env=env, creationflags=0x08000000)
             visible = False

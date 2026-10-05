@@ -15,6 +15,7 @@ from pathlib import Path
 import sqlite3
 import subprocess
 import sys
+import time
 
 from desktop import paths, pipeline
 
@@ -50,6 +51,7 @@ def run_recovery():
     result = {'ok': False}
     try:
         disable_diagnostic_ime()
+        paths.configure_timezone(pipeline.PROJECT_ROOT)
         from PySide6.QtWidgets import QApplication
         from desktop import app as desktop_app
         application = QApplication([])
@@ -58,6 +60,36 @@ def run_recovery():
         window.show()
         application.processEvents()
         assert window.isVisible()
+        if previous.get('visual_qa'):
+            # 跨进程验证持久化后的原始正文和删除；不生成或重新分析日报。
+            from desktop.history import HistoryStore
+            store = HistoryStore()
+            expected = previous['visual_qa']['history']
+            assert store.read(expected['deleted_id']) is None
+            assert len(store.list_records()) == len(expected['records'])
+            window.switch_page(window.history_page)
+
+            def wait_history():
+                end = time.monotonic() + 10
+                while window.history_worker is not None and time.monotonic() < end:
+                    application.processEvents()
+                    time.sleep(0.01)
+                assert window.history_worker is None
+
+            wait_history()
+            for item in expected['records']:
+                record = store.read(item['id'])
+                assert record.summary.recommendation_count == item['recommendation_count']
+                assert record.summary.candidate_date.isoformat() == item['candidate_date']
+                assert record.summary.fetch_completed_at_us == item['fetch_completed_at_us']
+                assert record.summary.completed_at_us == item['completed_at_us']
+                assert hashlib.sha256(record.markdown.encode('utf-8')).hexdigest() == item['sha256']
+                window.open_history_record(item['id'])
+                wait_history()
+                assert 'arXivKaleid Desktop 日报' in window.history_page.report.toPlainText()
+            result['history_restored_exactly'] = True
+            result['history_dates_restored_exactly'] = True
+            result['deleted_history_stays_deleted'] = True
         window.close()
         result.update(ok=True, synthetic_dpapi_recovered=True)
     except Exception as exc:

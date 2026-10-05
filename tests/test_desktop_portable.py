@@ -48,7 +48,7 @@ class DesktopPortableTests(unittest.TestCase):
         with chdir(self.source), patch.dict(os.environ, {"APPDATA": str(self.source), "LOCALAPPDATA": str(self.source)}):
             paths.prepare_runtime(self.source)
             self.assertEqual(paths.resource_root(self.source), self.app / "_internal")
-            for part in ("config/secret.dat", "work/arxiv_kaleid.sqlite", "work/round2_inputs.sqlite", "work/analysis.lock", "cache/arxiv", "pdfs/2026-09-25"):
+            for part in ("config/secret.dat", "history/history.sqlite", "work/arxiv_kaleid.sqlite", "work/round2_inputs.sqlite", "work/analysis.lock", "cache/arxiv", "pdfs/2026-09-25"):
                 self.assertEqual(paths.runtime_path(self.source, part), self.app / "runtime" / part)
         self.assertEqual(list(self.source.iterdir()), [])
         self.assertFalse((self.app / "_internal").exists())
