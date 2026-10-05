@@ -2,6 +2,13 @@
 
 本文件保留 Desktop 与通用功能的简短历史。代码解耦前的条目来自原项目：当时的发行来源、构建提交、兼容行为和治理测试仅表示历史事实，不代表当前仓库仍有这些入口或测试。现行行为以代码、配置、测试和 [当前业务规范](PROJECT_SPEC.md) 为准；详细历史通过 Git、PR 和 Issue 查询。
 
+## 2026-10-05：Desktop alpha 9 公开发行
+
+- 已公开 [v0.1.0-alpha.9 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.9)。[功能 PR #14](https://github.com/yyyang20/arXivKaleid-Desktop/pull/14) 合并后，从干净 main 提交 `8afcc98c8ebb321de2b46eccfdd4b89f3cc16bd1` 重建正式 Windows x64 portable；tag 与 BUILD_INFO 一致，用途为 public-release，未使用第一阶段技术候选发布。
+- 仅上传 ZIP 和 `.sha256`；ZIP 为 118,632,630 字节，SHA-256 为 `c48a8dba1ff58ba6bada8d2a5aea847beaefbe3ad164e59881c1430c9d4c487d`。匿名下载成品及校验文件与本地一致，86 个 tag 源码文件与发行 Git blob 逐字节一致；全部既有历史 tag、Release 正文及资产身份保持不变。
+- 验收提交与发行 main 文件树一致，两者均通过 173 项完整离线测试、零跳过及 48 个 Python 文件 AST、配置/Prompt 哈希和治理检查。正式冻结程序通过原生 DPR 1.5、模拟 100/125/150/200% 的每组 27 个状态，包含历史原文与日期、零推荐、确认删除、保存失败、跨进程恢复、三次普通重启、12 次窗口生命周期、DPAPI 和 DLL 来源检查。466 个发行文件及 227 个许可与源码文件已核验。
+- 更新下载入口与当前运行说明，不修改功能或已发布资产；技术候选、自动验证副本及历史审计材料保留，`release/` 仅保留正式 alpha 9 ZIP 和校验文件。模型调用与费用为 0，未覆盖第二台干净 Windows 或真实服务；既有单元测试 Qt GC 告警保留，冻结生命周期检查通过且 `gc.garbage` 为 0。
+
 ## 2026-10-05：Desktop alpha 9 历史卡片日期调整
 
 - 历史卡片分别显示实际抓取完成时间与论文日期，日期直接来自冻结候选快照，使用独立历史 schema v2；不解析日报正文，不迁移未公开技术候选的测试历史。
