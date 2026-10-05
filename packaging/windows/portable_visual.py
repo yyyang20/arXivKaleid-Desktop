@@ -14,8 +14,8 @@ import hashlib
 import sqlite3
 from contextlib import closing
 
-from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices, QFont, QInputMethodEvent
+from PySide6.QtCore import QCoreApplication, QEvent, QPoint, Qt, QTimer, QUrl
+from PySide6.QtGui import QDesktopServices, QFont, QInputMethodEvent, QKeyEvent
 from PySide6.QtWidgets import QMessageBox, QStyleOptionViewItem
 from desktop import app
 from desktop.errors import make_issue
@@ -285,6 +285,20 @@ def exercise_requirements(application, window, capture, output):
     for stage in ('round1', 'round2'):
         page.open_round(stage)
         assert not page.saved.custom and page.editor.isReadOnly()
+        # 只读控件允许选择但不启用输入法；普通键盘事件不能改写正文。
+        page.editor.setFocus()
+        original_text = page.editor.toPlainText()
+        page.editor.selectAll()
+        assert page.editor.textCursor().hasSelection()
+        cursor = page.editor.textCursor()
+        cursor.clearSelection()
+        page.editor.setTextCursor(cursor)
+        assert not page.editor.testAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled)
+        for event_type in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
+            QCoreApplication.sendEvent(page.editor, QKeyEvent(event_type, Qt.Key.Key_X, Qt.KeyboardModifier.NoModifier, 'x'))
+        assert page.editor.toPlainText() == original_text
+        assert page.back_button.width() < page.width() / 2
+        assert page.back_button.mapTo(page, QPoint(0, 0)).x() == page.title.mapTo(page, QPoint(0, 0)).x()
         capture('14-' + stage + '-default')
         page.begin_edit()
         page.editor.clear()
@@ -348,7 +362,8 @@ def exercise_requirements(application, window, capture, output):
     window.switch_page(window.home_page)
     return {'saved_sha256': saved, 'chinese_input_method_event': True, 'cancel': True,
             'restore_confirmed': True, 'restore_cancelled': True, 'dirty_protection': True,
-            'save_failure_kept_draft': True, 'minimum_large_font': True}
+            'save_failure_kept_draft': True, 'minimum_large_font': True,
+            'readonly_rejected_input': True, 'compact_left_return': True}
 
 
 def exercise(application, window, root, synthetic_key):

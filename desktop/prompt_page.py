@@ -3,12 +3,13 @@
 # See LICENSE in the project root for the full license text.
 
 """提示词页面只编辑研究要求，固定协议始终由程序管理。"""
-from PySide6.QtWidgets import QHBoxLayout, QMessageBox, QStackedWidget, QVBoxLayout, QWidget
-from qfluentwidgets import BodyLabel, FluentIcon, PlainTextEdit, PrimaryPushButton, PushButton, ScrollArea, TitleLabel
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QHBoxLayout, QMessageBox, QPlainTextEdit, QStackedWidget, QVBoxLayout, QWidget
+from qfluentwidgets import FluentIcon, PrimaryPushButton, PushButton, ScrollArea, TitleLabel
 
 from desktop.pages import card
 from desktop.research_requirements import RequirementsError, RequirementsStore
-from desktop.style import PAGE_BACKGROUND, SUBTLE_BACKGROUND, SUBTLE_BORDER, TEXT_PRIMARY
+from desktop.style import ACCENT, CARD_BACKGROUND, CARD_BORDER, PAGE_BACKGROUND, TEXT_PRIMARY, TEXT_SECONDARY
 from desktop.task_panel import wrapping_label
 
 
@@ -44,6 +45,7 @@ class PromptPage(QWidget):
             layout.addWidget(wrapping_label(self.PURPOSES[stage]))
             row = QHBoxLayout()
             state = wrapping_label("")
+            state.setStyleSheet(f"color: {TEXT_SECONDARY};")
             self.states[stage] = state
             row.addWidget(state, 1)
             button = PushButton(FluentIcon.CHEVRON_RIGHT, "查看")
@@ -75,10 +77,16 @@ class PromptPage(QWidget):
         layout.addWidget(self.state)
         self.message = wrapping_label("仅编辑研究要求；不会改变标签、数量、输出字段或费用保护。")
         layout.addWidget(self.message)
-        self.editor = PlainTextEdit()
+        for label in (self.purpose, self.state, self.message):
+            label.setStyleSheet(f"color: {TEXT_SECONDARY};")
+        # 使用与历史正文一致的 Qt 文本表面，避免只读聚焦也出现 Fluent 蓝色底边。
+        self.editor = QPlainTextEdit()
+        editor_font = QFont("Microsoft YaHei UI")
+        editor_font.setPixelSize(14)
+        self.editor.setFont(editor_font)
         self.editor.setReadOnly(True)
         self.editor.setMinimumHeight(160)
-        self.editor.setStyleSheet(f"QPlainTextEdit {{background:{SUBTLE_BACKGROUND}; color:{TEXT_PRIMARY}; border:1px solid {SUBTLE_BORDER}; border-radius:8px; padding:10px;}}")
+        self._editor_editable = None
         self.editor.textChanged.connect(self.update_controls)
         layout.addWidget(self.editor, 1)
         row = QHBoxLayout()
@@ -132,7 +140,14 @@ class PromptPage(QWidget):
         return True
 
     def update_controls(self):
-        self.editor.setReadOnly(not self.editing or self.busy)
+        editable = self.editing and not self.busy
+        self.editor.setReadOnly(not editable)
+        if editable != self._editor_editable:
+            style = f"QPlainTextEdit {{background:{CARD_BACKGROUND}; color:{TEXT_PRIMARY}; border:1px solid {CARD_BORDER}; border-radius:8px; padding:16px;}}"
+            if editable:
+                style += f"QPlainTextEdit:focus {{border:1px solid {ACCENT};}}"
+            self.editor.setStyleSheet(style)
+            self._editor_editable = editable
         self.edit_button.setVisible(not self.editing)
         self.save_button.setVisible(self.editing)
         self.cancel_button.setVisible(self.editing)
