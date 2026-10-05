@@ -15,7 +15,7 @@ import sqlite3
 from contextlib import closing
 
 from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QPointF, QRect, Qt, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices, QFont, QFontMetrics, QInputMethodEvent, QKeyEvent, QMouseEvent
+from PySide6.QtGui import QDesktopServices, QEnterEvent, QFont, QFontMetrics, QInputMethodEvent, QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import QMessageBox, QStyleOptionViewItem
 from desktop import app
 from desktop.errors import make_issue
@@ -293,8 +293,18 @@ def exercise_requirements(application, window, capture, output):
         QCoreApplication.sendEvent(window.windowHandle(), event)
         application.processEvents()
 
-    mouse_event(QEvent.Type.MouseMove, first, QPoint(first.width() - 100, first.height() // 2))
-    capture('13b-prompts-hover')
+    # 单独 MouseMove 不会产生 Qt 进入事件；投递完整 Enter/Leave 并核实真实控件状态。
+    point = QPoint(first.width() - 100, first.height() // 2)
+    try:
+        QCoreApplication.sendEvent(first, QEnterEvent(QPointF(point), QPointF(first.mapTo(window, point)),
+                                                      QPointF(first.mapToGlobal(point))))
+        application.processEvents()
+        assert first.underMouse(), 'entry_hover_not_triggered'
+        capture('13b-prompts-hover')
+        assert first.underMouse(), 'entry_hover_not_triggered'
+    finally:
+        QCoreApplication.sendEvent(first, QEvent(QEvent.Type.Leave))
+        application.processEvents()
     for stage, entry in page.entries.items():
         for point in (entry.icon_rect().center(), QPoint(entry.width() - 100, entry.height() // 2),
                       entry.title.mapTo(entry, entry.title.rect().center()),
@@ -436,7 +446,7 @@ def exercise_requirements(application, window, capture, output):
             'restore_confirmed': True, 'restore_cancelled': True, 'dirty_protection': True,
             'save_failure_kept_draft': True, 'minimum_large_font': True,
             'readonly_rejected_input': True, 'compact_left_return': True,
-            'entry_whole_card_mouse': True, 'entry_keyboard': True,
+            'entry_whole_card_mouse': True, 'entry_keyboard': True, 'entry_hover_event': True,
             'entry_history_frame_height': frame.height(), 'entry_icon_size': 36,
             'entry_minimum_large_font': True, 'entry_wrapped_large_font': True}
 
