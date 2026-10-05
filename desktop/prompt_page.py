@@ -3,14 +3,99 @@
 # See LICENSE in the project root for the full license text.
 
 """提示词页面只编辑研究要求，固定协议始终由程序管理。"""
-from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QHBoxLayout, QMessageBox, QPlainTextEdit, QStackedWidget, QVBoxLayout, QWidget
+from PySide6.QtCore import QRect, QRectF, QSize, Qt
+from PySide6.QtGui import QColor, QFont, QPainter, QPen
+from PySide6.QtWidgets import QAbstractButton, QHBoxLayout, QMessageBox, QPlainTextEdit, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
 from qfluentwidgets import FluentIcon, PrimaryPushButton, PushButton, ScrollArea, TitleLabel
 
-from desktop.pages import card
 from desktop.research_requirements import RequirementsError, RequirementsStore
-from desktop.style import ACCENT, CARD_BACKGROUND, CARD_BORDER, PAGE_BACKGROUND, TEXT_PRIMARY, TEXT_SECONDARY
+from desktop.style import ACCENT, CARD_BACKGROUND, CARD_BORDER, PAGE_BACKGROUND, SUBTLE_BACKGROUND, TEXT_PRIMARY, TEXT_SECONDARY
 from desktop.task_panel import wrapping_label
+
+
+class PromptEntryCard(QAbstractButton):
+    """整卡是单一按钮；标签透传鼠标，文字换行决定实际高度。"""
+
+    def __init__(self, title, purpose, parent=None):
+        super().__init__(parent)
+        self.setText(title)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        # 历史行高 104，绘制上下各留 5：实际外框高 94，间隔 10。
+        self.setMinimumHeight(94)
+        policy = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        policy.setHeightForWidth(True)
+        self.setSizePolicy(policy)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(72, 19, 54, 19)
+        layout.setSpacing(10)
+        heading = QWidget(self)
+        heading.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        row = QHBoxLayout(heading)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(18)
+        self.title = wrapping_label(title)
+        font = QFont("Microsoft YaHei UI", 10)
+        font.setBold(True)
+        self.title.setFont(font)
+        self.title.setStyleSheet(f"color: {TEXT_PRIMARY};")
+        self.state = wrapping_label("")
+        font = QFont("Microsoft YaHei UI")
+        font.setPixelSize(12)
+        self.state.setFont(font)
+        self.state.setStyleSheet(f"color: {TEXT_SECONDARY};")
+        row.addWidget(self.title)
+        row.addWidget(self.state, 1)
+        layout.addWidget(heading)
+        self.purpose = wrapping_label(purpose)
+        self.purpose.setFont(QFont("Microsoft YaHei UI", 10))
+        self.purpose.setStyleSheet(f"color: {TEXT_SECONDARY};")
+        layout.addWidget(self.purpose)
+        for label in (self.title, self.state, self.purpose):
+            label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def sizeHint(self):
+        return QSize(300, max(94, self.layout().sizeHint().height()))
+
+    def minimumSizeHint(self):
+        return QSize(0, 94)
+
+    def heightForWidth(self, width):
+        return max(94, self.layout().heightForWidth(width))
+
+    def icon_rect(self):
+        # 与历史 DOCUMENT 图标同为 36px，左侧距外框 18px，垂直居中。
+        frame = self.rect().adjusted(1, 0, -1, 0)
+        return QRect(frame.left() + 18, frame.center().y() - 18, 36, 36)
+
+    def paintEvent(self, _event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        hover = self.underMouse()
+        background = SUBTLE_BACKGROUND if self.isDown() else "#f4f8fc" if hover else CARD_BACKGROUND
+        border = ACCENT if self.hasFocus() else "#b7c8d9" if hover else CARD_BORDER
+        painter.setBrush(QColor(background))
+        painter.setPen(QPen(QColor(border), 1))
+        painter.drawRoundedRect(QRectF(self.rect()).adjusted(1, .5, -1, -.5), 8, 8)
+        FluentIcon.EDIT.icon(color=QColor(ACCENT)).paint(painter, self.icon_rect())
+        FluentIcon.CHEVRON_RIGHT.icon(color=QColor(TEXT_SECONDARY)).paint(
+            painter, QRect(self.width() - 36, (self.height() - 16) // 2, 16, 16))
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if not event.isAutoRepeat():
+                self.click()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def enterEvent(self, event):
+        super().enterEvent(event)
+        self.update()
+
+    def leaveEvent(self, event):
+        super().leaveEvent(event)
+        self.update()
 
 
 class PromptPage(QWidget):
@@ -40,19 +125,18 @@ class PromptPage(QWidget):
         root.addWidget(TitleLabel("提示词"))
         root.addWidget(wrapping_label("分别管理两轮研究要求；输出协议和安全边界由程序固定。"))
         self.states = {}
+        self.entries = {}
+        entries = QWidget()
+        entry_layout = QVBoxLayout(entries)
+        entry_layout.setContentsMargins(0, 0, 0, 0)
+        entry_layout.setSpacing(10)
         for stage in self.TITLES:
-            surface, layout = card(self.TITLES[stage])
-            layout.addWidget(wrapping_label(self.PURPOSES[stage]))
-            row = QHBoxLayout()
-            state = wrapping_label("")
-            state.setStyleSheet(f"color: {TEXT_SECONDARY};")
-            self.states[stage] = state
-            row.addWidget(state, 1)
-            button = PushButton(FluentIcon.CHEVRON_RIGHT, "查看")
-            button.clicked.connect(lambda _checked=False, s=stage: self.open_round(s))
-            row.addWidget(button)
-            layout.addLayout(row)
-            root.addWidget(surface)
+            entry = PromptEntryCard(self.TITLES[stage], self.PURPOSES[stage])
+            self.entries[stage] = entry
+            self.states[stage] = entry.state
+            entry.clicked.connect(lambda _checked=False, s=stage: self.open_round(s))
+            entry_layout.addWidget(entry)
+        root.addWidget(entries)
         root.addStretch()
         scroll = ScrollArea()
         scroll.setWidgetResizable(True)
@@ -117,6 +201,7 @@ class PromptPage(QWidget):
                 label.setText("当前使用自定义研究要求" if saved.custom else "当前使用默认研究要求")
             except (RequirementsError, RuntimeError, OSError, ValueError):
                 label.setText("研究要求不可用，请进入详情处理")
+            self.entries[stage].setAccessibleDescription(f"{self.PURPOSES[stage]} {label.text()}；回车或空格查看。")
 
     def open_round(self, stage):
         if not self.protect_unsaved():

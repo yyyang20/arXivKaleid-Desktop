@@ -843,6 +843,79 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.assertEqual(RequirementsStore(self.root).load('round1').text, '研究黑洞偏振图像')
         self.assertFalse(RequirementsStore(self.root).load('round2').custom)
 
+    def test_prompt_entry_whole_card_and_keyboard_open_readonly(self):
+        page = self.window.prompt_page
+        self.window.switch_page(page)
+        self.window.show()
+        QTest.qWait(50)
+        for stage, entry in page.entries.items():
+            # 真正命中文字、图标和空白，避免只验证按钮自己发出信号。
+            points = [(entry, entry.icon_rect().center()),
+                      (entry, QPoint(entry.width() - 100, entry.height() // 2)),
+                      (entry, QPoint(entry.width() - 28, entry.height() // 2)),
+                      (entry.title, entry.title.rect().center()),
+                      (entry.state, entry.state.rect().center()),
+                      (entry.purpose, entry.purpose.rect().center())]
+            for source, point in points:
+                page.go_back()
+                position = source.mapTo(self.window, point)
+                self.assertIs(self.window.childAt(position), entry)
+                QTest.mouseClick(self.window.windowHandle(), Qt.MouseButton.LeftButton, pos=position)
+                self.assertEqual(page.stage, stage)
+                self.assertEqual(page.stack.currentIndex(), 1)
+                self.assertTrue(page.editor.isReadOnly())
+                self.assertFalse(page.editing)
+            for key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+                page.go_back()
+                entry.setFocus()
+                QTest.keyClick(entry, key)
+                self.assertEqual(page.stage, stage)
+                self.assertEqual(page.stack.currentIndex(), 1)
+            page.go_back()
+            QTest.mouseClick(entry, Qt.MouseButton.RightButton)
+            self.assertEqual(page.stack.currentIndex(), 0)
+            QTest.mousePress(entry, Qt.MouseButton.LeftButton)
+            QTest.mouseRelease(entry, Qt.MouseButton.LeftButton, pos=QPoint(-5, -5))
+            self.assertEqual(page.stack.currentIndex(), 0)
+
+    def test_prompt_entry_matches_actual_history_card_and_grows_with_font(self):
+        from PySide6.QtCore import QRect
+        from PySide6.QtGui import QFont
+        from PySide6.QtWidgets import QStyleOptionViewItem
+        from desktop.history import HistorySummary
+        page = self.window.prompt_page
+        self.window.switch_page(page)
+        self.window.show()
+        QTest.qWait(50)
+        history = self.window.history_page
+        history.model.append([HistorySummary(1, 'synthetic-entry-size', 0, 75, 5, 0, DAY)])
+        option = QStyleOptionViewItem()
+        option.initFrom(history.list_view)
+        option.rect = QRect(0, 0, page.entries['round1'].width(), 104)
+        history_height = history.delegate.sizeHint(option, history.model.index(0)).height()
+        # 与实际 delegate 绘制后的外框比较，不只断言本功能自己的常量。
+        visible_history = QRect(0, 0, option.rect.width(), history_height).adjusted(1, 5, -1, -5)
+        first, second = page.entries.values()
+        self.assertEqual(first.height(), visible_history.height())
+        self.assertEqual(second.y() - first.geometry().bottom() - 1, history_height - visible_history.height())
+        icon = first.icon_rect()
+        self.assertEqual((icon.x(), icon.width(), icon.height()), (visible_history.left() + 18, 36, 36))
+        self.assertLessEqual(abs(icon.center().y() - first.rect().center().y()), 1)
+        self.window.resize(850, 680)
+        for entry in page.entries.values():
+            for label in (entry.title, entry.state, entry.purpose):
+                font = QFont(label.font())
+                font.setPointSize(20)
+                label.setFont(font)
+        QTest.qWait(100)
+        self.assertGreater(first.height(), visible_history.height())
+        self.assertLess(first.geometry().bottom(), second.y())
+        for entry in page.entries.values():
+            self.assertGreaterEqual(entry.height(), entry.heightForWidth(entry.width()))
+            for label in (entry.title, entry.state, entry.purpose):
+                bottom = label.mapTo(entry, label.rect().bottomRight())
+                self.assertTrue(entry.rect().contains(bottom))
+
     def test_restore_confirmation_failure_and_corrupt_recovery(self):
         from PySide6.QtWidgets import QMessageBox
         from desktop.research_requirements import RequirementsError

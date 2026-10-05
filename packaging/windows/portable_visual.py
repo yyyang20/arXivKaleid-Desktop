@@ -14,8 +14,8 @@ import hashlib
 import sqlite3
 from contextlib import closing
 
-from PySide6.QtCore import QCoreApplication, QEvent, QPoint, Qt, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices, QFont, QInputMethodEvent, QKeyEvent
+from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QPointF, QRect, Qt, QTimer, QUrl
+from PySide6.QtGui import QDesktopServices, QFont, QFontMetrics, QInputMethodEvent, QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import QMessageBox, QStyleOptionViewItem
 from desktop import app
 from desktop.errors import make_issue
@@ -270,6 +270,78 @@ def exercise_requirements(application, window, capture, output):
     page.go_back()
     capture('13-prompts-overview')
 
+    # 用历史实际 delegate 外框核对尺度；只创建内存元数据，不读写历史库。
+    from desktop.history import HistorySummary
+    from desktop.history_page import HistoryModel
+    model = HistoryModel()
+    model.append([HistorySummary(1, 'synthetic-card-size', 0, 75, 5, 0, date(2026, 10, 1))])
+    option = QStyleOptionViewItem()
+    option.initFrom(window.history_page.list_view)
+    first, second = page.entries.values()
+    height = window.history_page.delegate.sizeHint(option, model.index(0)).height()
+    frame = QRect(0, 0, first.width(), height).adjusted(1, 5, -1, -5)
+    assert first.height() == second.height() == frame.height()
+    assert second.y() - first.geometry().bottom() - 1 == height - frame.height()
+    assert first.icon_rect() == QRect(frame.left() + 18, first.rect().center().y() - 18, 36, 36)
+
+    def mouse_event(kind, entry, point, button=Qt.MouseButton.NoButton):
+        position = entry.mapTo(window, point)
+        assert window.childAt(position) is entry, 'entry_child_consumes_mouse'
+        buttons = button if kind == QEvent.Type.MouseButtonPress else Qt.MouseButton.NoButton
+        event = QMouseEvent(kind, QPointF(position), QPointF(window.mapToGlobal(position)),
+                            button, buttons, Qt.KeyboardModifier.NoModifier)
+        QCoreApplication.sendEvent(window.windowHandle(), event)
+        application.processEvents()
+
+    mouse_event(QEvent.Type.MouseMove, first, QPoint(first.width() - 100, first.height() // 2))
+    capture('13b-prompts-hover')
+    for stage, entry in page.entries.items():
+        for point in (entry.icon_rect().center(), QPoint(entry.width() - 100, entry.height() // 2),
+                      entry.title.mapTo(entry, entry.title.rect().center()),
+                      entry.state.mapTo(entry, entry.state.rect().center()),
+                      entry.purpose.mapTo(entry, entry.purpose.rect().center()),
+                      QPoint(entry.width() - 28, entry.height() // 2)):
+            mouse_event(QEvent.Type.MouseButtonPress, entry, point, Qt.MouseButton.LeftButton)
+            mouse_event(QEvent.Type.MouseButtonRelease, entry, point, Qt.MouseButton.LeftButton)
+            assert page.stage == stage and page.stack.currentIndex() == 1
+            assert page.editor.isReadOnly() and not page.editing
+            page.go_back()
+            application.processEvents()
+        for key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            entry.setFocus()
+            for kind in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
+                QCoreApplication.sendEvent(entry, QKeyEvent(kind, key, Qt.KeyboardModifier.NoModifier))
+            assert page.stage == stage and page.stack.currentIndex() == 1 and page.editor.isReadOnly()
+            page.go_back()
+            application.processEvents()
+
+    def verify_entry_text(entry):
+        for label in (entry.title, entry.state, entry.purpose):
+            bottom = label.mapTo(entry, label.rect().bottomRight())
+            assert entry.rect().contains(bottom), 'entry_label_outside_card'
+            required = QFontMetrics(label.font()).boundingRect(
+                QRect(0, 0, label.width(), 10000), Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap, label.text()).height()
+            assert required <= label.height(), 'entry_text_clipped'
+    labels = [label for entry in page.entries.values() for label in (entry.title, entry.state, entry.purpose)]
+    normal_fonts = [(label, label.font()) for label in labels]
+    window.resize(850, 680)
+    for points, name in ((12, '13c-prompts-minimum-large-font'), (20, '13d-prompts-wrapped-large-font')):
+        for label in labels:
+            font = QFont(label.font())
+            font.setPointSize(points)
+            label.setFont(font)
+        capture(name)
+        assert all(label.font().pointSizeF() == points for label in labels)
+        assert first.geometry().bottom() < second.y()
+        for entry in page.entries.values():
+            verify_entry_text(entry)
+        if points == 20:
+            assert first.height() > frame.height(), 'entry_large_font_height_not_updated'
+    for label, font in normal_fonts:
+        label.setFont(font)
+    window.resize(1060, 820)
+    application.processEvents()
+
     def answer(text, name):
         def act():
             dialog = application.activeModalWidget()
@@ -363,7 +435,10 @@ def exercise_requirements(application, window, capture, output):
     return {'saved_sha256': saved, 'chinese_input_method_event': True, 'cancel': True,
             'restore_confirmed': True, 'restore_cancelled': True, 'dirty_protection': True,
             'save_failure_kept_draft': True, 'minimum_large_font': True,
-            'readonly_rejected_input': True, 'compact_left_return': True}
+            'readonly_rejected_input': True, 'compact_left_return': True,
+            'entry_whole_card_mouse': True, 'entry_keyboard': True,
+            'entry_history_frame_height': frame.height(), 'entry_icon_size': 36,
+            'entry_minimum_large_font': True, 'entry_wrapped_large_font': True}
 
 
 def exercise(application, window, root, synthetic_key):
