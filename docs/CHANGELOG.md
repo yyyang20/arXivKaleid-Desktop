@@ -2,6 +2,14 @@
 
 本文件保留 Desktop 与通用功能的简短历史。代码解耦前的条目来自原项目：当时的发行来源、构建提交、兼容行为和治理测试仅表示历史事实，不代表当前仓库仍有这些入口或测试。现行行为以代码、配置、测试和 [当前业务规范](PROJECT_SPEC.md) 为准；详细历史通过 Git、PR 和 Issue 查询。
 
+## 2026-10-06：Desktop alpha 10 公开发行
+
+- 已公开 [v0.1.0-alpha.10 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.10)，不标为稳定 latest。[功能 PR #16](https://github.com/yyyang20/arXivKaleid-Desktop/pull/16) squash 合并后，从干净 main 提交 `89804e2895691d88f6ae62277e219de8f98ef0f9` 重新构建；tag 与 BUILD_INFO 一致，用途为 `public-release`，第一阶段技术候选未上传。
+- 仅上传 ZIP 与 `.sha256`：ZIP 为 118,661,452 字节，SHA-256 为 `162d2f7591793c3c4226cacd949a7cb781af95ad3d4a825007f6ba482bac9fbe`。匿名下载两份资产与本地逐字节一致，94 个 tag 源码文件与发行 Git blob 一致；全部既有历史 tag、Release 正文及资产身份未变。
+- PR 冻结提交与正式 main 文件树一致，均通过 192 项完整离线测试、零跳过、51 个 Python AST、四项资源哈希、治理和差异检查。正式 portable 通过原生 DPR 1.5 与模拟 100/125/150/200% 五组、每组 43 个 GUI 状态，覆盖真实 12/20 pt 字体、最小窗口、整卡点击/键盘、编辑保护、保存失败、分析禁改、跨进程恢复、请求哈希及费用边界、DPAPI、三次普通重启、12 次窗口生命周期和 DLL 来源；缺失/篡改资源及已用 runtime 安全拒绝。
+- 468 个发行文件逐文件核验，227 个第三方许可与对应源码文件与 alpha 9 一致；技术包与正式包仅 EXE、BUILD_INFO、用途化 README 和标准库 ZIP 成员顺序不同，154 个标准库成员内容一致。合成数据只存在验证副本，技术候选和历史审计原样保留，`release/` 仅留正式 alpha 10 ZIP/校验。
+- 本条及当前下载入口为发布后文档收口，不改变功能或已发布资产；最终 main 与发行 tag 分别核验。未安装依赖，未调用真实 arXiv、PDF 或 DeepSeek，模型调用与费用为 0。未覆盖第二台干净 Windows 或所有第三方 IME；既有 Qt 弃用/测试退出 GC 告警保留，冻结生命周期及退出检查通过，`gc.garbage` 为 0。
+
 ## 2026-10-06：Desktop alpha 10 提示词入口调整
 
 - 提示词主页改为整卡进入只读详情，支持回车和空格；左侧 Fluent 笔图标与历史文档图标同尺寸、同位置，卡片外框与间隔对齐实际历史卡片，较大字体时随换行增高。
