@@ -323,19 +323,25 @@ def exercise_requirements(application, window, capture, output):
         page.editor.setPlainText(text)
         assert page.save()
         saved[stage] = hashlib.sha256(text.encode('utf-8')).hexdigest()
-    normal_font = page.font()
-    page.setFont(QFont('Microsoft YaHei UI', 12))
+    # Fluent 控件有独立字体，不能只放大父页面后宣称较大字体已验证。
+    controls = (page.editor, page.purpose, page.state, page.message, page.back_button,
+                page.edit_button, page.save_button, page.cancel_button, page.restore_button)
+    normal_fonts = [(widget, widget.font()) for widget in controls]
+    for widget in controls:
+        widget.setFont(QFont('Microsoft YaHei UI', 12))
     window.resize(850, 680)
     page.begin_edit()
     page.editor.appendPlainText('\n'.join('较大字体滚动验证：关注强引力偏振图像。' for _ in range(60)))
     capture('21-prompts-minimum-large-font')
+    assert all(widget.font().pointSizeF() == 12 for widget in controls)
     assert page.editor.height() >= 160
     assert page.restore_button.mapTo(page, page.restore_button.rect().bottomRight()).y() < page.height()
     assert page.editor.verticalScrollBar().maximum() > 0
     page.editor.verticalScrollBar().setValue(page.editor.verticalScrollBar().maximum())
     capture('21b-prompts-scroll')
     page.cancel()
-    page.setFont(normal_font)
+    for widget, font in normal_fonts:
+        widget.setFont(font)
     window.resize(1060, 820)
     page.go_back()
     capture('22-prompts-custom-overview')

@@ -930,13 +930,17 @@ class DesktopAppTests(IsolatedDesktopTest):
     def test_prompt_large_font_minimum_window_layout(self):
         from PySide6.QtGui import QFont
         page = self.window.prompt_page
-        page.setFont(QFont('Microsoft YaHei UI', 12))
+        controls = (page.editor, page.purpose, page.state, page.message, page.back_button,
+                    page.edit_button, page.save_button, page.cancel_button, page.restore_button)
+        for widget in controls:
+            widget.setFont(QFont('Microsoft YaHei UI', 12))
         self.window.resize(850, 680)
         self.window.switch_page(page)
         page.open_round('round2')
         page.begin_edit()
         self.window.show()
         QTest.qWait(100)
+        self.assertTrue(all(widget.font().pointSizeF() == 12 for widget in controls))
         self.assertGreaterEqual(page.editor.height(), 160)
         self.assertTrue(page.save_button.isVisible())
         self.assertLess(page.restore_button.mapTo(page, page.restore_button.rect().bottomRight()).y(), page.height())

@@ -148,8 +148,21 @@ def run(*, network=False, visual=False):
         assert status == 'valid' and discarded == 0
         report['round1_nonempty_evidence'] = True
         from desktop.research_requirements import RequirementsStore
-        payload = json.loads(main.build_round2_messages(prompt, profile, [], config, research_requirements=RequirementsStore().load('round2').text)[1]['content'])
+        requirements = RequirementsStore().snapshot()
+        messages = main.build_round2_messages(prompt, profile, [], config, research_requirements=requirements.round2)
+        payload = json.loads(messages[1]['content'])
         assert 'research_profile' not in payload
+        assert payload['research_requirements'] == requirements.round2
+        for stage, builder, fixed in (
+                ('round1', main.build_round1_messages, main.load_prompt(resources['round1_prompt'])),
+                ('round2', main.build_round2_messages, prompt)):
+            text = getattr(requirements, stage)
+            saved_messages = builder(fixed, profile, [], config, research_requirements=text)
+            changed_messages = builder(fixed, profile, [], config, research_requirements=text + '\n合成验证偏好')
+            assert saved_messages[0] == changed_messages[0]
+            assert json.loads(saved_messages[1]['content'])['research_requirements'] == text
+            assert main.stable_json_hash(saved_messages) != main.stable_json_hash(changed_messages)
+        report['research_requirements_requests_and_hashes'] = True
         from desktop.secrets import SecretStore
         store = SecretStore()
         store.save('synthetic-portable-check-not-an-api-key')
