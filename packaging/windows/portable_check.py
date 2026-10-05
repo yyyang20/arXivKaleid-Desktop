@@ -61,6 +61,11 @@ def run_recovery():
         application.processEvents()
         assert window.isVisible()
         if previous.get('visual_qa'):
+            from desktop.research_requirements import RequirementsStore
+            for stage, digest in previous['visual_qa']['requirements']['saved_sha256'].items():
+                saved = RequirementsStore().load(stage)
+                assert saved.custom and hashlib.sha256(saved.text.encode('utf-8')).hexdigest() == digest
+            result['research_requirements_restored_exactly'] = True
             # 跨进程验证持久化后的原始正文和删除；不生成或重新分析日报。
             from desktop.history import HistoryStore
             store = HistoryStore()
@@ -142,8 +147,22 @@ def run(*, network=False, visual=False):
                            {'source': 'metadata_abstract', 'quote': 'Synthetic abstract'}]
         assert status == 'valid' and discarded == 0
         report['round1_nonempty_evidence'] = True
-        payload = json.loads(main.build_round2_messages(prompt, profile, [], config)[1]['content'])
+        from desktop.research_requirements import RequirementsStore
+        requirements = RequirementsStore().snapshot()
+        messages = main.build_round2_messages(prompt, profile, [], config, research_requirements=requirements.round2)
+        payload = json.loads(messages[1]['content'])
         assert 'research_profile' not in payload
+        assert payload['research_requirements'] == requirements.round2
+        for stage, builder, fixed in (
+                ('round1', main.build_round1_messages, main.load_prompt(resources['round1_prompt'])),
+                ('round2', main.build_round2_messages, prompt)):
+            text = getattr(requirements, stage)
+            saved_messages = builder(fixed, profile, [], config, research_requirements=text)
+            changed_messages = builder(fixed, profile, [], config, research_requirements=text + '\n合成验证偏好')
+            assert saved_messages[0] == changed_messages[0]
+            assert json.loads(saved_messages[1]['content'])['research_requirements'] == text
+            assert main.stable_json_hash(saved_messages) != main.stable_json_hash(changed_messages)
+        report['research_requirements_requests_and_hashes'] = True
         from desktop.secrets import SecretStore
         store = SecretStore()
         store.save('synthetic-portable-check-not-an-api-key')
@@ -195,7 +214,7 @@ def run(*, network=False, visual=False):
         window = desktop_app.DesktopWindow(diagnostics=diagnostics)
         assert window.api_key.text() == SYNTHETIC_KEY
         assert window.open_logs_button.isEnabled()
-        assert window.pages.count() == 3 and window.task_panel.isHidden()
+        assert window.pages.count() == 4 and window.task_panel.isHidden()
         assert window.settings_page.isAncestorOf(window.api_key)
         assert desktop_app.__version__ in window.settings_page.version_label.text()
         from PySide6.QtGui import QIcon

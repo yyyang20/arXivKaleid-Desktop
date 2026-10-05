@@ -32,8 +32,10 @@ SOURCE_URL = f'https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags
 RESOURCES = (
     'config.json',
     'assets/app-icon.ico',
-    'prompts/relevance_round1_v20.txt',
-    'prompts/relevance_round2_v15.txt',
+    'prompts/relevance_round1_v21.txt',
+    'prompts/relevance_round2_v16.txt',
+    'prompts/research_requirements_round1_v1.txt',
+    'prompts/research_requirements_round2_v1.txt',
 )
 PUBLIC_DOCUMENTS = ('README.md', 'EULA.txt', 'PRIVACY.md', 'SECURITY.md')
 REQUIRED_RELEASE_FILES = (
@@ -294,6 +296,7 @@ def verify_tree(folder: Path) -> dict[str, str]:
             continue
         if (path.name.lower() in ('secret.dat', 'local_secret.json', 'automation_policy.json',
                                   'research_profile.json', 'research_profile.md',
+                                  'round1_research_requirements.json', 'round2_research_requirements.json',
                                   'daily_report_template.py', 'selection_nature.py')
                 or path.name.lower() in {'visual_qa_desktop.py', 'qa.json'}
                 or '.sqlite' in path.name.lower()

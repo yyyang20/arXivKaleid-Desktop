@@ -67,6 +67,8 @@ class DesktopBuildTests(unittest.TestCase):
 
     def test_release_scanner_rejects_user_state_and_private_path(self):
         for name, content in (('secret.dat', b'fake'), ('data.sqlite-wal', b'fake'),
+                              ('round1_research_requirements.json', b'private-canary'),
+                              ('round2_research_requirements.json', b'private-canary'),
                               ('paper.pdf', b'fake'), ('diagnostic.jsonl', b'{}\n'),
                               ('runtime/cache/data', b'fake'),
                               ('tests/helper.py', b'fake'), ('screenshots/initial.png', b'fake'),
@@ -81,7 +83,7 @@ class DesktopBuildTests(unittest.TestCase):
 
     def test_resource_allowlist_matches_current_config(self):
         config = json.loads((ROOT / 'config.json').read_text(encoding='utf-8'))
-        for name in ('round1_prompt', 'round2_prompt'):
+        for name in ('round1_prompt', 'round2_prompt', 'round1_requirements', 'round2_requirements'):
             self.assertIn(config['paths'][name], builder.RESOURCES)
         self.assertNotIn('config/research_profile.json', builder.RESOURCES)
         self.assertNotIn('profiles/research_profile.md', builder.RESOURCES)

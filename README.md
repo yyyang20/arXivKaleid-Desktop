@@ -4,7 +4,7 @@ arXivKaleid Desktop 是面向黑洞与致密天体强引力成像、偏振和新
 
 本仓库包含 Desktop 应用源码、测试、构建配置和项目文档；Windows portable 成品通过 GitHub Releases 提供。
 
-当前版本为 `0.1.0-alpha.9`，增加成功日报的本地历史保存、查看和确认删除；历史卡片分别显示抓取时间与论文日期，保留日期选择、全量候选两轮分析与现有模型安全限制。最新公开成品为 [alpha 9 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.9)，下载 ZIP 和同名校验文件后按下述方式核验。
+当前版本为 `0.1.0-alpha.10`，新增两轮独立的研究要求查看、编辑、保存及恢复默认，历史详情增加“生成时间”标签。alpha 10 尚未公开发布，本地技术候选仅供人工验收。最新公开成品仍为 [alpha 9 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.9)，下载 ZIP 和同名校验文件后按下述方式核验。
 
 ## 开发方式
 
@@ -42,6 +42,12 @@ API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和脱
 alpha 9 的历史保存当次完整原始 Markdown，重启后无需 Key 即可查看。同日多次成功分析分别保留，正常零推荐也保存；历史保存失败会单独提示，分析成功和本次日报仍保留。历史正文以明文存于 `runtime/history/history.sqlite`，不自动清理；确认删除只删除该日报，不删除 PDF、日志或 Key。
 
 详细数据说明见 [PRIVACY.md](PRIVACY.md)，使用本软件前请阅读 [EULA.txt](EULA.txt)。
+
+## 研究要求
+
+在“提示词”页分别管理第一轮和第二轮研究要求。查看时可选择复制，点击编辑后才可修改；保存成功后下次分析生效，取消恢复最后保存值。恢复默认需要确认并立即持久生效，另一轮不受影响。返回、切页或关闭时会保护未保存修改；分析期间只可查看。
+
+研究要求可写研究方向、关注/排除条件和阅读价值偏好，支持 Markdown 风格纯文本，不能为空、含 NUL 或超过 10,000 字符。标签、数量、排序机制、输出字段、校验和费用保护由程序固定。内容以明文保存在当前目录的 `runtime/config/round1_research_requirements.json` 和 `round2_research_requirements.json`，分析时随请求发送给 DeepSeek；不要填写凭据或不宜外发的私人内容。损坏配置会阻止分析并保留文件，可确认恢复本轮默认。新版本解压到新目录后使用该版本默认要求，不迁移旧目录。
 
 ## 卸载
 

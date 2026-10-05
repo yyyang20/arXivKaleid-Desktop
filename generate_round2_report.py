@@ -207,7 +207,7 @@ def load_and_validate_round2(
     ).fetchall()
     if not rows:
         if (
-            audit_prompt_version in {"round2_v15"}
+            audit_prompt_version in {"round2_v16"}
             and isinstance(audit, dict)
             and audit.get("accepted_count") == 0
         ):
@@ -252,9 +252,9 @@ def load_and_validate_round2(
             next(iter(prompt_versions))
         )
     )
-    uses_tolerant_contract = prompt_versions == {"round2_v15"}
+    uses_tolerant_contract = prompt_versions == {"round2_v16"}
     if not uses_tolerant_contract:
-        reasons.append("Desktop 仅支持 round2_v15 结果。")
+        reasons.append("Desktop 仅支持 round2_v16 结果。")
     expected_count = min(5, len(candidate_ids))
     if not uses_tolerant_contract and len(rows) != expected_count:
         reasons.append(

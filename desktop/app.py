@@ -32,10 +32,12 @@ from desktop.pages import HomePage, HistoryPage, SettingsPage
 from desktop.style import PAGE_BACKGROUND
 from desktop.task_panel import ANALYSIS_STAGES, STAGE_SYMBOLS
 from desktop.history import HistoryError, HistoryStore
+from desktop.prompt_page import PromptPage
+from desktop.research_requirements import RequirementsError, RequirementsStore
 
 
 ANALYSIS_NOTICE = (
-    "开始分析会将论文标题、摘要、通过门控后的 PDF 提取全文和内置研究边界"
+    "开始分析会将论文标题、摘要、通过门控后的 PDF 提取全文和已保存的研究要求"
     "发送到你自己的 DeepSeek API，并可能产生费用。\n\n"
     "API Key 仅在本机使用 Windows DPAPI 加密保存；PDF、SQLite 和缓存保存在本机。"
     "应用没有维护者服务器中转或遥测。\n\n"
@@ -157,11 +159,13 @@ class DesktopWindow(QWidget):
         diagnostics: DesktopDiagnostics | None = None,
         window_icon: QIcon | None = None,
         history_store: HistoryStore | None = None,
+        requirements_store: RequirementsStore | None = None,
     ):
         super().__init__()
         self.secret_store = secret_store if secret_store is not None else SecretStore()
         self.diagnostics = diagnostics
         self.history_store = history_store if history_store is not None else HistoryStore()
+        self.requirements_store = requirements_store if requirements_store is not None else RequirementsStore()
         self.history_worker: HistoryWorker | None = None
         self._history_jobs = []
         self._history_generation = 0
@@ -197,10 +201,12 @@ class DesktopWindow(QWidget):
         self.navigation.setIndicatorAnimationEnabled(False)
         self.pages = QStackedWidget()
         self.home_page = HomePage()
+        self.prompt_page = PromptPage(self.requirements_store)
         self.history_page = HistoryPage()
         self.settings_page = SettingsPage()
         for page, icon, title in (
             (self.home_page, FluentIcon.HOME, "首页"),
+            (self.prompt_page, FluentIcon.DOCUMENT, "提示词"),
             (self.history_page, FluentIcon.HISTORY, "历史"),
             (self.settings_page, FluentIcon.SETTING, "设置"),
         ):
@@ -260,6 +266,9 @@ class DesktopWindow(QWidget):
             self.diagnostic_text.setText("诊断仅保留在当前会话；本地日志不可写。")
 
     def switch_page(self, page: QWidget) -> None:
+        if page is not self.pages.currentWidget() and not self.prompt_page.protect_unsaved():
+            self.navigation.setCurrentItem(self.pages.currentWidget().objectName())
+            return
         self.pages.setCurrentWidget(page)
         self.navigation.setCurrentItem(page.objectName())
         if page is self.history_page:
@@ -653,8 +662,18 @@ class DesktopWindow(QWidget):
         if not self.save_key():
             self.switch_page(self.settings_page)
             return
+        if not self.prompt_page.protect_unsaved():
+            return
+        try:
+            requirements = self.requirements_store.snapshot()
+        except (RequirementsError, RuntimeError, OSError, ValueError):
+            self.status.setText("研究要求不可用，未开始分析。请在提示词页面处理保存内容或检查内置资源。")
+            self.prompt_page.refresh_states()
+            self.switch_page(self.prompt_page)
+            return
         # 在启动线程前消费快照；任何失败都不恢复旧快照的分析资格。
-        attempt = AnalysisAttempt(self.snapshot, self.diagnostics)
+        attempt = AnalysisAttempt(self.snapshot, self.diagnostics, requirements=requirements)
+        self.prompt_page.set_busy(True)
         self.switch_page(self.home_page)
         self.task_panel.begin("analysis")
         self.fetch_button.setEnabled(False)
@@ -743,6 +762,7 @@ class DesktopWindow(QWidget):
         self.api_key.setEnabled(True)
         self.refresh_diagnostic_availability()
         self.worker = None
+        self.prompt_page.set_busy(False)
         worker.deleteLater()
 
     @Slot(QUrl)
@@ -763,6 +783,9 @@ class DesktopWindow(QWidget):
         if self.worker is not None or self.history_worker is not None:
             self.status.setText("任务正在运行，请等待结束后关闭窗口。")
             self.history_page.message.setText("历史读写正在运行，请等待结束后关闭窗口。")
+            event.ignore()
+            return
+        if not self.prompt_page.protect_unsaved():
             event.ignore()
             return
         if not self.save_key():

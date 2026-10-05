@@ -43,7 +43,7 @@ def content_label_from_details_json(
     details_json: Any, *, prompt_version: Any
 ) -> str | None:
     """读取当前 Desktop 第一轮直接返回的四类标签。"""
-    if prompt_version != "round1_v20":
+    if prompt_version != "round1_v21":
         raise RuntimeError("desktop_round1_prompt_unsupported")
     try:
         details = json.loads(str(details_json))
@@ -58,7 +58,7 @@ def round2_content_label_from_details_json(
     details_json: Any, *, prompt_version: Any
 ) -> str | None:
     """读取当前 Desktop 第二轮基于全文返回的四类标签。"""
-    if prompt_version != "round2_v15":
+    if prompt_version != "round2_v16":
         raise RuntimeError("desktop_round2_prompt_unsupported")
     try:
         details = json.loads(str(details_json))

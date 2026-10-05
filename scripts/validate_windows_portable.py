@@ -105,6 +105,7 @@ def main():
         restored = json.loads((copy / 'runtime/work/recovery-check.json').read_text())
         assert restored['synthetic_dpapi_recovered']
         assert restored['history_restored_exactly'] and restored['deleted_history_stays_deleted']
+        assert restored['research_requirements_restored_exactly']
         for _ in range(3):
             process = subprocess.Popen([str(copy / 'arXivKaleid.exe')], cwd=work, env=env, creationflags=0x08000000)
             visible = False
@@ -132,9 +133,17 @@ def main():
     # 缺失资源必须失败，且诊断拒绝重复使用已有 runtime；仅操作本次新副本。
     negative = checked_path(work, 'missing-resource')
     shutil.copytree(source, negative)
-    prompt = negative / '_internal/prompts/relevance_round2_v15.txt'
+    prompt = negative / '_internal/prompts/relevance_round2_v16.txt'
     prompt.rename(prompt.with_suffix('.disabled'))
     bad = subprocess.run([str(negative / 'arXivKaleid.exe'), '--portable-check'], cwd=work,
+                         env=env, timeout=30, creationflags=0x08000000)
+    assert bad.returncode != 0
+    # 默认研究资源同样受发行完整性校验，篡改后不可启动分析。
+    tampered = checked_path(work, 'tampered-requirements')
+    shutil.copytree(source, tampered)
+    requirement = checked_path(tampered, '_internal/prompts/research_requirements_round1_v1.txt')
+    requirement.write_bytes(requirement.read_bytes() + b'\nsynthetic-tamper')
+    bad = subprocess.run([str(tampered / 'arXivKaleid.exe'), '--portable-check'], cwd=work,
                          env=env, timeout=30, creationflags=0x08000000)
     assert bad.returncode != 0
     rejected = subprocess.run([str(copy / 'arXivKaleid.exe'), '--portable-check'], cwd=work,
@@ -143,6 +152,7 @@ def main():
     # 应用曾用过的验证目录不回流干净发行树。
     verify_tree(source)
     summary = {'commit': identity['commit'], 'runs': results, 'missing_resource_rejected': True,
+               'tampered_requirements_rejected': True,
                'used_runtime_rejected': True, 'clean_distribution_preserved': True}
     (work / 'validation.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
     print('Validation audit:', work.name)

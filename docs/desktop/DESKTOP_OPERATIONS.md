@@ -12,7 +12,7 @@
 python -B -m desktop.app
 ```
 
-当前版本为 `0.1.0-alpha.9`，使用 PySide6 / Qt `6.9.2`、PySide6-Fluent-Widgets `1.11.3` 基础版、PySideSix-Frameless-Window `0.8.2`、darkdetect `0.8.0`、Windows pywin32 `312`，均固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。不安装 full 的 scipy、pillow、colorthief。该文件同时引入 [requirements.txt](../../requirements.txt) 中的 pypdf 核心运行依赖；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
+当前版本为 `0.1.0-alpha.10`，尚未公开发布。使用 PySide6 / Qt `6.9.2`、PySide6-Fluent-Widgets `1.11.3` 基础版、PySideSix-Frameless-Window `0.8.2`、darkdetect `0.8.0`、Windows pywin32 `312`，均固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。不安装 full 的 scipy、pillow、colorthief。该文件同时引入 [requirements.txt](../../requirements.txt) 中的 pypdf 核心运行依赖；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
 
 仅在用户已授权且已核实为本项目专用的 Conda 环境中，才可安装 Desktop 依赖：
 
@@ -54,7 +54,7 @@ alpha 7 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windo
 ./scripts/build_windows_portable.ps1 -PythonExe $desktopPython
 ```
 
-构建入口按现有 spec 生成 Windows GUI one-folder；资源 allowlist 仅包含 `config.json` 和两份现行自包含 Prompt，不包含独立自动化策略或 Profile 文件。curl `8.22.0_2` 来自 curl 官方固定 x64 归档，并核验 manifest 中的 SHA-256 后才运行。时区数据来自专用环境，不依赖系统 IANA 数据。
+构建入口按现有 spec 生成 Windows GUI one-folder；资源 allowlist 包含 `config.json`、正式 ICO、两份现行固定协议和两份默认研究要求，不包含用户覆盖记录、历史 Prompt、独立自动化策略或 Profile 文件。curl `8.22.0_2` 来自 curl 官方固定 x64 归档，并核验 manifest 中的 SHA-256 后才运行。时区数据来自专用环境，不依赖系统 IANA 数据。
 
 构建前必须在已授权范围内冻结干净提交；本地技术验证使用 `codex/` 开发分支，要求其是已核验 `origin/main` 基线的后代，不要求 HEAD 等于基线。产物为根 `dist/` 下带版本目录、`release/` 下同名 ZIP 和 `.zip.sha256`。`BUILD_INFO.json` 记录分支、基线、冻结提交、验证用途和环境版本。旧干净发行物移入本次 `.desktop-build/build-*/` 留存；已有 `runtime/` 的发行目录拒绝覆盖。构建目录、vendor 下载和输出均被 Git 忽略。所有下载都先校验固定哈希，缓存不符即停止。
 
@@ -88,6 +88,14 @@ Qt `QDomDocument.setContent` 弃用提示暂为非阻塞已知问题，以冻结
 
 ## 运行目录与凭据
 
+研究要求在本目录 `config/round1_research_requirements.json` 与 `round2_research_requirements.json` 中以 UTF-8 明文保存。重启生效；损坏或未知格式会阻止分析，不自动覆盖。通过 GUI 确认恢复对应轮默认可修复覆盖记录，内置资源损坏则重新解压。升级到新目录使用新版默认，不复制或迁移旧 `runtime/`。
+
+alpha 10 第一阶段先通过源码离线测试、实际 GUI、请求哈希/缓存/预算与隐私边界验证，再冻结本地中文 commit。构建前核验已有 vendor 固定哈希，缺失或异常时停止，不安装依赖或下载替代材料。自动合成数据只写验证副本；分别验收四页、两轮查看/编辑、保存失败、恢复确认、离开保护、分析禁改、原生 DPI 与模拟 100/125/150/200%，并检查输入法提交中文、滚动及较大字体。提示词入口还须核对实际历史卡片外框、间隔与图标，执行整卡各区域点击及回车/空格进入，检查悬停/聚焦、最小窗口下实际放大文字的换行和裁切。此处输入法事件检查不等于所有第三方 IME 的实机兼容覆盖。
+
+干净构建目录与 ZIP 必须无 runtime、测试/个人数据和用户覆盖配置，逐文件核对资源、许可、身份和哈希。`BUILD_INFO.json` 使用 `local-portable-technical-validation`，README 绑定冻结 commit。验收通过后，按准确文件名把旧 ZIP/校验和被替换候选原样移入被忽略的构建审计目录，核对移动前后哈希，不删除历史材料。`release/` 最后只留本阶段 alpha 10 ZIP 与 `.sha256`；不执行公开发布后的清理流程。
+
+第一阶段到本地技术候选交付即停止，不 push、PR、merge、tag、GitHub Release 或上传资产。正式发布需另行授权，从合并后的干净 main 重建，技术候选不可直接发布。
+
 `.desktop-runtime/` 位于项目根目录并被 Git 忽略。源码诊断日志位于 `.desktop-runtime/logs/`；`config/secret.dat` 为当前 Windows 用户的 DPAPI 密文；`cache/arxiv/last_request_time.txt` 为请求间隔记录。候选在当前进程冻结；开始分析后将其写入本次工作库，不作为跨运行历史。
 
 日志文件按进程创建，完整 JSON 行写入后立即 flush。GUI 的“打开日志目录”只在持久日志可用时启用；目录创建、序列化或写入失败时显示“诊断仅保留在当前会话”，原业务错误和成功状态不受影响。日志可随时在应用关闭后手工删除；分享前仍应检查内容，只提供与问题相关的文件，不要发送整个 `runtime/`。
@@ -112,7 +120,7 @@ alpha 9 历史库独立位于 `history/history.sqlite`，以明文保存当次�
 
 ## 离线验证
 
-隔离视觉 QA 使用已有环境运行 `python -X utf8 -B scripts/visual_qa_desktop.py`，执行前按下述方式限制 TEMP/TMP。该入口不启动正式业务、不读取用户 Secret、不运行真实网络或模型；内存假 Key、合成快照/事件与 SQLite 事实经过真实校验器、日报生成器、QThread 与 GUI，urllib/socket/子进程网络入口硬禁止。截图与 qa.json 写入 `.codex-validation/alpha9-visual-qa/capture-*/`，包含初始、抓取、成功收缩/展开、分析、真实生成日报、设置/禁改、历史空态/列表/详情/零推荐、确认删除及保存失败、最小窗口和较大字体。Windows 使用当前进程 `QT_QPA_PLATFORM=windows`；可分别以 `QT_SCALE_FACTOR=1` 和 `1.5` 复核不同缩放，包含日期弹层、边界月份和最小窗口日历；实际 DPR 在 qa.json 中记录，不改变持久系统设置。
+隔离视觉 QA 使用已有环境运行 `python -X utf8 -B scripts/visual_qa_desktop.py`，执行前按下述方式限制 TEMP/TMP。该入口不启动正式业务、不读取用户 Secret、不运行真实网络或模型；内存假 Key、合成快照/事件与 SQLite 事实经过真实校验器、日报生成器、QThread 与 GUI，urllib/socket/子进程网络入口硬禁止。截图与 qa.json 写入 `.codex-validation/alpha10-visual-qa/capture-*/`，包含初始、抓取、成功收缩/展开、分析、真实生成日报、设置/禁改、历史空态/列表/详情/零推荐、确认删除及保存失败、两轮研究要求查看/编辑和保护对话框、最小窗口和实际放大的控件字体。Windows 使用当前进程 `QT_QPA_PLATFORM=windows`；可分别以 `QT_SCALE_FACTOR=1` 和 `1.5` 复核不同缩放，包含日期弹层、边界月份和最小窗口日历；实际 DPR 在 qa.json 中记录，不改变持久系统设置。
 
 在项目根目录及已有匹配依赖的环境中运行；临时目录只作用于当前 PowerShell 进程及其子进程，结束后恢复原值，不修改用户或系统的持久设置。先使用已有路径检查函数确认临时目录仍在项目内且没有目录链接：
 

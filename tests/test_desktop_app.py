@@ -8,6 +8,7 @@ import importlib.util
 import os
 import threading
 import time
+import json
 import unittest
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import Mock, patch
@@ -16,7 +17,7 @@ from zoneinfo import ZoneInfo
 from desktop.pipeline import CandidateSnapshot
 from desktop.progress import ProgressEvent
 from desktop.secrets import SecretError
-from test_desktop_pipeline import DAY, IsolatedDesktopTest, paper
+from test_desktop_pipeline import DAY, PROJECT_ROOT, IsolatedDesktopTest, paper
 
 
 HAS_QT = (importlib.util.find_spec("PySide6") is not None
@@ -40,6 +41,10 @@ class DesktopAppTests(IsolatedDesktopTest):
 
     def setUp(self):
         super().setUp()
+        for name in ("config.json", *json.loads((PROJECT_ROOT / "config.json").read_text(encoding="utf-8"))["paths"].values()):
+            target = self.root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((PROJECT_ROOT / name).read_bytes())
         self.store = Mock(load=Mock(return_value=""))
         self.window = app.DesktopWindow(self.store)
         self.addCleanup(self.close_window)
@@ -99,7 +104,7 @@ class DesktopAppTests(IsolatedDesktopTest):
 
     def test_pages_and_versions_use_the_single_source_and_history_without_key(self):
         from desktop import __version__
-        self.assertEqual(self.window.pages.count(), 3)
+        self.assertEqual(self.window.pages.count(), 4)
         self.assertIn(f"v{__version__}", self.window.windowTitle())
         self.assertIn(f"v{__version__}", self.window.version_header.text())
         self.assertEqual(self.window.settings_page.version_label.text(), f"v{__version__}")
@@ -467,7 +472,7 @@ class DesktopAppTests(IsolatedDesktopTest):
             self.assertTrue(self.window.confirm_analysis_notice())
         question.assert_called_once()
         self.assertIn("论文标题、摘要", app.ANALYSIS_NOTICE)
-        self.assertIn("研究边界", app.ANALYSIS_NOTICE)
+        self.assertIn("已保存的研究要求", app.ANALYSIS_NOTICE)
         self.assertIn("可能产生费用", app.ANALYSIS_NOTICE)
         self.assertIn("Windows DPAPI", app.ANALYSIS_NOTICE)
         self.assertIn("PDF、SQLite 和缓存", app.ANALYSIS_NOTICE)
@@ -633,6 +638,9 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.window.open_history_record("history-one")
         self.wait_until(lambda: self.window.history_worker is None)
         self.assertIn(record.summary.time_text, page.detail_meta.text())
+        self.assertTrue(page.detail_meta.text().startswith('生成时间 '))
+        self.assertNotIn(record.summary.fetch_time_text, page.detail_meta.text())
+        self.assertEqual(self.window.history_store.read('history-one').markdown, record.markdown)
         self.assertNotIn("抓取时间", page.detail_meta.text())
 
     def show_history(self):
@@ -805,3 +813,213 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.assertLess(window.fetch_button.geometry().bottom(), card.height())
         self.assertGreater(window.task_panel.geometry().top(), card.geometry().bottom())
         self.assertGreaterEqual(window.home_page.report_stack.height(), 70)
+
+    def test_requirements_view_save_cancel_and_restart(self):
+        page = self.window.prompt_page
+        self.window.switch_page(page)
+        page.open_round('round1')
+        default = page.editor.toPlainText()
+        self.assertTrue(page.editor.isReadOnly())
+        page.editor.setFocus()
+        page.editor.selectAll()
+        self.assertTrue(page.editor.textCursor().hasSelection())
+        QTest.keyClicks(page.editor, 'readonly')
+        self.assertEqual(page.editor.toPlainText(), default)
+        self.assertFalse(self.window.api_key.text())
+        page.begin_edit()
+        page.editor.setPlainText('研究黑洞偏振图像')
+        self.assertIn('未保存修改', page.state.text())
+        self.assertFalse(self.window.requirements_store.load('round1').custom)
+        page.cancel()
+        self.assertEqual(page.editor.toPlainText(), default)
+        page.begin_edit()
+        page.editor.setPlainText('研究黑洞偏振图像')
+        self.assertTrue(page.save())
+        page.begin_edit()
+        page.editor.setPlainText('尚未保存')
+        page.cancel()
+        self.assertEqual(page.editor.toPlainText(), '研究黑洞偏振图像')
+        from desktop.research_requirements import RequirementsStore
+        self.assertEqual(RequirementsStore(self.root).load('round1').text, '研究黑洞偏振图像')
+        self.assertFalse(RequirementsStore(self.root).load('round2').custom)
+
+    def test_prompt_entry_whole_card_and_keyboard_open_readonly(self):
+        page = self.window.prompt_page
+        self.window.switch_page(page)
+        self.window.show()
+        QTest.qWait(50)
+        for stage, entry in page.entries.items():
+            # 真正命中文字、图标和空白，避免只验证按钮自己发出信号。
+            points = [(entry, entry.icon_rect().center()),
+                      (entry, QPoint(entry.width() - 100, entry.height() // 2)),
+                      (entry, QPoint(entry.width() - 28, entry.height() // 2)),
+                      (entry.title, entry.title.rect().center()),
+                      (entry.state, entry.state.rect().center()),
+                      (entry.purpose, entry.purpose.rect().center())]
+            for source, point in points:
+                page.go_back()
+                position = source.mapTo(self.window, point)
+                self.assertIs(self.window.childAt(position), entry)
+                QTest.mouseClick(self.window.windowHandle(), Qt.MouseButton.LeftButton, pos=position)
+                self.assertEqual(page.stage, stage)
+                self.assertEqual(page.stack.currentIndex(), 1)
+                self.assertTrue(page.editor.isReadOnly())
+                self.assertFalse(page.editing)
+            for key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+                page.go_back()
+                entry.setFocus()
+                QTest.keyClick(entry, key)
+                self.assertEqual(page.stage, stage)
+                self.assertEqual(page.stack.currentIndex(), 1)
+            page.go_back()
+            QTest.mouseClick(entry, Qt.MouseButton.RightButton)
+            self.assertEqual(page.stack.currentIndex(), 0)
+            QTest.mousePress(entry, Qt.MouseButton.LeftButton)
+            QTest.mouseRelease(entry, Qt.MouseButton.LeftButton, pos=QPoint(-5, -5))
+            self.assertEqual(page.stack.currentIndex(), 0)
+
+    def test_prompt_entry_matches_actual_history_card_and_grows_with_font(self):
+        from PySide6.QtCore import QRect
+        from PySide6.QtGui import QFont
+        from PySide6.QtWidgets import QStyleOptionViewItem
+        from desktop.history import HistorySummary
+        page = self.window.prompt_page
+        self.window.switch_page(page)
+        self.window.show()
+        QTest.qWait(50)
+        history = self.window.history_page
+        history.model.append([HistorySummary(1, 'synthetic-entry-size', 0, 75, 5, 0, DAY)])
+        option = QStyleOptionViewItem()
+        option.initFrom(history.list_view)
+        option.rect = QRect(0, 0, page.entries['round1'].width(), 104)
+        history_height = history.delegate.sizeHint(option, history.model.index(0)).height()
+        # 与实际 delegate 绘制后的外框比较，不只断言本功能自己的常量。
+        visible_history = QRect(0, 0, option.rect.width(), history_height).adjusted(1, 5, -1, -5)
+        first, second = page.entries.values()
+        self.assertEqual(first.height(), visible_history.height())
+        self.assertEqual(second.y() - first.geometry().bottom() - 1, history_height - visible_history.height())
+        icon = first.icon_rect()
+        self.assertEqual((icon.x(), icon.width(), icon.height()), (visible_history.left() + 18, 36, 36))
+        self.assertLessEqual(abs(icon.center().y() - first.rect().center().y()), 1)
+        self.window.resize(850, 680)
+        for entry in page.entries.values():
+            for label in (entry.title, entry.state, entry.purpose):
+                font = QFont(label.font())
+                font.setPointSize(20)
+                label.setFont(font)
+        QTest.qWait(100)
+        self.assertGreater(first.height(), visible_history.height())
+        self.assertLess(first.geometry().bottom(), second.y())
+        for entry in page.entries.values():
+            self.assertGreaterEqual(entry.height(), entry.heightForWidth(entry.width()))
+            for label in (entry.title, entry.state, entry.purpose):
+                bottom = label.mapTo(entry, label.rect().bottomRight())
+                self.assertTrue(entry.rect().contains(bottom))
+
+    def test_restore_confirmation_failure_and_corrupt_recovery(self):
+        from PySide6.QtWidgets import QMessageBox
+        from desktop.research_requirements import RequirementsError
+        page = self.window.prompt_page
+        page.open_round('round1')
+        page.begin_edit()
+        page.editor.setPlainText('草稿')
+        with patch('desktop.prompt_page.QMessageBox.question', return_value=QMessageBox.StandardButton.No) as ask:
+            self.assertFalse(page.restore_default())
+        self.assertEqual(ask.call_args.args[-1], QMessageBox.StandardButton.No)
+        self.assertTrue(page.dirty)
+        with patch('desktop.prompt_page.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes), patch.object(page.store, 'save', side_effect=RequirementsError('保存失败')):
+            self.assertFalse(page.restore_default())
+        self.assertTrue(page.dirty)
+        with patch('desktop.prompt_page.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes):
+            self.assertTrue(page.restore_default())
+        self.assertFalse(page.editing)
+        target = page.store._path('round1')
+        target.write_bytes(b'broken')
+        page.open_round('round1')
+        self.assertIsNone(page.saved)
+        self.assertFalse(page.edit_button.isEnabled())
+        with patch('desktop.prompt_page.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes):
+            self.assertTrue(page.restore_default())
+        self.assertFalse(page.store.load('round1').custom)
+
+    def test_dirty_leave_three_choices_and_save_failure_stays(self):
+        from PySide6.QtWidgets import QMessageBox
+        from desktop.research_requirements import RequirementsError
+        page = self.window.prompt_page
+        self.window.switch_page(page)
+        page.open_round('round1')
+        page.begin_edit()
+        page.editor.setPlainText('未保存研究要求')
+
+        def choose(index):
+            def act(box):
+                wanted = ('保存并继续', '放弃修改', '留在此页')[index]
+                next(button for button in box.buttons() if button.text() == wanted).click()
+                return 0
+            return act
+
+        with patch.object(QMessageBox, 'exec', choose(2)):
+            self.window.switch_page(self.window.settings_page)
+        self.assertIs(self.window.pages.currentWidget(), page)
+        with patch.object(QMessageBox, 'exec', choose(0)), patch.object(page.store, 'save', side_effect=RequirementsError('保存失败')):
+            self.assertFalse(page.protect_unsaved())
+        self.assertTrue(page.dirty)
+        with patch.object(QMessageBox, 'exec', choose(0)):
+            self.assertTrue(page.protect_unsaved())
+        self.assertEqual(page.store.load('round1').text, '未保存研究要求')
+        page.begin_edit()
+        page.editor.setPlainText('放弃')
+        with patch.object(QMessageBox, 'exec', choose(1)):
+            page.go_back()
+        self.assertEqual(page.stack.currentIndex(), 0)
+        self.assertEqual(page.store.load('round1').text, '未保存研究要求')
+        page.open_round('round2')
+        page.begin_edit()
+        page.editor.setPlainText('关闭时的草稿')
+        with patch.object(QMessageBox, 'exec', choose(2)):
+            self.assertFalse(self.window.close())
+        page.cancel()
+        with patch.object(QMessageBox, 'exec', side_effect=AssertionError('no dialog')):
+            self.assertTrue(page.protect_unsaved())
+
+    def test_analysis_busy_blocks_mutations_and_bad_requirements_do_not_consume(self):
+        page = self.window.prompt_page
+        page.open_round('round1')
+        before = page.store.load('round1')
+        page.set_busy(True)
+        page.begin_edit()
+        self.assertFalse(page.editing)
+        self.assertFalse(page.save())
+        self.assertFalse(page.restore_default())
+        self.assertFalse(page.edit_button.isEnabled())
+        self.assertFalse(page.restore_button.isEnabled())
+        self.assertEqual(page.store.load('round1'), before)
+        page.set_busy(False)
+        self.prepare_analysis()
+        target = page.store._path('round2')
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b'broken')
+        with patch.object(app.AnalysisAttempt, 'run') as run:
+            self.window.start_analysis()
+        run.assert_not_called()
+        self.assertFalse(self.result.analysis_attempted)
+        self.assertIsNone(self.window.worker)
+
+    def test_prompt_large_font_minimum_window_layout(self):
+        from PySide6.QtGui import QFont
+        page = self.window.prompt_page
+        controls = (page.editor, page.purpose, page.state, page.message, page.back_button,
+                    page.edit_button, page.save_button, page.cancel_button, page.restore_button)
+        for widget in controls:
+            widget.setFont(QFont('Microsoft YaHei UI', 12))
+        self.window.resize(850, 680)
+        self.window.switch_page(page)
+        page.open_round('round2')
+        page.begin_edit()
+        self.window.show()
+        QTest.qWait(100)
+        self.assertTrue(all(widget.font().pointSizeF() == 12 for widget in controls))
+        self.assertGreaterEqual(page.editor.height(), 160)
+        self.assertTrue(page.save_button.isVisible())
+        self.assertLess(page.restore_button.mapTo(page, page.restore_button.rect().bottomRight()).y(), page.height())
+        page.cancel()

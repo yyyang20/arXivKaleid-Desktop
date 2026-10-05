@@ -354,6 +354,7 @@ def _build_fulltext_aware_bundle(
     config: dict[str, Any],
     profile: dict[str, Any],
     prompt: str,
+    research_requirements: str,
 ) -> Round2InputBundle:
     round2_fulltext_state.validate_fulltext_schema(fulltext_connection)
     max_pdf_pages = _positive_limit(
@@ -514,7 +515,7 @@ def _build_fulltext_aware_bundle(
     }
     remaining = list(fulltext_papers)
     token_excluded: list[dict[str, Any]] = []
-    messages = main.build_round2_messages(prompt, profile, remaining, config)
+    messages = main.build_round2_messages(prompt, profile, remaining, config, research_requirements=research_requirements)
     initial_full_text_tokens = (
         round2_fulltext_state.conservative_request_token_estimate(messages)
     )
@@ -543,7 +544,7 @@ def _build_fulltext_aware_bundle(
         )
         remaining = [paper for paper in remaining if paper is not excluded]
         if remaining:
-            messages = main.build_round2_messages(prompt, profile, remaining, config)
+            messages = main.build_round2_messages(prompt, profile, remaining, config, research_requirements=research_requirements)
             estimated_tokens = (
                 round2_fulltext_state.conservative_request_token_estimate(messages)
             )
@@ -641,6 +642,7 @@ def build_round2_input_bundle(
     profile: dict[str, Any],
     prompt: str,
     *,
+    research_requirements: str,
     run_id: int,
     fulltext_connection: sqlite3.Connection,
     round1_identity: tuple[str, str, str] | None = None,
@@ -676,6 +678,7 @@ def build_round2_input_bundle(
         config=config,
         profile=profile,
         prompt=prompt,
+        research_requirements=research_requirements,
     )
 
 
