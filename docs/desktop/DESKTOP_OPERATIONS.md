@@ -58,13 +58,13 @@ alpha 7 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windo
 
 构建前必须在已授权范围内冻结干净提交；本地技术验证使用 `codex/` 开发分支，要求其是已核验 `origin/main` 基线的后代，不要求 HEAD 等于基线。产物为根 `dist/` 下带版本目录、`release/` 下同名 ZIP 和 `.zip.sha256`。`BUILD_INFO.json` 记录分支、基线、冻结提交、验证用途和环境版本。旧干净发行物移入本次 `.desktop-build/managed-artifacts/build-<ID>/preserved/previous-*` 留存并核对移动前后逐文件哈希；已有 `runtime/` 的发行目录拒绝覆盖。stage、缓存和重复构建副本在保存审计证据后收尾，最终输出和 previous-* 不自动清理。构建目录、vendor 下载和输出均被 Git 忽略。所有下载都先校验固定哈希，缓存不符即停止。
 
-当前环境原包缓存位置可能已失效，构建入口支持显式许可输入 manifest，Python 入口对应 `--license-input-manifest`。准备输入只读 Conda 元数据并复制必要许可，不修改环境、原归档或历史包装脚本。首次在现有历史来源哈希已经核验且复制范围获准后执行以下命令；目标目录存在时拒绝覆盖：
+当前环境原包缓存位置可能已失效，构建入口支持显式许可输入 manifest，Python 入口对应 `--license-input-manifest`。准备输入只读 Conda 元数据并复制必要许可，不修改环境或原归档。首次在现有历史来源哈希已经核验且复制范围获准后执行以下命令；目标目录存在时拒绝覆盖：
 
 ```powershell
 & $desktopPython -X utf8 -B scripts/portable_licenses.py --source-archive '.desktop-build/alpha10-audit/archived-release/arXivKaleid-0.1.0-alpha.9-windows-x64.zip' --source-sha256 'c48a8dba1ff58ba6bada8d2a5aea847beaefbe3ad164e59881c1430c9d4c487d' --output '.desktop-build/inputs/conda-licenses/alpha9/manifest.json'
 ```
 
-manifest 记录组件 name/version/build/包归档 SHA-256、来源发行归档 SHA-256 和逐文件 SHA-256；构建重新校验来源归档、安装身份和完整许可文件集，缺失或不符即停止，不使用全局 JSON 映射。`.desktop-build/vendor/`、`.desktop-build/inputs/`、上述 alpha 9 来源 ZIP、历史许可副本及包装脚本持续受保护。来源历史目录不能按目录年龄或名称自动删除；如果将来解除依赖，须另行审查与授权。
+manifest 记录组件 name/version/build/包归档 SHA-256、来源发行归档 SHA-256 和逐文件 SHA-256；构建重新校验来源归档、安装身份和完整许可文件集，缺失或不符即停止，不使用全局 JSON 映射。`.desktop-build/vendor/`、`.desktop-build/inputs/` 和上述 alpha 9 来源 ZIP 持续受保护。构建直接使用受跟踪入口与稳定 manifest，退役的历史包装脚本和旧许可副本不再作为构建输入。来源 ZIP 所在历史目录必须按实际文件依赖划定保留范围；其他历史内容仍须依赖复核及当次明确授权，不按目录年龄或名称自动删除。
 
 正式构建要求分支为 `main` 且 HEAD 等于已核验的 `origin/main`，`BUILD_INFO.json` 的 `purpose` 为 `public-release`；开发分支为 `local-portable-technical-validation`。旧发行物、历史材料和受保护输入在构建、验证及失败阶段不清理。正式发布及远端核验成功后 `release/` 旧 ZIP 的精确清理见 [本地历史 portable 收口](../OPERATIONS.md#本地历史-portable-收口)，该节不清理 `.desktop-build/` 或其他材料；当前自产工作文件按 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期) 收尾，两者授权范围不同。
 

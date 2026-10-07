@@ -221,9 +221,11 @@ def artifact_contract_errors(agents, operations, desktop, checklist):
             '最近两次成功证据和最近一次普通失败诊断', '标记绑定实际异常对象', 'local_artifacts_v2',
             '证据清单和哈希全部匹配', 'v1 失败和归属不明记录继续保护',
             '旧成品即使移入本次目录也不取得删除资格', '正式 `dist/`、`release/` 输出',
-            'vendor 归档', '稳定许可输入', 'alpha 9 来源 ZIP', '历史包装脚本')),
+            'vendor 归档', '稳定许可输入', 'alpha 9 来源 ZIP',
+            '退役的历史包装脚本和旧许可副本不再作为构建输入', '当次明确授权才能精确清理')),
         'desktop': (desktop, ('--license-input-manifest', 'run_local_checks.py', 'managed-artifacts',
-            '干净提交', 'previous-*', '缺失或不符即停止')),
+            '干净提交', 'previous-*', '缺失或不符即停止',
+            '退役的历史包装脚本和旧许可副本不再作为构建输入', '当次明确授权')),
         'checklist': (checklist, ('本节的不得清理要求限定旧发行物和历史材料', 'verify_public_release.py',
             '不改变本节授权及正式发布后远端核验门槛')),
     }
