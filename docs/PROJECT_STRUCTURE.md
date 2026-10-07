@@ -105,7 +105,7 @@ docs/
 - 工作库、锁、PDF、DPAPI 密文、请求缓存和会话日志的具体路径及职责见 [Desktop 当前运行数据](desktop/DESKTOP_STRUCTURE.md#当前运行数据)；SQLite 数据边界见 [当前业务规范](PROJECT_SPEC.md#sqlite-工作数据)。
 - 候选快照只在内存中冻结；成功日报的原始 Markdown 与计数进入独立 `history/history.sqlite`，不写根 `reports/`，不参与后续候选、筛选或工作库重置。
 - `build/`、`dist/`、`release/`、`.desktop-build/`、`.codex-validation/`、`.codex-audit-*/`、Python 缓存及运行数据被 Git 忽略。
-- `release/` 在构建和验证期间保留候选及旧成品；正式发布和远端核验成功后只保留最新正式 ZIP 与 `.sha256`，历史正式版本存于 GitHub Releases。授权、核验和精确清理边界见 [本地历史 portable 收口](OPERATIONS.md#本地历史-portable-收口)，不清理其他忽略材料。
+- `release/` 和 `dist/` 在构建和验证期间保留候选及旧成品；正式发布和新旧远端核验成功后，按分别列明的当次授权精确收口，`release/` 只保留最新正式 ZIP 与 `.sha256`，`dist/` 只保留当前正式版本及仍有明确必要的成品。旧 `dist/` 必须与对应远端正式 ZIP 逐文件一致且已无构建、验证或待审用途，含 `runtime/` 的目录继续保护。历史正式版本存于 GitHub Releases；授权、核验和精确清理边界见 [本地历史 portable 收口](OPERATIONS.md#本地历史-portable-收口)，不清理其他忽略材料。
 - `.gitignore` 仍保护旧 `config/local_secret.json`、`data/` 数据库、PDF、`reports/` 和日志等路径；这些忽略规则不表示旧运行入口仍然存在。
 
 SQLite、PDF、报告、日志、缓存、审计目录和未跟踪文件不得因普通代码或文档任务被删除。当前任务自产合成数据及可重建工作文件仅按 [临时产物生命周期](OPERATIONS.md#临时产物生命周期) 收尾，不涉及用户或历史数据。`.desktop-build/managed-artifacts/` 保存登记、证据和受保护 previous-*；测试 work 独立位于 `.codex-validation/managed-artifacts/`。`.desktop-build/inputs/conda-licenses/` 是稳定、被忽略的构建输入，不是临时清理目标；来源发行 ZIP 和 vendor 继续保留。退役的历史包装脚本及旧许可映射目录不是当前依赖，须经依赖复核及当次明确授权后才能清理。下载或生成临时审计内容只能使用项目内明确的忽略目录。路径配置使用相对路径，代码写入前验证解析后的目标仍在规定根目录内。

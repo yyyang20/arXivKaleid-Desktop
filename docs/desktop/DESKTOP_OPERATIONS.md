@@ -66,7 +66,7 @@ alpha 7 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windo
 
 manifest 记录组件 name/version/build/包归档 SHA-256、来源发行归档 SHA-256 和逐文件 SHA-256；构建重新校验来源归档、安装身份和完整许可文件集，缺失或不符即停止，不使用全局 JSON 映射。`.desktop-build/vendor/`、`.desktop-build/inputs/` 和上述 alpha 9 来源 ZIP 持续受保护。构建直接使用受跟踪入口与稳定 manifest，退役的历史包装脚本和旧许可副本不再作为构建输入。来源 ZIP 所在历史目录必须按实际文件依赖划定保留范围；其他历史内容仍须依赖复核及当次明确授权，不按目录年龄或名称自动删除。
 
-正式构建要求分支为 `main` 且 HEAD 等于已核验的 `origin/main`，`BUILD_INFO.json` 的 `purpose` 为 `public-release`；开发分支为 `local-portable-technical-validation`。旧发行物、历史材料和受保护输入在构建、验证及失败阶段不清理。正式发布及远端核验成功后 `release/` 旧 ZIP 的精确清理见 [本地历史 portable 收口](../OPERATIONS.md#本地历史-portable-收口)，该节不清理 `.desktop-build/` 或其他材料；当前自产工作文件按 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期) 收尾，两者授权范围不同。
+正式构建要求分支为 `main` 且 HEAD 等于已核验的 `origin/main`，`BUILD_INFO.json` 的 `purpose` 为 `public-release`；开发分支为 `local-portable-technical-validation`。旧发行物、历史材料和受保护输入在构建、验证及失败阶段不清理。正式发布及新旧远端核验成功后，按当次分别列明的授权收口 `release/` 旧 ZIP 和与对应正式 ZIP 逐文件一致、已无构建、验证或待审用途的旧版本 `dist/`；只保留当前正式版本及仍有明确必要的成品。准确路径、完整文件集、哈希、进程退出与含 `runtime/` 目录保护见 [本地历史 portable 收口](../OPERATIONS.md#本地历史-portable-收口)，该节不清理 `.desktop-build/` 或其他材料；当前自产工作文件按 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期) 收尾，两者授权范围不同。
 
 发行物包含 GPL-3.0-only 应用 LICENSE、第三方声明、实际依赖许可证及上述八项上游源码归档，允许按 LGPL 替换动态库；这些归档用于分发材料，用户无需解包。源码 manifest 显式记录各组件许可，版本与固定运行依赖一致；gzip/xz 归档原样保留并核验 SHA-256。许可证缺失、源码入口/归档哈希不符、用户运行文件或本机个人路径进入发行树时，构建失败。ZIP 生成后逐文件重新比对哈希；构建审计目录记录模块/运行时 hook 清单及各主要组成的未压缩字节数。
 
