@@ -19,6 +19,7 @@ from unittest.mock import patch
 
 import deepseek_client
 import main
+from scripts.local_artifacts import test_scratch
 import model_usage
 import round2_fulltext_state
 import run_round2
@@ -35,7 +36,7 @@ class DesktopAnalysisTests(unittest.TestCase):
     def setUp(self):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
-        scratch = PROJECT_ROOT / ".codex-validation"
+        scratch = test_scratch(PROJECT_ROOT)
         scratch.mkdir(exist_ok=True)
         self.root = Path(self.stack.enter_context(tempfile.TemporaryDirectory(dir=scratch)))
         for name in ("config.json", *json.loads((PROJECT_ROOT / "config.json").read_text(encoding="utf-8"))["paths"].values()):

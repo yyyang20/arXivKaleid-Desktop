@@ -20,7 +20,8 @@ from desktop.diagnostics import DesktopDiagnostics
 
 class DesktopPortableTests(unittest.TestCase):
     def setUp(self):
-        scratch = Path(__file__).resolve().parents[1] / ".codex-validation"
+        from scripts.local_artifacts import test_scratch
+        scratch = test_scratch(Path(__file__).resolve().parents[1])
         scratch.mkdir(exist_ok=True)
         self.temp = tempfile.TemporaryDirectory(dir=scratch)
         self.addCleanup(self.temp.cleanup)

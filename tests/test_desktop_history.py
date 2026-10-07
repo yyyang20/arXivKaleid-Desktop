@@ -27,7 +27,8 @@ BODY = "# 当次实际日报\n\n## 原有顺序\n\n**中文** 与 `代码`\n\n- 
 
 class DesktopHistoryTests(unittest.TestCase):
     def setUp(self):
-        scratch = ROOT / ".codex-validation"
+        from scripts.local_artifacts import test_scratch
+        scratch = test_scratch(ROOT)
         scratch.mkdir(exist_ok=True)
         directory = tempfile.TemporaryDirectory(dir=scratch)
         self.addCleanup(directory.cleanup)

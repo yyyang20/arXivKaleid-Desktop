@@ -211,7 +211,62 @@ def portable_cleanup_errors(operations: str, checklist: str, agents: str) -> lis
             for rule, fragments in rules.items() if any(s not in text for s in fragments)]
 
 
+def artifact_contract_errors(agents, operations, desktop, checklist):
+    """生命周期与历史 portable 是不同范围；缺失门槛或全局禁令均拒绝。"""
+    contracts = {
+        'agents': (agents, ('旧材料移入本次目录仍受保护', '跨运行残留和受保护旧证据', '当次明确授权',
+            '普通证据自动轮换', '未知故障默认保护')),
+        'operations': (operations, ('**4 GiB**', '**512 MiB**', '进程文件锁', '所属进程、线程及数据库连接退出',
+            '不覆盖原始错误', '人工验收截图', '强制中断', '受保护旧证据不会自动轮换', '不自动删除残留',
+            '最近两次成功证据和最近一次普通失败诊断', '标记绑定实际异常对象', 'local_artifacts_v2',
+            '证据清单和哈希全部匹配', 'v1 失败和归属不明记录继续保护',
+            '旧成品即使移入本次目录也不取得删除资格', '正式 `dist/`、`release/` 输出',
+            'vendor 归档', '稳定许可输入', 'alpha 9 来源 ZIP', '历史包装脚本')),
+        'desktop': (desktop, ('--license-input-manifest', 'run_local_checks.py', 'managed-artifacts',
+            '干净提交', 'previous-*', '缺失或不符即停止')),
+        'checklist': (checklist, ('本节的不得清理要求限定旧发行物和历史材料', 'verify_public_release.py',
+            '不改变本节授权及正式发布后远端核验门槛')),
+    }
+    errors = [name for name, (text, fragments) in contracts.items() if any(f not in text for f in fragments)]
+    for text in (agents, operations, desktop, checklist):
+        if any(rule in text for rule in ('自动删除所有忽略目录', '失败时禁止收尾本次工作文件', '自动淘汰受保护输入',
+                                        '第三次成功必须人工清理', '普通失败必须授权后才能再次启动')):
+            errors.append('contradictory_scope')
+    if '本节的不得清理要求限定旧发行物和历史材料' not in section(checklist, '本地历史 portable 收口'):
+        errors.append('historical_rule_location')
+    return errors
+
+
+def current_version_references(text):
+    # --source-archive 指定历史许可来源，不声明当前发行身份；其他旧版本仍判错。
+    current = re.sub(r"--source-archive\s+'[^']+'", '--source-archive <历史构建输入>', text)
+    return (re.findall(r'当前版本(?:为)?\s*`([^`]+)`', current)
+            + re.findall(r'arXivKaleid-([\d.]+(?:-[\w.]+)?)-windows-x64', current))
+
+
 class DesktopGovernanceTests(unittest.TestCase):
+    def test_artifact_rules_and_negative_conflicts(self):
+        documents = [read_utf8(p) for p in ('AGENTS.md', 'docs/OPERATIONS.md',
+            'docs/desktop/DESKTOP_OPERATIONS.md', 'docs/public_release/RELEASE_CHECKLIST.md')]
+        self.assertEqual(artifact_contract_errors(*documents), [])
+        for index, fragment in ((0, '旧材料移入本次目录仍受保护'), (1, '**4 GiB**'),
+                                (1, '不覆盖原始错误'), (2, '--license-input-manifest'),
+                                (0, '普通证据自动轮换'), (1, '标记绑定实际异常对象'),
+                                (1, '证据清单和哈希全部匹配'), (1, 'v1 失败和归属不明记录继续保护'),
+                                (3, '本节的不得清理要求限定旧发行物和历史材料')):
+            changed = documents.copy()
+            changed[index] = changed[index].replace(fragment, '')
+            self.assertTrue(artifact_contract_errors(*changed))
+        for fragment in ('自动删除所有忽略目录', '失败时禁止收尾本次工作文件', '自动淘汰受保护输入',
+                         '第三次成功必须人工清理', '普通失败必须授权后才能再次启动'):
+            changed = documents.copy()
+            changed[1] += fragment
+            self.assertIn('contradictory_scope', artifact_contract_errors(*changed))
+        changed = documents.copy()
+        fragment = '本节的不得清理要求限定旧发行物和历史材料'
+        changed[3] = changed[3].replace(fragment, '') + '\n' + fragment
+        self.assertIn('historical_rule_location', artifact_contract_errors(*changed))
+
     def assert_fragments(self, text, fragments):
         for fragment in fragments:
             with self.subTest(fragment=fragment):
@@ -379,14 +434,19 @@ class DesktopGovernanceTests(unittest.TestCase):
         for relative in ('README.md', 'docs/desktop/README.md', 'docs/desktop/DESKTOP_SPEC.md',
                          'docs/desktop/DESKTOP_OPERATIONS.md'):
             text = read_utf8(relative)
-            values = re.findall(r'当前版本(?:为)?\s*`([^`]+)`', text)
-            values += re.findall(r'arXivKaleid-([\d.]+(?:-[\w.]+)?)-windows-x64', text)
+            values = current_version_references(text)
             with self.subTest(document=relative):
                 if relative != 'README.md':
                     self.assertTrue(values)
                 if not values:
                     continue
                 self.assertEqual(set(values), {version})
+
+    def test_historical_license_source_does_not_hide_wrong_current_version(self):
+        text = "--source-archive '.desktop-build/audit/arXivKaleid-0.1.0-alpha.9-windows-x64.zip'"
+        self.assertEqual(current_version_references(text), [])
+        self.assertEqual(current_version_references(text + '\n当前版本 `0.1.0-alpha.9`'), ['0.1.0-alpha.9'])
+        self.assertEqual(current_version_references(text + '\nrelease/arXivKaleid-0.1.0-alpha.9-windows-x64.zip'), ['0.1.0-alpha.9'])
 
     def test_internal_markdown_links_resolve_within_project(self):
         paths = sorted(PROJECT_ROOT.glob('*.md')) + sorted((PROJECT_ROOT / 'docs').rglob('*.md'))

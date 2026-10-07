@@ -17,6 +17,7 @@ from unittest.mock import patch
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+from scripts.local_artifacts import test_scratch
 spec = importlib.util.spec_from_file_location('portable_builder_tests', ROOT / 'scripts/build_windows_portable.py')
 builder = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(builder)
@@ -32,7 +33,7 @@ with patch.dict(sys.modules, {'build_windows_portable': builder}):
 
 class DesktopBuildTests(unittest.TestCase):
     def setUp(self):
-        scratch = ROOT / '.codex-validation'
+        scratch = test_scratch(ROOT)
         scratch.mkdir(exist_ok=True)
         temporary = tempfile.TemporaryDirectory(dir=scratch)
         self.addCleanup(temporary.cleanup)

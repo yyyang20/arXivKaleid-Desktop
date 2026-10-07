@@ -18,7 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class DesktopConfigTests(unittest.TestCase):
     def setUp(self):
-        scratch = ROOT / '.codex-validation'
+        from scripts.local_artifacts import test_scratch
+        scratch = test_scratch(ROOT)
         scratch.mkdir(exist_ok=True)
         temporary = tempfile.TemporaryDirectory(dir=scratch)
         self.addCleanup(temporary.cleanup)

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import hashlib
+import argparse
 import importlib.metadata
 import io
 import json
@@ -17,7 +18,6 @@ import shutil
 import struct
 import subprocess
 import sys
-import tempfile
 import urllib.request
 import zipfile
 
@@ -26,6 +26,7 @@ sys.path.insert(0, str(ROOT))
 from desktop import __version__
 from desktop.paths import checked_path
 from desktop.config import load_config
+from scripts.local_artifacts import ArtifactRun
 
 NAME = f'arXivKaleid-{__version__}-windows-x64'
 SOURCE_URL = f'https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v{__version__}.zip'
@@ -319,7 +320,10 @@ def verify_tree(folder: Path) -> dict[str, str]:
     return inventory
 
 
-def main() -> None:
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--license-input-manifest')
+    args = parser.parse_args(argv)
     frozen = frozen_identity()
     if sys.platform != 'win32' or struct.calcsize('P') != 8 or platform.machine().lower() not in ('amd64', 'x86_64'):
         raise RuntimeError('windows_x64_required')
@@ -329,9 +333,27 @@ def main() -> None:
         for name, version in pinned_requirements(filename).items():
             if importlib.metadata.version(name) != version:
                 raise RuntimeError('build_dependency_version_mismatch:' + name)
+    manifest = checked_path(ROOT, args.license_input_manifest) if args.license_input_manifest else None
+    with ArtifactRun('build', root=ROOT) as run:
+        run.record['commit'] = frozen['commit']
+        run.protect(checked_path(ROOT, '.desktop-build/vendor'))
+        if manifest:
+            run.protect(manifest.parent)
+            from portable_licenses import conda_metadata, license_input_files
+            license_input_files(ROOT, manifest, conda_metadata(Path(sys.prefix)))
+            run.protect(checked_path(ROOT, json.loads(manifest.read_text(encoding='utf-8'))['archive']))
+        try:
+            build_portable(frozen, run, manifest)
+        finally:
+            log = run.work / 'pyinstaller.log'
+            if log.is_file():
+                run.finish_evidence(lambda: run.capture(log, 'pyinstaller.log'))
+
+
+def build_portable(frozen, run, license_manifest=None):
+    """工作文件只放本次 work；输出与旧成品不属于自动删除范围。"""
     build = checked_path(ROOT, '.desktop-build')
-    build.mkdir(exist_ok=True)
-    job = Path(tempfile.mkdtemp(prefix='build-', dir=build))
+    job = run.work
     stage = job / 'stage'
     stage.mkdir()
     for name in ('temp', 'pyinstaller-cache'):
@@ -343,19 +365,25 @@ def main() -> None:
     env['PYTHONUTF8'] = '1'
     prepare_resources(stage)
     prepare_curl(stage, checked_path(build, 'vendor'))
+    run.checkpoint()
     with (job / 'pyinstaller.log').open('w', encoding='utf-8') as log:
-        result = subprocess.run([sys.executable, '-X', 'utf8', '-B', '-m', 'PyInstaller', '--noconfirm',
+        result = run.process([sys.executable, '-X', 'utf8', '-B', '-m', 'PyInstaller', '--noconfirm',
                         '--workpath', str(job / 'work'), '--distpath', str(job / 'dist'),
                         str(ROOT / 'packaging/windows/arxivkaleid.spec')], env=env, cwd=ROOT, stdout=log, stderr=log)
     if result.returncode:
-        raise RuntimeError('pyinstaller_failed; inspect ' + str(job / 'pyinstaller.log'))
+        error = RuntimeError('pyinstaller_failed; inspect ' + str(job / 'pyinstaller.log'))
+        if result.returncode == 1:
+            run.mark_ordinary_failure(error, 'pyinstaller_failure')
+        raise error
     print('PyInstaller completed:', job.name, flush=True)
+    run.checkpoint()
     folder = job / 'dist/arXivKaleid'
     module_inventory = inspect_python_archive(folder / 'arXivKaleid.exe')
-    (job / 'module-inventory.json').write_text(json.dumps(module_inventory, indent=2), encoding='utf-8')
+    (run.evidence / 'module-inventory.json').write_text(json.dumps(module_inventory, indent=2), encoding='utf-8')
     copy_public_documents(folder, frozen)
     from portable_licenses import collect_licenses
-    collect_licenses(ROOT, folder, module_inventory)
+    collect_licenses(ROOT, folder, module_inventory, license_manifest=license_manifest)
+    run.checkpoint()
     if frozen_identity() != frozen:
         raise RuntimeError('frozen_identity_changed_during_build')
     identity = {'version': __version__, **frozen,
@@ -366,7 +394,8 @@ def main() -> None:
                 'qt_modules': ['Core', 'Gui', 'Widgets', 'Svg', 'SvgWidgets', 'Xml'], 'tzdata': '2026c'}
     (folder / 'BUILD_INFO.json').write_text(json.dumps(identity, indent=2), encoding='utf-8')
     inventory = verify_tree(folder)
-    (job / 'inventory.json').write_text(json.dumps(inventory, indent=2), encoding='utf-8')
+    (run.evidence / 'inventory.json').write_text(json.dumps(inventory, indent=2), encoding='utf-8')
+    shutil.copyfile(folder / 'BUILD_INFO.json', run.evidence / 'BUILD_INFO.json')
     groups = {}
     for name in inventory:
         group = ('source_archives' if name.startswith('licenses/sources/') else
@@ -376,23 +405,18 @@ def main() -> None:
                  'pywin32' if 'pywin' in name.lower() or Path(name).name.startswith('win32') else
                  'python_runtime' if name.startswith('_internal/') else 'application_and_documents')
         groups[group] = groups.get(group, 0) + (folder / name).stat().st_size
-    (job / 'size-report.json').write_text(json.dumps(groups, indent=2), encoding='utf-8')
+    (run.evidence / 'size-report.json').write_text(json.dumps(groups, indent=2), encoding='utf-8')
     dist = checked_path(ROOT, 'dist', NAME)
     release = checked_path(ROOT, 'release')
     dist.parent.mkdir(exist_ok=True)
     release.mkdir(exist_ok=True)
-    if dist.exists():
-        if (dist / 'runtime').exists():
-            raise RuntimeError('existing_distribution_contains_runtime_preserved')
-        # 旧发行物移入本项目本次构建目录留存，不递归删除历史数据。
-        dist.rename(job / 'previous-dist')
-    shutil.copytree(folder, dist)
-    zip_path = release / (NAME + '.zip')
-    if zip_path.exists():
-        zip_path.rename(job / 'previous-release.zip')
+    if dist.exists() and (dist / 'runtime').exists():
+        raise RuntimeError('existing_distribution_contains_runtime_preserved')
+    # 先在工作区生成并验证完整新 ZIP，避免失败时覆盖旧成品/校验文件。
+    zip_path = job / (NAME + '.zip')
     with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
         for name in sorted(inventory):
-            archive.write(dist / name, NAME + '/' + name)
+            archive.write(folder / name, NAME + '/' + name)
     with zipfile.ZipFile(zip_path) as archive:
         if archive.testzip() is not None or len(archive.namelist()) != len(inventory):
             raise RuntimeError('zip_integrity_failed')
@@ -401,9 +425,21 @@ def main() -> None:
                 raise RuntimeError('zip_inventory_mismatch')
     digest = sha(zip_path.read_bytes())
     checksum = release / (NAME + '.zip.sha256')
+    run.checkpoint()
+    if dist.exists():
+        run.preserve_move(dist, 'previous-dist')
+    old_zip = release / zip_path.name
+    if old_zip.exists():
+        run.preserve_move(old_zip, 'previous-release.zip')
     if checksum.exists():
-        checksum.rename(job / 'previous-release.sha256')
+        run.preserve_move(checksum, 'previous-release.sha256')
+    shutil.copytree(folder, dist)
+    zip_path.rename(old_zip)
+    zip_path = old_zip
     checksum.write_text(f'{digest}  {zip_path.name}\n', encoding='ascii')
+    run.record['outputs'] = {'zip': zip_path.relative_to(ROOT).as_posix(), 'sha256': digest,
+                             'bytes': zip_path.stat().st_size, 'files': len(inventory)}
+    run.save()
     print(json.dumps({'zip': str(zip_path), 'sha256': digest, 'bytes': zip_path.stat().st_size, 'files': len(inventory)}, ensure_ascii=False))
 
 

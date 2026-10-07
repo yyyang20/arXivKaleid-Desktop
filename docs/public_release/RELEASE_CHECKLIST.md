@@ -63,6 +63,7 @@
 
 ## 本地历史 portable 收口
 
+- [ ] 本节的不得清理要求限定旧发行物和历史材料；本次登记工作文件的收尾按生命周期执行，不改变本节授权及正式发布后远端核验门槛。
 - [ ] 已按 [运行手册](../OPERATIONS.md#本地历史-portable-收口) 将精确旧文件删除纳入当次授权；构建、验证和失败阶段不得提前清理，已授权时不重复确认。
 - [ ] 正式新版本 Release 成功发布，新资产、tag、BUILD_INFO、公开源码及远端资产核验全部通过。
 - [ ] 从未登录视角下载全部待清理版本的正式 ZIP 和 `.sha256`，核对名称、字节数、GitHub digest、实际 SHA-256、校验内容及 tag/BUILD_INFO，确认历史资产完整且历史发行保持不变。
@@ -76,3 +77,16 @@
 - [ ] 任一哈希、版本、提交、文件集合或扫描结果不一致时停止发布。
 - [ ] 不替换已发布的 ZIP、标签或校验值；需要修复时发布新版本。
 - [ ] 失败后不自动重跑网络验证、不上传部分成品、不调用 DeepSeek。
+- [ ] 使用受管构建和验证入口；受保护 vendor、稳定许可 manifest、来源归档和旧成品哈希已登记，许可输入缺失或不匹配即停止。
+- [ ] 按 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期) 保存摘要、清单、哈希和截图后，所属进程退出再收尾本次自产工作副本；人工验收证据保留到明确结案，清理失败单独报告并停止后续生成。
+- [ ] 普通证据按生命周期自动轮换每类最近两次成功和最近一次普通失败诊断；历史、未结案故障及待审材料继续保护，普通失败不授予自动重跑网络或业务的权限。
+
+## 匿名只读核验入口
+
+`scripts/verify_public_release.py` 参数指定 `--repo`、`--tag`、`--commit`、`--zip`、`--checksum` 和 `--history-baseline`。只在当次授权的公开核验范围内访问 GitHub；不使用登录凭据、不上传、不发布、不删除远端资产、不自动重试。运行登记并保护本地资产和基线，保存 `evidence/release.json` 与发行身份摘要，收尾本次下载副本。该入口不授予本地历史 portable 删除权限，也不代替上述人工检查。
+
+基线为 `history_snapshot(repo, tag)` 的 JSON：`releases` 保存排除目标 tag 后各 Release 的 id、tag_name、name、body、draft、prerelease、immutable 及全部 assets 的 id/name/size/digest；`tags` 保存排除目标 tag 的 refs/tags/ 到对象 SHA 映射。发布前取得并保存在项目内忽略目录；核验前后都必须与该基线一致。旧审计基线格式不自动转换，原历史脚本和记录保持原样。
+
+```powershell
+& $desktopPython -X utf8 -B scripts/verify_public_release.py --repo 'yyyang20/arXivKaleid-Desktop' --tag 'v<version>' --commit '<冻结提交40位SHA>' --zip 'release/arXivKaleid-<version>-windows-x64.zip' --checksum 'release/arXivKaleid-<version>-windows-x64.zip.sha256' --history-baseline '.desktop-build/<本次审计>/history-baseline.json'
+```

@@ -65,7 +65,8 @@ print('RESULT:' + json.dumps({'code': code, 'ok': report['ok'], 'injected': bool
                      'requires Windows DPAPI and installed Fluent GUI')
 class PortableDiagnosticTests(unittest.TestCase):
     def exercise(self, mode):
-        scratch = ROOT / '.codex-validation'
+        from scripts.local_artifacts import test_scratch
+        scratch = test_scratch(ROOT)
         scratch.mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=scratch) as folder:
             env = dict(os.environ, QT_QPA_PLATFORM='offscreen', TEMP=folder, TMP=folder)

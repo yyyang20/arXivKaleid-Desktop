@@ -31,6 +31,9 @@
 | `docs/public_release/` | portable 打包 README、应用 EULA、隐私与安全说明的维护源及发布检查清单；不保存 ZIP |
 | `scripts/build_windows_portable.py` | 资源与公开文档 allowlist、vendor 校验、构建、发行扫描、ZIP 和 SHA-256 |
 | `scripts/portable_licenses.py` | 从实际分发组件及固定 gzip/xz 源码收集原许可，保留八项源码归档与哈希 |
+| `scripts/local_artifacts.py` | 构建/验证工作区、证据、受保护输入与 previous-* 的生命周期及精确计划 |
+| `scripts/run_local_checks.py` | 受管离线测试入口，子进程使用独立项目内临时根 |
+| `scripts/verify_public_release.py` | 匿名只读发行核验及本次下载副本收尾 |
 | `scripts/validate_windows_portable.py` | 全新副本的脱离开发环境验证和重启 |
 | `scripts/visual_qa_desktop.py` | 禁止网络/模型、内存假 Key、合成业务事件驱动的真实 Qt 截图；产物仅在项目忽略目录 |
 | `scripts/generate_app_icon.py` | 使用现有 PySide6 从 A0 SVG 母版确定性生成 16～256 px Windows ICO 与可选验收预览 |
@@ -78,6 +81,6 @@ portable 根目录包含直接来自仓库根的 GPLv3 `LICENSE`。应用源码�
    └─ <候选日期>/
 ```
 
-Secret 保存过程中可暂存同目录下的随机命名密文 `.tmp` 文件，成功后原子替换；测试临时数据可以使用 `test-temp/`。整个目录被忽略，不进入 Git，也不得进入 portable ZIP；`logs/` 不写入 `_internal/`、AppData、Documents 或 home。
+Secret 保存过程中可暂存同目录下的随机命名密文 `.tmp` 文件，成功后原子替换。整个目录被忽略，不进入 Git，也不得进入 portable ZIP；`logs/` 不写入 `_internal/`、AppData、Documents 或 home。受管测试的合成 runtime 位于独立测试根，portable 和视觉 QA 合成 runtime 位于本次 work；它们按 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期) 收尾，真实用户运行数据不在该工具清理范围。
 
 候选快照只存在当前进程内；分析时复制到当前工作库，不跨运行去重。全文仅存于独立全文库，PDF 保留。成功日报字符串原样保存到独立历史库，重启后仍可查看；不写根 `reports/`。`run_round2.py` 使用显式 Key 注入，主库/全文库通过连接参数传入。根核心模块只保留 Desktop 所需功能，不依赖 Online 模块或资源。完整项目结构见 [PROJECT_STRUCTURE.md](../PROJECT_STRUCTURE.md)。

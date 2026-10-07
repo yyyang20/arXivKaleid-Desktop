@@ -16,6 +16,7 @@ import time
 import uuid
 
 from build_windows_portable import ROOT, NAME, checked_path, verify_tree, frozen_identity, inspect_python_archive
+from scripts.local_artifacts import ArtifactRun, inventory
 
 
 def verify_capture_display(visual, *, native_screen=None, target_dpr=None):
@@ -61,8 +62,44 @@ def main():
     identity = json.loads((source / 'BUILD_INFO.json').read_text(encoding='utf-8'))
     assert identity['commit'] == frozen_identity()['commit'] and identity['working_tree_clean']
     inspect_python_archive(source / 'arXivKaleid.exe')
-    work = checked_path(ROOT, '.desktop-build', 'validation-' + uuid.uuid4().hex)
-    work.mkdir(parents=True)
+    with ArtifactRun('portable', root=ROOT, review=True) as run:
+        run.record['commit'] = identity['commit']
+        run.protect(source)
+        try:
+            validate_portable(run, source, identity, args)
+        finally:
+            run.finish_evidence(lambda: collect_validation_evidence(run))
+
+
+def collect_validation_evidence(run):
+    """只保留本次截图和诊断；不复制合成凭据、全文或数据库。"""
+    inventory(run.root, run.work)
+    for path in run.work.rglob('*'):
+        if path.is_file() and (path.suffix.lower() == '.png' or path.name in
+                ('portable-check.json', 'recovery-check.json', 'external-library-name.txt')
+                or path.parent == run.work and path.suffix == '.log'):
+            run.capture(path, path.relative_to(run.work).as_posix())
+
+
+def verify_synthetic_privacy(work):
+    """原验收中的合成数据隐私检查在收尾前完成，不读取 secret.dat。"""
+    import sqlite3
+    from contextlib import closing
+    canaries = ('canary-R1', 'canary-R2', '离线合成研究要求 round1', '离线合成研究要求 round2',
+                'fake-desktop-key', 'fake-key-for-offline-qa')
+    for path in work.rglob('*'):
+        if not path.is_file():
+            continue
+        if path.suffix in ('.log', '.jsonl'):
+            assert not any(c.encode('utf-8') in path.read_bytes() for c in canaries)
+        elif path.suffix == '.sqlite':
+            with closing(sqlite3.connect(path.resolve().as_uri() + '?mode=ro', uri=True)) as connection:
+                text = '\n'.join(connection.iterdump())
+            assert not any(c in text for c in canaries)
+
+
+def validate_portable(run, source, identity, args):
+    work = run.work
     results = []
     native_dpr = None
     modes = [('native', None)] if args.arxiv else [('native', None), ('simulated-100', 1),
@@ -70,6 +107,7 @@ def main():
     for mode, target_dpr in modes:
         copy = checked_path(work, '隔离副本 ' + mode)
         shutil.copytree(source, copy)
+        run.checkpoint()
         token = uuid.uuid4().hex
         env = {key: value for key, value in os.environ.items() if key.upper() in
                ('SYSTEMROOT', 'WINDIR', 'COMSPEC', 'SYSTEMDRIVE')}
@@ -85,7 +123,7 @@ def main():
         if args.arxiv:
             command.append('--arxiv')
         with (work / (mode + '-process.log')).open('wb') as log:
-            result = subprocess.run(command, cwd=work, env=env, timeout=1600,
+            result = run.process(command, cwd=work, env=env, timeout=1600,
                                     stdout=log, stderr=log, creationflags=0x08000000)
         report_path = copy / 'runtime/work/portable-check.json'
         report = json.loads(report_path.read_text(encoding='utf-8')) if report_path.exists() else {'ok': False}
@@ -99,7 +137,7 @@ def main():
             native_dpr = actual_dpr
             native_screen = actual_screen
         # 新进程先明确断言合成 DPAPI 恢复，随后验证普通入口重复启动/关闭。
-        recovery = subprocess.run([str(copy / 'arXivKaleid.exe'), '--portable-recovery-check'],
+        recovery = run.process([str(copy / 'arXivKaleid.exe'), '--portable-recovery-check'],
                                   cwd=work, env=env, timeout=30, creationflags=0x08000000)
         assert recovery.returncode == 0
         restored = json.loads((copy / 'runtime/work/recovery-check.json').read_text())
@@ -108,6 +146,9 @@ def main():
         assert restored['research_requirements_restored_exactly']
         for _ in range(3):
             process = subprocess.Popen([str(copy / 'arXivKaleid.exe')], cwd=work, env=env, creationflags=0x08000000)
+            run.children.append(process)
+            run.record['children'].append(process.pid)
+            run.save()
             visible = False
             try:
                 for _ in range(150):
@@ -120,14 +161,16 @@ def main():
                 if not visible or process.wait(timeout=15) != 0:
                     raise RuntimeError('portable_restart_failed')
             finally:
-                if process.poll() is None:
-                    process.terminate()
-                    process.wait(timeout=10)
+                def close_restart():
+                    if process.poll() is None:
+                        process.terminate()
+                        process.wait(timeout=10)
+                run.finish_evidence(close_restart)
         report.update(restart_cycles=3, synthetic_dpapi_restart=True, python_on_path=False,
                       dpi_mode='native' if target_dpr is None else 'simulated', requested_dpr=target_dpr,
                       actual_dpr=actual_dpr, validation_directory=copy.name, outside_source_cwd=True)
         results.append(report)
-        (work / 'validation.json').write_text(json.dumps({'commit': identity['commit'], 'runs': results},
+        (run.evidence / 'validation.json').write_text(json.dumps({'commit': identity['commit'], 'runs': results},
                                                        ensure_ascii=False, indent=2), encoding='utf-8')
         print(json.dumps({'mode': mode, 'dpr': actual_dpr, 'ok': True, 'screenshots': len(report['visual_qa']['captures'])}), flush=True)
     # 缺失资源必须失败，且诊断拒绝重复使用已有 runtime；仅操作本次新副本。
@@ -135,7 +178,8 @@ def main():
     shutil.copytree(source, negative)
     prompt = negative / '_internal/prompts/relevance_round2_v16.txt'
     prompt.rename(prompt.with_suffix('.disabled'))
-    bad = subprocess.run([str(negative / 'arXivKaleid.exe'), '--portable-check'], cwd=work,
+    run.checkpoint()
+    bad = run.process([str(negative / 'arXivKaleid.exe'), '--portable-check'], cwd=work,
                          env=env, timeout=30, creationflags=0x08000000)
     assert bad.returncode != 0
     # 默认研究资源同样受发行完整性校验，篡改后不可启动分析。
@@ -143,19 +187,21 @@ def main():
     shutil.copytree(source, tampered)
     requirement = checked_path(tampered, '_internal/prompts/research_requirements_round1_v1.txt')
     requirement.write_bytes(requirement.read_bytes() + b'\nsynthetic-tamper')
-    bad = subprocess.run([str(tampered / 'arXivKaleid.exe'), '--portable-check'], cwd=work,
+    run.checkpoint()
+    bad = run.process([str(tampered / 'arXivKaleid.exe'), '--portable-check'], cwd=work,
                          env=env, timeout=30, creationflags=0x08000000)
     assert bad.returncode != 0
-    rejected = subprocess.run([str(copy / 'arXivKaleid.exe'), '--portable-check'], cwd=work,
+    rejected = run.process([str(copy / 'arXivKaleid.exe'), '--portable-check'], cwd=work,
                               env=env, timeout=30, creationflags=0x08000000)
     assert rejected.returncode == 2
     # 应用曾用过的验证目录不回流干净发行树。
     verify_tree(source)
+    verify_synthetic_privacy(work)
     summary = {'commit': identity['commit'], 'runs': results, 'missing_resource_rejected': True,
                'tampered_requirements_rejected': True,
                'used_runtime_rejected': True, 'clean_distribution_preserved': True}
-    (work / 'validation.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
-    print('Validation audit:', work.name)
+    (run.evidence / 'validation.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+    print('Validation audit:', run.evidence.relative_to(ROOT).as_posix())
 
 
 if __name__ == '__main__':

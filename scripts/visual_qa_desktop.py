@@ -11,7 +11,6 @@ from pathlib import Path
 import socket
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 import urllib.request
@@ -30,6 +29,7 @@ from desktop import app
 from desktop.diagnostics import DesktopDiagnostics
 from desktop.paths import checked_path
 from desktop.progress import ProgressEvent
+from scripts.local_artifacts import ArtifactRun, inventory, temporary_environment
 from desktop.history import HistoryStore
 from portable_visual import synthetic_snapshot as report_snapshot, synthetic_analysis_result, exercise_history, exercise_requirements
 
@@ -73,14 +73,30 @@ def compose_captures(output, filename, items, columns):
 
 
 def main():
-    scratch = checked_path(ROOT, ".codex-validation", "alpha10-visual-qa")
-    scratch.mkdir(parents=True, exist_ok=True)
-    output = Path(tempfile.mkdtemp(prefix="capture-", dir=scratch))
+    with ArtifactRun('visual', root=ROOT, review=True) as run:
+        try:
+            with temporary_environment(run):
+                visual_qa(run)
+        finally:
+            run.finish_evidence(lambda: collect_qa_evidence(run))
+
+
+def collect_qa_evidence(run):
+    inventory(ROOT, run.work)
+    for path in run.work.iterdir():
+        if path.is_file() and (path.suffix == '.png' or path.name == 'qa.json'):
+            run.capture(path, path.name)
+
+
+def visual_qa(run):
+    output = run.work
     for relative in ('config.json', *json.loads((ROOT / 'config.json').read_text(encoding='utf-8'))['paths'].values()):
         target = checked_path(output, relative)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / relative, target)
     from desktop.research_requirements import RequirementsStore
+    # 初始化中途失败时资源退出尚未确认，保留 work 供诊断，不贸然删除。
+    run.cleanup_allowed = False
     application = QApplication.instance() or QApplication([])
     diagnostics = DesktopDiagnostics(output)
     window = app.DesktopWindow(MemorySecretStore(), diagnostics, history_store=HistoryStore(output), requirements_store=RequirementsStore(output))
@@ -111,6 +127,7 @@ def main():
                          "report_height": window.home_page.report_stack.height(),
                          "task_height": window.task_panel.height(),
                          "detail_height": window.task_panel.details_scroll.height()})
+        run.checkpoint()
         popup = window.date_picker
         if popup.isVisible():
             available = window.rect().translated(window.mapToGlobal(QPoint(0, 0))).intersected(window.screen().availableGeometry())
@@ -231,13 +248,17 @@ def main():
                 wait_until(lambda: window.worker is None)
             capture("12-failure")
     finally:
-        gate.set()
-        if window.worker is not None:
-            window.worker.wait(20000)
-            application.processEvents()
-        wait_until(lambda: window.history_worker is None and not window._history_jobs)
-        window.close()
-        diagnostics.close()
+        def close_qa():
+            gate.set()
+            if window.worker is not None:
+                if not window.worker.wait(20000):
+                    raise RuntimeError('qa_worker_still_running')
+                application.processEvents()
+            wait_until(lambda: window.history_worker is None and not window._history_jobs)
+            window.close()
+            diagnostics.close()
+            run.cleanup_allowed = True
+        run.finish_evidence(close_qa)
     (output / "qa.json").write_text(json.dumps({
         "version": app.__version__, "qt_platform": application.platformName(),
         "offline_synthetic": True, "history": history, "requirements": requirements, "captures": captures,
@@ -253,7 +274,7 @@ def main():
         ("10c-history-zero", "零推荐日报"), ("10h-history-save-failed", "历史保存失败 / 分析成功"),
         ("12-failure", "失败状态 / 安全诊断"),
     ], 2)
-    print(output)
+    print(run.evidence)
 
 
 if __name__ == "__main__":
