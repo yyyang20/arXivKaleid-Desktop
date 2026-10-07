@@ -4,14 +4,133 @@
 
 """从实际安装包和固定上游源码收集许可证；不得猜测或静默跳过。"""
 import importlib.metadata
+import argparse
+import hashlib
 import io
 import json
 from pathlib import Path
 import shutil
 import sys
 import tarfile
+import zipfile
 
 from build_windows_portable import checked_path, download, source_archives
+
+LICENSE_INPUT_SCHEMA = 'portable_conda_license_inputs_v1'
+
+
+def conda_metadata(prefix):
+    """只读指定环境的包身份，不修改安装元数据或原缓存。"""
+    return {data['name']: data for path in sorted((prefix / 'conda-meta').glob('*.json'))
+            for data in [json.loads(path.read_text(encoding='utf-8'))]}
+
+
+def package_identity(metadata):
+    return {key: metadata[key] for key in ('name', 'version', 'build', 'sha256')}
+
+
+def prepare_license_inputs(root, archive_path, digest, prefix, output):
+    """从明确指定且哈希正确的干净归档复制许可；旧来源材料永不删除。"""
+    archive_path = checked_path(root, archive_path.relative_to(root).as_posix())
+    output = checked_path(root, output.relative_to(root).as_posix())
+    stable = checked_path(root, '.desktop-build/inputs/conda-licenses')
+    if not output.is_relative_to(stable) or output == stable or output.exists():
+        raise RuntimeError('license_input_output_invalid_or_exists')
+    data = archive_path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != digest:
+        raise RuntimeError('license_input_archive_hash_mismatch')
+    metadata = conda_metadata(prefix)
+    records, copies = [], []
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        names = [n for n in archive.namelist() if not n.endswith('/')]
+        if len(names) != len(set(names)) or any('/runtime/' in n for n in names):
+            raise RuntimeError('license_input_archive_invalid')
+        roots = {n.split('/')[0] for n in names}
+        if len(roots) != 1:
+            raise RuntimeError('license_input_archive_root_invalid')
+        base = next(iter(roots)) + '/licenses/'
+        components = json.loads(archive.read(base + 'components.json'))
+        for component in components:
+            if 'distributed_files' not in component:
+                continue
+            name = component['name']
+            package = metadata[name]
+            if component['version'] != package['version']:
+                raise RuntimeError('license_input_version_mismatch')
+            files = []
+            for member in names:
+                if not member.startswith(base + name + '/'):
+                    continue
+                relative = member[len(base + name + '/'):]
+                target = checked_path(root, output.parent.relative_to(root).as_posix(), name, relative)
+                content = archive.read(member)
+                files.append({'relative': relative, 'path': target.relative_to(root).as_posix(),
+                              'member': member, 'sha256': hashlib.sha256(content).hexdigest()})
+                copies.append((target, content))
+            if not files:
+                raise RuntimeError('license_input_files_missing')
+            records.append({**package_identity(package), 'files': files})
+    if len(records) != len({r['name'] for r in records}) or not {'python', 'tzdata'} <= {r['name'] for r in records}:
+        raise RuntimeError('license_input_inventory_invalid')
+    # 拒绝覆盖已存在目录；完整验证通过后才开始写入新的稳定输入目录。
+    if output.parent.exists():
+        raise RuntimeError('license_input_directory_exists')
+    output.parent.mkdir(parents=True)
+    for target, content in copies:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+    manifest = dict(schema=LICENSE_INPUT_SCHEMA, archive=archive_path.relative_to(root).as_posix(),
+                    archive_sha256=digest, packages=records)
+    output.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
+    return manifest
+
+
+def license_input_files(root, manifest_path, metadata):
+    manifest_path = checked_path(root, manifest_path.relative_to(root).as_posix())
+    stable = checked_path(root, '.desktop-build/inputs/conda-licenses')
+    if not manifest_path.is_relative_to(stable):
+        raise RuntimeError('license_input_manifest_outside_stable_directory')
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+    if manifest.get('schema') != LICENSE_INPUT_SCHEMA:
+        raise RuntimeError('license_input_schema_invalid')
+    archive_path = checked_path(root, manifest['archive'])
+    data = archive_path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != manifest['archive_sha256']:
+        raise RuntimeError('license_input_archive_hash_mismatch')
+    result = {}
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        names = [n for n in archive.namelist() if not n.endswith('/')]
+        roots = {n.split('/')[0] for n in names}
+        if len(roots) != 1 or len(names) != len(set(names)):
+            raise RuntimeError('license_input_archive_invalid')
+        base = next(iter(roots)) + '/licenses/'
+        components = json.loads(archive.read(base + 'components.json'))
+        expected_packages = {c['name']: c['version'] for c in components if 'distributed_files' in c}
+        for record in manifest['packages']:
+            name = record['name']
+            if (name not in metadata or name not in expected_packages or name in result
+                    or expected_packages[name] != record['version']
+                    or package_identity(metadata[name]) != {k: record[k] for k in package_identity(metadata[name])}):
+                raise RuntimeError('license_input_package_identity_mismatch')
+            files = []
+            seen = set()
+            for item in record['files']:
+                source = checked_path(root, item['path'])
+                expected = checked_path(root, manifest_path.parent.relative_to(root).as_posix(), name, item['relative'])
+                if (source != expected or item['relative'] in seen
+                        or item['member'] != base + name + '/' + item['relative']):
+                    raise RuntimeError('license_input_file_path_invalid')
+                seen.add(item['relative'])
+                content = source.read_bytes()
+                if hashlib.sha256(content).hexdigest() != item['sha256'] or content != archive.read(item['member']):
+                    raise RuntimeError('license_input_file_hash_mismatch')
+                files.append((item['relative'], source))
+            if not files or {base + name + '/' + relative for relative in seen} != {n for n in names if n.startswith(base + name + '/')}:
+                raise RuntimeError('license_input_files_missing')
+            result[name] = files
+        if set(result) != set(expected_packages):
+            raise RuntimeError('license_input_inventory_incomplete')
+    return result
 
 
 def wheel_license_files(dist):
@@ -59,7 +178,7 @@ def collect_source_archives(root: Path, licenses: Path) -> list[dict[str, str]]:
     return records
 
 
-def collect_licenses(root: Path, folder: Path, module_inventory: dict | None = None) -> None:
+def collect_licenses(root: Path, folder: Path, module_inventory: dict | None = None, *, license_manifest=None) -> None:
     licenses = folder / 'licenses'
     licenses.mkdir()
     records = []
@@ -83,15 +202,24 @@ def collect_licenses(root: Path, folder: Path, module_inventory: dict | None = N
     required = {name for name, files in shipped.items() if files}
     if not {'python', 'tzdata'} <= required:
         raise RuntimeError('execution_platform_missing')
-    for path in (Path(sys.prefix) / 'conda-meta').glob('*.json'):
-        metadata = json.loads(path.read_text(encoding='utf-8'))
+    installed = conda_metadata(Path(sys.prefix))
+    explicit = license_input_files(root, license_manifest, installed) if license_manifest else None
+    for metadata in installed.values():
         name = metadata['name']
         if name not in required:
             continue
-        source = Path(metadata['extracted_package_dir']) / 'info/licenses'
-        if not source.is_dir() or not any(source.rglob('*')):
-            raise RuntimeError('conda_license_missing:' + name)
-        shutil.copytree(source, licenses / name)
+        if explicit is not None:
+            if name not in explicit:
+                raise RuntimeError('conda_license_missing:' + name)
+            for relative, source in explicit[name]:
+                target = checked_path(licenses, name, relative)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, target)
+        else:
+            source = Path(metadata['extracted_package_dir']) / 'info/licenses'
+            if not source.is_dir() or not any(source.rglob('*')):
+                raise RuntimeError('conda_license_missing:' + name)
+            shutil.copytree(source, licenses / name)
         records.append({'name': name, 'version': metadata['version'], 'license': metadata.get('license'),
                         'distributed_files': shipped[name]})
     if required != {r['name'] for r in records}:
@@ -122,3 +250,17 @@ def collect_licenses(root: Path, folder: Path, module_inventory: dict | None = N
             raise RuntimeError('required_license_missing:' + name)
     shutil.copyfile(root / 'packaging/windows/THIRD_PARTY_NOTICES.txt', folder / 'THIRD_PARTY_NOTICES.txt')
     (licenses / 'components.json').write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding='utf-8')
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='准备项目内固定许可输入；不构建、不联网、不修改环境')
+    parser.add_argument('--source-archive', required=True)
+    parser.add_argument('--source-sha256', required=True)
+    parser.add_argument('--output', required=True)
+    args = parser.parse_args()
+    root = Path(__file__).resolve().parents[1]
+    if Path(sys.prefix).name != 'arxivkaleid-desktop':
+        raise RuntimeError('dedicated_conda_environment_required')
+    prepare_license_inputs(root, checked_path(root, args.source_archive), args.source_sha256,
+                           Path(sys.prefix), checked_path(root, args.output))
+    print('许可输入已准备：' + args.output)

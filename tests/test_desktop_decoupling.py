@@ -207,7 +207,8 @@ class DesktopDecouplingTests(unittest.TestCase):
             self.assertFalse((ROOT / name).exists(), name)
 
     def test_two_rounds_run_from_isolated_source_copy_without_online_resources_or_docs(self):
-        scratch = ROOT / '.codex-validation'
+        from scripts.local_artifacts import test_scratch
+        scratch = test_scratch(ROOT)
         scratch.mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=scratch) as directory:
             isolated = Path(directory) / 'standalone'
@@ -215,7 +216,7 @@ class DesktopDecouplingTests(unittest.TestCase):
             isolated.mkdir()
             outside.mkdir()
             names = list(CORE_MODULES) + ['config.json', 'tests/test_desktop_analysis.py',
-                                       'tests/test_desktop_pipeline.py']
+                                       'tests/test_desktop_pipeline.py', 'scripts/local_artifacts.py']
             names += [str(p.relative_to(ROOT)) for p in (ROOT / 'desktop').glob('*.py')]
             names += list(json.loads((ROOT / 'config.json').read_text(encoding='utf-8'))['paths'].values())
             for name in names:
@@ -243,6 +244,8 @@ print('standalone_two_rounds_ok')
 '''
             env = {k: v for k, v in os.environ.items() if not k.upper().startswith('PYTHON')}
             env.update(TEMP=str(outside), TMP=str(outside), QT_QPA_PLATFORM='offscreen')
+            # 隔离源码有独立根目录，不能继承父测试入口的相对 scratch。
+            env.pop('ARXIVKALEID_TEST_SCRATCH', None)
             result = subprocess.run([sys.executable, '-I', '-B', '-X', 'utf8', '-c', code, str(isolated)],
                                     cwd=outside, env=env, capture_output=True, text=True,
                                     encoding='utf-8', timeout=60)

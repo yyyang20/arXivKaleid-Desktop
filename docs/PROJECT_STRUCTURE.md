@@ -30,6 +30,9 @@
 | `generate_round2_report.py` | 当前 Round 2 结果验证、页数与推荐区块渲染辅助函数 |
 | `packaging/windows/` | one-folder spec、冻结入口、portable 自检和 vendor/许可证元数据 |
 | `scripts/` | 本地 Windows portable 构建、许可证收集、零模型验证及隔离离线 GUI 视觉 QA 入口 |
+| `scripts/local_artifacts.py` | 项目内生命周期、进程锁、容量和留存门槛、准确处置计划；不自动淘汰历史材料 |
+| `scripts/run_local_checks.py` | 独立 TEMP/TMP 与测试根目录的离线 unittest 薄入口 |
+| `scripts/verify_public_release.py` | 匿名只读核验发行资产、冻结源码与历史基线；不执行远端写入 |
 
 根目录保留核心函数模块供 Desktop 调用；应用启动入口为 `python -B -m desktop.app`。当前仓库没有 Online 自动化、云端状态、恢复、错误样本或 Issue 日报发布模块，也没有 GitHub workflow。
 
@@ -91,6 +94,7 @@ docs/
 | `test_desktop_build.py` | checksum、x64、资源 allowlist、固定依赖、LICENSE/文档复制、源码版本/许可/归档校验及发行数据排除 |
 | `test_portable_diagnostic.py` | 独立进程完整诊断路径、Windows 合成 DPAPI、后置失败与已用 runtime 拒绝 |
 | `test_desktop_governance.py` | 文档入口、安全与授权、阅读和更新路由、身份表、链接、发行资料副本及发布检查要求；内存反例验证 |
+| `test_desktop_artifacts.py` | 成功、失败、中断、超时、锁、容量、清理安全、许可 manifest 和 mock 发布核验 |
 
 治理测试只读检查维护文件，不启动应用或读取运行数据；构建测试验证打包复制和发行扫描，两者职责不同。发布清单的静态检查不能代替实际成品或 GitHub 发布核验。新增功能必须新增或更新对应测试，文档不以固定测试数量描述当前状态。
 
@@ -104,4 +108,4 @@ docs/
 - `release/` 在构建和验证期间保留候选及旧成品；正式发布和远端核验成功后只保留最新正式 ZIP 与 `.sha256`，历史正式版本存于 GitHub Releases。授权、核验和精确清理边界见 [本地历史 portable 收口](OPERATIONS.md#本地历史-portable-收口)，不清理其他忽略材料。
 - `.gitignore` 仍保护旧 `config/local_secret.json`、`data/` 数据库、PDF、`reports/` 和日志等路径；这些忽略规则不表示旧运行入口仍然存在。
 
-SQLite、PDF、报告、日志、缓存、审计目录和未跟踪文件不得因普通代码或文档任务被删除。下载或生成临时审计内容只能使用项目内明确的忽略目录。路径配置使用相对路径，代码写入前验证解析后的目标仍在规定根目录内。
+SQLite、PDF、报告、日志、缓存、审计目录和未跟踪文件不得因普通代码或文档任务被删除。当前任务自产合成数据及可重建工作文件仅按 [临时产物生命周期](OPERATIONS.md#临时产物生命周期) 收尾，不涉及用户或历史数据。`.desktop-build/managed-artifacts/` 保存登记、证据和受保护 previous-*；测试 work 独立位于 `.codex-validation/managed-artifacts/`。`.desktop-build/inputs/conda-licenses/` 是稳定、被忽略的构建输入，不是临时清理目标；来源发行 ZIP 和 vendor 继续保留。退役的历史包装脚本及旧许可映射目录不是当前依赖，须经依赖复核及当次明确授权后才能清理。下载或生成临时审计内容只能使用项目内明确的忽略目录。路径配置使用相对路径，代码写入前验证解析后的目标仍在规定根目录内。

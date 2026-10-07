@@ -15,6 +15,7 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 import main
+from scripts.local_artifacts import test_scratch
 from desktop import pipeline
 from desktop.diagnostics import DesktopDiagnostics
 
@@ -56,7 +57,7 @@ class IsolatedDesktopTest(unittest.TestCase):
     def setUp(self):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
-        scratch = PROJECT_ROOT / ".codex-validation"
+        scratch = test_scratch(PROJECT_ROOT)
         self.assertTrue(scratch.resolve().is_relative_to(PROJECT_ROOT))
         scratch.mkdir(exist_ok=True)
         directory = self.stack.enter_context(tempfile.TemporaryDirectory(dir=scratch))
