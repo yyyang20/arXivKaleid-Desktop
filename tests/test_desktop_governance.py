@@ -70,9 +70,9 @@ def prose(text: str) -> str:
     return '\n'.join(lines)
 
 
-def section(text: str, title: str) -> str:
+def section(text: str, title: str, *, level: int = 2) -> str:
     match = re.search(
-        rf'^## {re.escape(title)}[ \t]*(?:\n|\Z)(.*?)(?=^#{{1,2}} |\Z)',
+        rf'^#{{{level}}} {re.escape(title)}[ \t]*(?:\n|\Z)(.*?)(?=^#{{1,{level}}} |\Z)',
         prose(text), re.MULTILINE | re.DOTALL,
     )
     if match is None:
@@ -189,6 +189,26 @@ def portable_cleanup_errors(operations: str, checklist: str, agents: str) -> lis
             'preserve': ('不删除或修改 GitHub 历史 Release、tag、源码或资产',
                          '不清理 `.desktop-build/`、源码材料、审计材料、运行数据'),
             'failure': ('异常均停止后续发布或删除',),
+            'dist_authorization': ('分别列明旧 ZIP、校验文件和旧版本 `dist/` 成品目录',
+                                   '仅授权清理 `release/` 不包含 `dist/`'),
+            'dist_stage': ('新旧远端核验全部通过后', '不再用于构建、验证或待审',
+                           '所属进程、线程及数据库连接退出',
+                           '不由构建器或临时产物轮换自动删除'),
+            'dist_integrity': ('准确目录', '早于当前正式版本的已发布成品',
+                               'BUILD_INFO 的版本与提交和对应历史 tag',
+                               '完整文件集和逐文件 SHA-256', '对应远端正式 ZIP',
+                               '遗漏文件、额外文件或目录、哈希及身份不符均停止'),
+            'dist_preserve': ('含 `runtime/`、Secret、数据库、PDF 或日志的目录保留',
+                              '不读取这些用户数据', '未知版本、技术候选、链接、越界或归属不明',
+                              '技术构建例外不适用于 `dist/`',
+                              '`preserved/previous-*`、vendor、许可输入与来源归档均不在本步骤范围'),
+            'dist_execution': ('准确绝对路径、完整文件与目录清单、逐文件哈希',
+                               '执行前重新核验，任何变化都停止',
+                               '由深到浅移除已核验的空目录', '禁止删除 `dist/` 父目录',
+                               '删除失败立即停止', '不自动重试'),
+            'dist_result': ('`dist/` 只保留当前最新正式版本及仍有明确必要的成品',
+                            '记录额外保留目录的用途和待完成事项，后续发布再次复核',
+                            '`release/` 和 `dist/` 最终文件及目录列表'),
         }),
         'checklist': (checklist, {
             'stage': ('构建、验证和失败阶段不得提前清理',),
@@ -200,11 +220,33 @@ def portable_cleanup_errors(operations: str, checklist: str, agents: str) -> lis
             'preserve': ('不删除或修改 GitHub 历史 Release、tag、源码或资产',
                          '不清理 `.desktop-build/`、源码材料、审计材料、运行数据'),
             'failure': ('异常时停止后续发布或删除',),
+            'dist_authorization': ('分别列明旧 ZIP、校验文件和旧版本 `dist/` 成品目录',
+                                   '仅授权清理 `release/` 不包含 `dist/`'),
+            'dist_stage': ('新旧远端核验全部通过后', '不再用于构建、验证或待审',
+                           '所属进程、线程及数据库连接退出',
+                           '不由构建器或临时产物轮换自动删除'),
+            'dist_integrity': ('旧目录名、BUILD_INFO 的版本与提交和对应历史 tag 一致',
+                               '早于当前正式版本的已发布成品', '完整文件集和逐文件 SHA-256',
+                               '对应远端正式 ZIP', '遗漏文件、额外文件或目录、哈希及身份不符均停止'),
+            'dist_preserve': ('含 `runtime/`、Secret、数据库、PDF 或日志的目录保留',
+                              '不读取这些用户数据', '未知版本、技术候选、链接、越界或归属不明',
+                              '技术构建例外不适用于 `dist/`',
+                              '`preserved/previous-*`、vendor、许可输入与来源归档均不在本步骤范围'),
+            'dist_execution': ('准确绝对路径、完整文件与目录清单、逐文件哈希',
+                               '执行前重新核验，任何变化都停止',
+                               '由深到浅移除已核验的空目录', '禁止删除 `dist/` 父目录',
+                               '删除失败立即停止', '不自动重试'),
+            'dist_result': ('`dist/` 只保留当前最新正式版本及仍有明确必要的成品',
+                            '记录额外保留目录的用途和待完成事项，后续发布再次复核',
+                            '最终文件及目录列表'),
         }),
         'agents': (agents, {
             'entry': ('已授权的本地历史 portable 收口', '新旧远端资产核验通过后',
                       '`docs/OPERATIONS.md`', '构建和验证阶段不得提前清理',
-                      '例外只覆盖 `release/`', '不扩大到其他运行或审计材料'),
+                       '例外只覆盖 `release/`', '不扩大到其他运行或审计材料'),
+            'dist_entry': ('以及当次明确授权、与对应远端正式 ZIP 逐文件一致',
+                           '不再用于构建、验证或待审的旧版本 `dist/` 成品目录',
+                           '含 `runtime/` 的目录继续保护'),
         }),
     }
     return [f'{document}:{rule}' for document, (text, rules) in contracts.items()
@@ -599,6 +641,62 @@ class DesktopGovernanceTests(unittest.TestCase):
             changed[index] = changed[index].replace(removed, '错误规则')
             with self.subTest(rule=expected):
                 self.assertIn(expected, portable_cleanup_errors(*changed))
+
+    def test_dist_cleanup_requires_all_gates_in_the_release_section(self):
+        # 在原发布后收口契约中核验，不给临时产物轮换或构建器新增删除职责。
+        operations = section(read_utf8('docs/OPERATIONS.md'), '本地历史 portable 收口', level=3)
+        checklist = section(read_utf8('docs/public_release/RELEASE_CHECKLIST.md'),
+                            '本地历史 portable 收口')
+        agents = section(read_utf8('AGENTS.md'), '项目内修改')
+        self.assertEqual(portable_cleanup_errors(operations, checklist, agents), [])
+        for relative in ('docs/PROJECT_STRUCTURE.md', 'docs/desktop/DESKTOP_OPERATIONS.md'):
+            text = read_utf8(relative)
+            self.assertRegex(text, r'旧(?:版本)? `dist/`')
+            self.assertIn('含 `runtime/`', text)
+            self.assertIn('OPERATIONS.md#本地历史-portable-收口', text)
+
+    def test_dist_cleanup_missing_gate_or_protection_is_detected_in_memory(self):
+        documents = [section(read_utf8('docs/OPERATIONS.md'), '本地历史 portable 收口', level=3),
+                     section(read_utf8('docs/public_release/RELEASE_CHECKLIST.md'),
+                             '本地历史 portable 收口'),
+                     section(read_utf8('AGENTS.md'), '项目内修改')]
+        # 删除一个门槛即判错，覆盖仅 ZIP 授权、提前清理、用户数据及目录范围扩大。
+        rules = {
+            'dist_authorization': '仅授权清理 `release/` 不包含 `dist/`',
+            'dist_stage': '不再用于构建、验证或待审',
+            'dist_integrity': '完整文件集和逐文件 SHA-256',
+            'dist_preserve': '含 `runtime/`、Secret、数据库、PDF 或日志的目录保留',
+            'dist_execution': '执行前重新核验，任何变化都停止',
+            'dist_result': '记录额外保留目录的用途和待完成事项，后续发布再次复核',
+        }
+        for index, document in enumerate(('operations', 'checklist')):
+            for rule, fragment in rules.items():
+                changed = documents.copy()
+                changed[index] = changed[index].replace(fragment, '错误规则')
+                with self.subTest(document=document, rule=rule):
+                    self.assertIn(f'{document}:{rule}', portable_cleanup_errors(*changed))
+            for rule, fragment in (
+                    ('dist_stage', '新旧远端核验全部通过后'),
+                    ('dist_stage', '所属进程、线程及数据库连接退出'),
+                    ('dist_stage', '不由构建器或临时产物轮换自动删除'),
+                    ('dist_integrity', '早于当前正式版本的已发布成品'),
+                    ('dist_integrity', '遗漏文件、额外文件或目录、哈希及身份不符均停止'),
+                    ('dist_preserve', '技术构建例外不适用于 `dist/`'),
+                    ('dist_preserve', '`preserved/previous-*`、vendor、许可输入与来源归档均不在本步骤范围'),
+                    ('dist_execution', '禁止删除 `dist/` 父目录'),
+                    ('dist_execution', '删除失败立即停止'),
+                    ('dist_execution', '不自动重试')):
+                changed = documents.copy()
+                changed[index] = changed[index].replace(fragment, '错误规则')
+                with self.subTest(document=document, fragment=fragment):
+                    self.assertIn(f'{document}:{rule}', portable_cleanup_errors(*changed))
+        for fragment in ('以及当次明确授权、与对应远端正式 ZIP 逐文件一致',
+                         '不再用于构建、验证或待审的旧版本 `dist/` 成品目录',
+                         '含 `runtime/` 的目录继续保护'):
+            changed = documents.copy()
+            changed[2] = changed[2].replace(fragment, '错误规则')
+            with self.subTest(fragment=fragment):
+                self.assertIn('agents:dist_entry', portable_cleanup_errors(*changed))
 
     def test_missing_or_wrong_identity_is_detected_in_memory(self):
         text = '## 当前身份\n\n| Desktop 版本 | `1.0` |\n'
