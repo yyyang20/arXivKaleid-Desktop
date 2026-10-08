@@ -33,10 +33,10 @@ SOURCE_URL = f'https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags
 RESOURCES = (
     'config.json',
     'assets/app-icon.ico',
-    'prompts/relevance_round1_v21.txt',
-    'prompts/relevance_round2_v16.txt',
-    'prompts/research_requirements_round1_v1.txt',
-    'prompts/research_requirements_round2_v1.txt',
+    'prompts/relevance_round1_v22.txt',
+    'prompts/relevance_round2_v17.txt',
+    'prompts/research_prompt_round1_v1.txt',
+    'prompts/research_prompt_round2_v1.txt',
 )
 PUBLIC_DOCUMENTS = ('README.md', 'EULA.txt', 'PRIVACY.md', 'SECURITY.md')
 REQUIRED_RELEASE_FILES = (
@@ -247,7 +247,7 @@ def inspect_python_archive(executable: Path) -> dict:
     archive = CArchiveReader(str(executable))
     pyz = archive.open_embedded_archive('PYZ.pyz')
     modules = sorted(pyz.toc)
-    if any(n == 'tests' or n.startswith(('tests.', 'unittest', 'pytest', 'scripts.visual_qa',
+    if any(n in ('tests', 'content_labels') or n.startswith(('tests.', 'unittest', 'pytest', 'scripts.visual_qa',
                                        'scipy', 'PIL', 'colorthief')) for n in modules):
         raise RuntimeError('development_or_full_module_in_release')
     for required in ('qfluentwidgets._rc.resource', 'qframelesswindow', 'darkdetect', 'portable_visual'):
@@ -278,6 +278,15 @@ def verify_legal_resources(folder: Path) -> None:
         verify_checksum(archive.read_bytes(), item['sha256'])
 
 
+def verify_resource_identity(folder: Path, identity: dict) -> None:
+    """冻结身份记录全部允许资源，拒绝遗漏或产物中的资源变化。"""
+    expected = identity.get('resource_hashes')
+    actual = {name: sha(checked_path(folder, '_internal', name).read_bytes()) for name in RESOURCES}
+    if expected != actual:
+        raise RuntimeError('build_resource_identity_mismatch')
+    load_config(checked_path(folder, '_internal', 'config.json'))
+
+
 def verify_tree(folder: Path) -> dict[str, str]:
     """不接触真实 Secret；仅扫描发行 allowlist 产生的文件和字节。"""
     forbidden = {'runtime', '.git', '.desktop-runtime', '.codex-validation', 'logs', 'reports', 'cache', '__pycache__'}
@@ -298,6 +307,7 @@ def verify_tree(folder: Path) -> dict[str, str]:
         if (path.name.lower() in ('secret.dat', 'local_secret.json', 'automation_policy.json',
                                   'research_profile.json', 'research_profile.md',
                                   'round1_research_requirements.json', 'round2_research_requirements.json',
+                                  'round1_research_prompt.json', 'round2_research_prompt.json',
                                   'daily_report_template.py', 'selection_nature.py')
                 or path.name.lower() in {'visual_qa_desktop.py', 'qa.json'}
                 or '.sqlite' in path.name.lower()
@@ -316,6 +326,7 @@ def verify_tree(folder: Path) -> dict[str, str]:
         if required not in inventory:
             raise RuntimeError('release_file_missing:' + required)
     verify_x64((folder / 'arXivKaleid.exe').read_bytes())
+    verify_resource_identity(folder, json.loads((folder / 'BUILD_INFO.json').read_text(encoding='utf-8')))
     verify_legal_resources(folder)
     return inventory
 
@@ -391,7 +402,8 @@ def build_portable(frozen, run, license_manifest=None):
                 'dependencies': {n: importlib.metadata.version(n) for n in
                                  (*pinned_requirements('requirements-desktop.txt'), 'PyInstaller',
                                   'pyinstaller-hooks-contrib', 'shiboken6', 'PySide6_Essentials', 'PySide6_Addons')},
-                'qt_modules': ['Core', 'Gui', 'Widgets', 'Svg', 'SvgWidgets', 'Xml'], 'tzdata': '2026c'}
+                'qt_modules': ['Core', 'Gui', 'Widgets', 'Svg', 'SvgWidgets', 'Xml'], 'tzdata': '2026c',
+                'resource_hashes': {name: sha((folder / '_internal' / name).read_bytes()) for name in RESOURCES}}
     (folder / 'BUILD_INFO.json').write_text(json.dumps(identity, indent=2), encoding='utf-8')
     inventory = verify_tree(folder)
     (run.evidence / 'inventory.json').write_text(json.dumps(inventory, indent=2), encoding='utf-8')

@@ -243,14 +243,14 @@ def checked_usage(connection, run_id, config):
 def run_round1(
     connection, run_id, papers, config, profile, prompt, api_key,
     diagnostic_observer: Callable[[str, object], None] | None = None,
-    *, research_requirements: str,
+    *, research_prompt: str,
 ):
     if not papers:
         main.save_round1_screening_results(
             connection, run_id, [], config, selection_audit=main.empty_screening_stage_audit()
         )
         return []
-    messages = main.build_round1_messages(prompt, profile, papers, config, research_requirements=research_requirements)
+    messages = main.build_round1_messages(prompt, profile, papers, config, research_prompt=research_prompt)
     validate_budget(connection, run_id, config, "round1", messages)
     stage = main.deepseek_stage_config(config, "round1")
     client = main.DeepSeekClient(
@@ -450,7 +450,7 @@ class AnalysisAttempt:
                 connection, run_id, papers, config, profile,
                 main.load_prompt(paths["round1_prompt"]), api_key,
                 diagnostic_observer=observe_round1,
-                research_requirements=self.requirements.round1,
+                research_prompt=self.requirements.round1,
             )
             if not selected:
                 normal = outcome(
@@ -699,7 +699,7 @@ class AnalysisAttempt:
                 bundle = run_round2.build_round2_input_bundle(
                     connection, config, profile, round2_prompt,
                     run_id=run_id, fulltext_connection=fulltext,
-                    research_requirements=self.requirements.round2,
+                    research_prompt=self.requirements.round2,
                 )
             else:
                 bundle = run_round2.Round2InputBundle(

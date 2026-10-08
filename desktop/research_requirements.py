@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # See LICENSE in the project root for the full license text.
 
-"""两轮研究要求：只在当前运行根持久化，草稿不属于此保存层。"""
+"""两轮完整研究 Prompt：复用保存层，只在当前运行根持久化。"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -15,7 +15,7 @@ from desktop import paths, pipeline
 from desktop.config import load_config
 
 
-FORMAT_VERSION = "research_requirements_v1"
+FORMAT_VERSION = "research_prompt_v1"
 MAX_CHARACTERS = 10_000
 ROUNDS = ("round1", "round2")
 
@@ -26,14 +26,14 @@ class RequirementsError(RuntimeError):
 
 def normalize(text: str) -> str:
     if not isinstance(text, str):
-        raise RequirementsError("研究要求必须是纯文本。")
+        raise RequirementsError("研究 Prompt 必须是纯文本。")
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     if not text.strip() or "\x00" in text or len(text) > MAX_CHARACTERS:
-        raise RequirementsError("研究要求不能为空、含 NUL 或超过 10,000 字符。")
+        raise RequirementsError("研究 Prompt 不能为空、含 NUL 或超过 10,000 字符。")
     try:
         text.encode("utf-8")
     except UnicodeError:
-        raise RequirementsError("研究要求包含无法保存的字符。") from None
+        raise RequirementsError("研究 Prompt 包含无法保存的字符。") from None
     return text
 
 
@@ -55,14 +55,14 @@ class RequirementsStore:
 
     def _path(self, stage: str) -> Path:
         if stage not in ROUNDS:
-            raise RequirementsError("研究要求轮次无效。")
-        return paths.runtime_path(self.source_root, "config", f"{stage}_research_requirements.json")
+            raise RequirementsError("研究 Prompt 轮次无效。")
+        return paths.runtime_path(self.source_root, "config", f"{stage}_research_prompt.json")
 
     def default(self, stage: str) -> str:
         self._path(stage)
         root = paths.resource_root(self.source_root)
         config = load_config(paths.checked_path(root, "config.json"))
-        return normalize(paths.checked_path(root, config["paths"][f"{stage}_requirements"]).read_text(encoding="utf-8"))
+        return normalize(paths.checked_path(root, config["paths"][f"{stage}_research_prompt"]).read_text(encoding="utf-8"))
 
     def load(self, stage: str) -> SavedRequirements:
         default = self.default(stage)
@@ -74,16 +74,16 @@ class RequirementsStore:
             if path.stat().st_size > 80_000:
                 raise ValueError
             data = json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(data, dict) or set(data) != {"format_version", "research_requirements"}:
+            if not isinstance(data, dict) or set(data) != {"format_version", "research_prompt"}:
                 raise ValueError
             if data["format_version"] != FORMAT_VERSION:
                 raise ValueError
-            text = data["research_requirements"]
+            text = data["research_prompt"]
             if text is None:
                 return SavedRequirements(default, False)
             return SavedRequirements(normalize(text), True)
         except (OSError, UnicodeError, ValueError, RequirementsError):
-            raise RequirementsError("本轮已保存的研究要求损坏或格式未知；请确认恢复默认后再分析。") from None
+            raise RequirementsError("本轮已保存的研究 Prompt 损坏或格式未知；请确认恢复默认后再分析。") from None
 
     def save(self, stage: str, text: str | None) -> SavedRequirements:
         # 先验证默认资源，避免损坏资源下写入或错误宣称已生效。
@@ -93,7 +93,7 @@ class RequirementsStore:
         try:
             target = self._path(stage)
             target.parent.mkdir(parents=True, exist_ok=True)
-            payload = json.dumps({"format_version": FORMAT_VERSION, "research_requirements": value}, ensure_ascii=False)
+            payload = json.dumps({"format_version": FORMAT_VERSION, "research_prompt": value}, ensure_ascii=False)
             with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n", dir=target.parent, prefix=f".{stage}-", delete=False) as stream:
                 temporary = Path(stream.name)
                 stream.write(payload + "\n")
@@ -104,7 +104,7 @@ class RequirementsStore:
             os.replace(temporary, target)
             temporary = None
         except (OSError, ValueError):
-            raise RequirementsError("研究要求保存失败；原来的生效内容未改变，请检查目录权限和磁盘空间。") from None
+            raise RequirementsError("研究 Prompt 保存失败；原来的生效内容未改变，请检查目录权限和磁盘空间。") from None
         finally:
             if temporary is not None:
                 try:

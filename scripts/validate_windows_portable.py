@@ -176,7 +176,7 @@ def validate_portable(run, source, identity, args):
     # 缺失资源必须失败，且诊断拒绝重复使用已有 runtime；仅操作本次新副本。
     negative = checked_path(work, 'missing-resource')
     shutil.copytree(source, negative)
-    prompt = negative / '_internal/prompts/relevance_round2_v16.txt'
+    prompt = negative / '_internal/prompts/relevance_round2_v17.txt'
     prompt.rename(prompt.with_suffix('.disabled'))
     run.checkpoint()
     bad = run.process([str(negative / 'arXivKaleid.exe'), '--portable-check'], cwd=work,
@@ -185,7 +185,7 @@ def validate_portable(run, source, identity, args):
     # 默认研究资源同样受发行完整性校验，篡改后不可启动分析。
     tampered = checked_path(work, 'tampered-requirements')
     shutil.copytree(source, tampered)
-    requirement = checked_path(tampered, '_internal/prompts/research_requirements_round1_v1.txt')
+    requirement = checked_path(tampered, '_internal/prompts/research_prompt_round1_v1.txt')
     requirement.write_bytes(requirement.read_bytes() + b'\nsynthetic-tamper')
     run.checkpoint()
     bad = run.process([str(tampered / 'arXivKaleid.exe'), '--portable-check'], cwd=work,

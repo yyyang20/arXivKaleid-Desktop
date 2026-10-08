@@ -77,17 +77,11 @@ def build_round2_result_tool(config: dict[str, Any]) -> dict[str, Any]:
                         "properties": {
                             "arxiv_id": {"type": "string"},
                             "version": {"type": "string"},
-                            "content_label": {
-                                "type": "string",
-                                "enum": ["成像", "新解", "成像｜新解", "其他"],
-                            },
-                            "reason": {"type": "string"},
+                            "evaluation": {"type": "string"},
                         },
                         "required": [
                             "arxiv_id",
                             "version",
-                            "content_label",
-                            "reason",
                         ],
                         "additionalProperties": False,
                     },
@@ -158,8 +152,7 @@ def load_round2_candidate_papers(
 ) -> list[dict[str, Any]]:
     rows = connection.execute(
         f"""
-        SELECT s.arxiv_id, s.version, s.result_rank, s.score,
-               s.confidence, s.reason, s.details_json,
+        SELECT s.arxiv_id, s.version,
                p.title, p.authors, p.categories, p.primary_category, p.summary
         FROM screening_results AS s
         JOIN papers AS p
@@ -170,7 +163,7 @@ def load_round2_candidate_papers(
           AND s.is_selected = 1
           AND s.prompt_version = ?
           AND s.research_profile_version = ?
-        ORDER BY s.result_rank ASC, s.score DESC, s.arxiv_id
+        ORDER BY s.arxiv_id ASC, s.version ASC
         """,
         [
             policy_version,
@@ -183,7 +176,6 @@ def load_round2_candidate_papers(
 
     papers: list[dict[str, Any]] = []
     for row in rows:
-        details = parse_details_json(row["details_json"])
         papers.append(
             {
                 "arxiv_id": str(row["arxiv_id"]),
@@ -193,25 +185,6 @@ def load_round2_candidate_papers(
                 "categories": str(row["categories"] or ""),
                 "primary_category": str(row["primary_category"] or ""),
                 "summary": str(row["summary"] or ""),
-                "round1_rank": int(row["result_rank"] or 0),
-                "score": int(row["score"]) if row["score"] is not None else None,
-                "confidence": (
-                    int(row["confidence"])
-                    if row["confidence"] is not None
-                    else None
-                ),
-                "round1_reason": str(row["reason"] or ""),
-                "matched_reasons": details.get("matched_reasons", []),
-                "negative_reasons": details.get("negative_reasons", []),
-                "evidence_from_title_or_abstract": details.get(
-                    "evidence_from_title_or_abstract", []
-                ),
-                **(
-                    {"content_label": details["content_label"]}
-                    if details.get("content_label")
-                    in main.content_labels.CORE_CONTENT_LABEL_SET
-                    else {}
-                ),
             }
         )
     return papers
@@ -224,8 +197,7 @@ def exclude_confirmed_withdrawn_papers(
     prompt_version: str,
 ) -> list[dict[str, Any]]:
     """v18 起撤稿只从全文候选中排除，不提升模型 Top K 外论文。"""
-    if not main.content_labels.round1_prompt_uses_core_content_label(prompt_version):
-        return papers
+    # 撤稿/PDF 门控属于技术资格，与研究标签或提示词编号无关。
     table = connection.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='pdf_downloads'"
     ).fetchone()
@@ -259,11 +231,7 @@ def _positive_limit(config: dict[str, Any], field: str, default: int) -> int:
 def _metadata_missing_fields(paper: dict[str, Any]) -> tuple[str, ...]:
     required = {
         "title": paper.get("title"),
-        "authors": paper.get("authors"),
-        "categories": paper.get("categories"),
-        "primary_category": paper.get("primary_category"),
         "metadata_abstract": paper.get("summary"),
-        "round1_reason": paper.get("round1_reason"),
     }
     return tuple(name for name, value in required.items() if not str(value or "").strip())
 
@@ -275,7 +243,6 @@ def _candidate_token_estimates(
         {
             "arxiv_id": str(paper["arxiv_id"]),
             "version": int(paper["version"]),
-            "round1_rank": int(paper.get("round1_rank") or 0),
             "page_count": int(paper.get("pdf_page_count") or 0),
             "estimated_tokens": round2_fulltext_state.conservative_value_token_estimate(
                 main.build_round2_candidate_payload(paper)
@@ -298,8 +265,6 @@ def _input_exclusion(
         "arxiv_id": str(paper["arxiv_id"]),
         "version": int(paper["version"]),
         "title": str(paper.get("title") or ""),
-        "round1_rank": int(paper.get("round1_rank") or 0),
-        "score": paper.get("score"),
         "page_count": int(page_count),
         "exclusion_reason": reason,
         "estimated_tokens": estimated_tokens,
@@ -354,7 +319,7 @@ def _build_fulltext_aware_bundle(
     config: dict[str, Any],
     profile: dict[str, Any],
     prompt: str,
-    research_requirements: str,
+    research_prompt: str,
 ) -> Round2InputBundle:
     round2_fulltext_state.validate_fulltext_schema(fulltext_connection)
     max_pdf_pages = _positive_limit(
@@ -515,20 +480,19 @@ def _build_fulltext_aware_bundle(
     }
     remaining = list(fulltext_papers)
     token_excluded: list[dict[str, Any]] = []
-    messages = main.build_round2_messages(prompt, profile, remaining, config, research_requirements=research_requirements)
+    messages = main.build_round2_messages(prompt, profile, remaining, config, research_prompt=research_prompt)
     initial_full_text_tokens = (
         round2_fulltext_state.conservative_request_token_estimate(messages)
     )
     estimated_tokens = initial_full_text_tokens
 
     # 超限时优先排除单篇载荷最大的论文；并列时优先排除
-    # Round 1 排名更低者，再按 arXiv 身份固定顺序。每次都重新序列化整批请求。
+    # 仅按 arXiv 身份固定顺序裁决并列，独立于第一轮研究排名。
     while remaining and estimated_tokens > max_request_tokens:
         excluded = sorted(
             remaining,
             key=lambda paper: (
                 -estimate_by_key[(str(paper["arxiv_id"]), int(paper["version"]))],
-                -int(paper.get("round1_rank") or 0),
                 str(paper["arxiv_id"]),
                 int(paper["version"]),
             ),
@@ -544,7 +508,7 @@ def _build_fulltext_aware_bundle(
         )
         remaining = [paper for paper in remaining if paper is not excluded]
         if remaining:
-            messages = main.build_round2_messages(prompt, profile, remaining, config, research_requirements=research_requirements)
+            messages = main.build_round2_messages(prompt, profile, remaining, config, research_prompt=research_prompt)
             estimated_tokens = (
                 round2_fulltext_state.conservative_request_token_estimate(messages)
             )
@@ -642,7 +606,7 @@ def build_round2_input_bundle(
     profile: dict[str, Any],
     prompt: str,
     *,
-    research_requirements: str,
+    research_prompt: str,
     run_id: int,
     fulltext_connection: sqlite3.Connection,
     round1_identity: tuple[str, str, str] | None = None,
@@ -678,7 +642,7 @@ def build_round2_input_bundle(
         config=config,
         profile=profile,
         prompt=prompt,
-        research_requirements=research_requirements,
+        research_prompt=research_prompt,
     )
 
 

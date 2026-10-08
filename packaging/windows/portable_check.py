@@ -138,29 +138,45 @@ def run(*, network=False, visual=False):
         config, resources, profile, prompt = run_round2.read_round2_context(paths.resource_root(pipeline.PROJECT_ROOT))
         assert config['versions']['research_profile_version'] == profile['profile_version'] and prompt
         import main
-        # 在冻结程序中执行非空证据路径，防止缺失标准库导入被零结果掩盖。
-        evidence = [{'source': 'metadata_title', 'quote': 'Synthetic paper'},
-                    {'source': 'metadata_abstract', 'quote': 'Ｓｙｎｔｈｅｔｉｃ　abstract'}]
-        checked, status, discarded = main.validate_optional_round1_evidence(
-            evidence, {'title': 'Ｓｙｎｔｈｅｔｉｃ　paper', 'summary': 'Synthetic\n  abstract'})
-        assert checked == [{'source': 'metadata_title', 'quote': 'Synthetic paper'},
-                           {'source': 'metadata_abstract', 'quote': 'Synthetic abstract'}]
-        assert status == 'valid' and discarded == 0
-        report['round1_nonempty_evidence'] = True
+        # 冻结程序实际走最小协议；评价不能改变合法身份入选。
+        candidates = [dict(arxiv_id=f'2609.0000{i}', version=1, title='Synthetic paper',
+                           summary='Numerical method', round2_input_mode='full_text',
+                           pdf_extraction_status='success', pdf_page_count=1,
+                           pdf_pages=[dict(page_number=1, page_text='Synthetic full text')])
+                      for i in (1, 2)]
+        raw = dict(task_type='round1_abstract_screening', selection_policy='top_k_daily_budget',
+                   selection_policy_version=config['round1_selection_policy_version'],
+                   profile_version=profile['profile_version'], prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION,
+                   selected_papers=[dict(candidate_index=1, evaluation='其他 / English\n' + '评价' * 400),
+                                    dict(candidate_index=2, evaluation={'invalid': True})])
+        checked, _ = main.validate_round1_result(raw, candidates, max_selected=10,
+            profile_version=profile['profile_version'], prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION,
+            selection_policy_version=config['round1_selection_policy_version'])
+        assert checked['batch_valid'] and checked['actual_selected_count'] == 2
+        assert checked['selected_papers'][0]['evaluation'] == raw['selected_papers'][0]['evaluation']
+        assert checked['selection_audit']['evaluation_discarded_count'] == 1
+        report['minimal_protocol_free_evaluation'] = True
         from desktop.research_requirements import RequirementsStore
         requirements = RequirementsStore().snapshot()
-        messages = main.build_round2_messages(prompt, profile, [], config, research_requirements=requirements.round2)
+        messages = main.build_round2_messages(prompt, profile, [], config, research_prompt=requirements.round2)
         payload = json.loads(messages[1]['content'])
         assert 'research_profile' not in payload
-        assert payload['research_requirements'] == requirements.round2
+        assert payload['research_prompt'] == requirements.round2
+        baseline = main.build_round2_messages(prompt, profile, candidates, config, research_prompt=requirements.round2)
+        polluted = [dict(p, round1_rank=10-i, round1_reason='PRIVATE-R1', content_label='新解',
+                         score=999, confidence=999) for i, p in enumerate(reversed(candidates))]
+        changed = main.build_round2_messages(prompt, profile, polluted, config, research_prompt=requirements.round2)
+        assert baseline == changed and 'PRIVATE-R1' not in changed[1]['content']
+        assert main.stable_json_hash(baseline) == main.stable_json_hash(changed)
+        report['round2_independent_handoff'] = True
         for stage, builder, fixed in (
                 ('round1', main.build_round1_messages, main.load_prompt(resources['round1_prompt'])),
                 ('round2', main.build_round2_messages, prompt)):
             text = getattr(requirements, stage)
-            saved_messages = builder(fixed, profile, [], config, research_requirements=text)
-            changed_messages = builder(fixed, profile, [], config, research_requirements=text + '\n合成验证偏好')
+            saved_messages = builder(fixed, profile, [], config, research_prompt=text)
+            changed_messages = builder(fixed, profile, [], config, research_prompt=text + '\n合成验证偏好')
             assert saved_messages[0] == changed_messages[0]
-            assert json.loads(saved_messages[1]['content'])['research_requirements'] == text
+            assert json.loads(saved_messages[1]['content'])['research_prompt'] == text
             assert main.stable_json_hash(saved_messages) != main.stable_json_hash(changed_messages)
         report['research_requirements_requests_and_hashes'] = True
         from desktop.secrets import SecretStore

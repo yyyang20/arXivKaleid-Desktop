@@ -437,8 +437,8 @@ class ArtifactTests(ArtifactFixture):
         import validate_windows_portable as validator
         source = self.root / 'dist/synthetic'
         self.write(source / 'arXivKaleid.exe', b'synthetic executable')
-        self.write(source / '_internal/prompts/relevance_round2_v16.txt')
-        self.write(source / '_internal/prompts/research_requirements_round1_v1.txt')
+        self.write(source / '_internal/prompts/relevance_round2_v17.txt')
+        self.write(source / '_internal/prompts/research_prompt_round1_v1.txt')
         original = artifacts.inventory(self.root, source, hashes=True)
         calls = []
         class Restart:
@@ -659,6 +659,8 @@ class ArtifactTests(ArtifactFixture):
         with artifacts.ArtifactRun('build', root=self.root) as run:
             def fake_process(*args, **kwargs):
                 self.write(run.work / 'dist/arXivKaleid/arXivKaleid.exe', b'new-exe')
+                for name in build.RESOURCES:
+                    self.write(run.work / 'dist/arXivKaleid/_internal' / name, b'synthetic-resource')
                 return subprocess.CompletedProcess(args, 0)
             with patch.object(build, 'ROOT', self.root), patch.object(build, 'prepare_resources'), \
                     patch.object(build, 'prepare_curl'), patch.object(build, 'inspect_python_archive', return_value={}), \

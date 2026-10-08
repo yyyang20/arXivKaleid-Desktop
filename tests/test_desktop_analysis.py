@@ -56,7 +56,7 @@ class DesktopAnalysisTests(unittest.TestCase):
         self.requests = []
         self.pdf_urls = []
         self.selected_indices = [1, 2, 3]
-        self.evidence_by_candidate = {}
+        self.evaluation_by_candidate = {}
         self.recommendations_limit = 5
         self.page_counts = {}
         self.fail_pdf = set()
@@ -90,7 +90,7 @@ class DesktopAnalysisTests(unittest.TestCase):
             candidates = task["candidate_papers"]
             data = dict(task_type=main.ROUND2_TASK_TYPE, selection_policy=main.ROUND2_SELECTION_POLICY,
                         profile_version="profile_v2", prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION,
-                        final_recommendations=[dict(arxiv_id=p["arxiv_id"], version=p["version"], content_label="成像", reason="全文给出黑洞成像结果。") for p in candidates[:self.recommendations_limit]])
+                        final_recommendations=[dict(arxiv_id=p["arxiv_id"], version=p["version"], evaluation="全文提供可复核的计算结果。") for p in candidates[:self.recommendations_limit]])
             result = dict(model="deepseek-flash", status="completed",
                           output=[dict(type="function_call", name="submit_round2_results", arguments=json.dumps(data))],
                           usage=dict(input_tokens=200, output_tokens=30, total_tokens=230, input_tokens_details=dict(cached_tokens=0)))
@@ -104,67 +104,51 @@ class DesktopAnalysisTests(unittest.TestCase):
         return Response(json.dumps(result).encode())
 
     def round1_payload(self):
-        # 合成响应可携带真实校验器需要的证据；未配置时保留原有测试场景。
+        # 合成响应经过真实身份校验器，评价可缺省、任意语言或任意长度。
         selected = []
         for index in self.selected_indices:
-            item = dict(candidate_index=index, content_label="成像", reason="生成黑洞阴影图像。")
-            if index in self.evidence_by_candidate:
-                item["evidence"] = self.evidence_by_candidate[index]
+            item = dict(candidate_index=index)
+            if index in self.evaluation_by_candidate:
+                item["evaluation"] = self.evaluation_by_candidate[index]
             selected.append(item)
         return dict(task_type="round1_abstract_screening", profile_version="profile_v2",
                     prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION, selection_policy="top_k_daily_budget",
-                    selection_policy_version="top_k_daily_budget_v4", selected_papers=selected)
+                    selection_policy_version="top_k_daily_budget_v5", selected_papers=selected)
 
     def validate_round1(self, papers):
         return main.validate_round1_result(
             self.round1_payload(), papers, max_selected=10,
             profile_version="profile_v2", prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION,
-            selection_policy_version="top_k_daily_budget_v4",
+            selection_policy_version="top_k_daily_budget_v5",
         )
 
-    def test_round1_nonempty_evidence_normalizes_unicode_and_whitespace(self):
+    def test_round1_free_evaluation_preserves_long_unicode_text(self):
         self.selected_indices = [1]
-        candidate = dict(paper(1), title="Ｓｙｎｔｈｅｔｉｃ　paper",
-                         summary="Synthetic\n  abstract")
-        self.evidence_by_candidate[1] = [
-            dict(source="metadata_title", quote="  Synthetic   paper  "),
-            dict(source="metadata_abstract", quote="Ｓｙｎｔｈｅｔｉｃ　abstract"),
-        ]
+        candidate = dict(paper(1), title="A numerical QNM method")
+        evaluation = "Other / 自定义标签\n  Score: 3.14 / Ｓｙｍｂｏｌ " + "自由评价" * 200
+        self.evaluation_by_candidate[1] = evaluation
         validated, warnings = self.validate_round1([candidate])
         self.assertTrue(validated["batch_valid"])
         self.assertEqual(warnings, [])
         selected = validated["selected_papers"][0]
-        self.assertEqual(selected["evidence"], [
-            dict(source="metadata_title", quote="Synthetic paper"),
-            dict(source="metadata_abstract", quote="Synthetic abstract"),
-        ])
-        self.assertEqual(selected["evidence_status"], "valid")
-        self.assertEqual(selected["evidence_invalid_count"], 0)
+        self.assertEqual(selected["evaluation"], evaluation)
+        self.assertNotIn("content_label", selected)
 
-    def test_round1_invalid_evidence_preserves_selection_and_order(self):
+    def test_round1_invalid_optional_evaluation_preserves_selection_and_order(self):
         self.selected_indices = [2, 1]
-        self.evidence_by_candidate = {
-            2: [dict(source="metadata_title", quote="Synthetic paper"),
-                dict(source="metadata_abstract", quote="Unsupported evidence quote")],
-            1: [dict(source="metadata_abstract", quote="Another unsupported quote")],
-        }
+        self.evaluation_by_candidate = {2: {"unexpected": "object"}, 1: "\ud800"}
         validated, warnings = self.validate_round1([paper(1), paper(2)])
         self.assertTrue(validated["batch_valid"])
         selected = validated["selected_papers"]
         self.assertEqual([item["candidate_index"] for item in selected], [2, 1])
         self.assertEqual([item["round1_rank"] for item in selected], [1, 2])
-        self.assertEqual([item["evidence_status"] for item in selected], ["partial", "invalid"])
-        self.assertEqual([item["evidence_invalid_count"] for item in selected], [1, 1])
-        self.assertEqual(selected[1]["evidence"], [])
-        self.assertEqual(validated["selection_audit"]["evidence_discarded_count"], 2)
+        self.assertEqual([item["evaluation"] for item in selected], ["", ""])
+        self.assertEqual(validated["selection_audit"]["evaluation_discarded_count"], 2)
         self.assertEqual(validated["selection_audit"]["excluded_count"], 0)
         self.assertTrue(warnings)
 
-    def test_round1_nonempty_evidence_completes_mocked_two_rounds(self):
-        self.evidence_by_candidate[1] = [
-            dict(source="metadata_title", quote="Synthetic paper"),
-            dict(source="metadata_abstract", quote="Synthetic abstract"),
-        ]
+    def test_optional_evaluation_completes_mocked_two_rounds_without_fixed_levels(self):
+        self.evaluation_by_candidate[1] = "任意领域 / 其他 / QNM / methodology"
         result = self.run_snapshot()
         self.assertEqual([stage for stage, _ in self.requests], ["round1", "round2"])
         self.assertEqual(len(self.pdf_urls), 3)
@@ -175,8 +159,11 @@ class DesktopAnalysisTests(unittest.TestCase):
             "WHERE task_type = 'round1_abstract_screening' AND result_rank = 1"
         )]
         self.assertEqual(len(details), 1)
-        self.assertEqual(details[0]["evidence_status"], "valid")
-        self.assertEqual(details[0]["evidence"], self.evidence_by_candidate[1])
+        self.assertEqual(set(details[0]), {"model_position"})
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM screening_results WHERE recommendation_level IS NOT NULL OR score IS NOT NULL OR confidence IS NOT NULL").fetchone()[0], 0)
+        self.assertIn(self.evaluation_by_candidate[1], result.markdown)
+        self.assertNotIn("推荐级别", result.markdown)
+        self.assertNotIn("内容标签", result.markdown)
         self.assertEqual(model_usage.load_run_usage_summary(conn, result.run_id).api_attempt_count, 2)
         self.assertIn("Round 1 入围数量：3", result.markdown)
         self.assertIn("Round 2 最终推荐数量：3", result.markdown)

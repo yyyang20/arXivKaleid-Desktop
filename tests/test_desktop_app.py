@@ -472,7 +472,7 @@ class DesktopAppTests(IsolatedDesktopTest):
             self.assertTrue(self.window.confirm_analysis_notice())
         question.assert_called_once()
         self.assertIn("论文标题、摘要", app.ANALYSIS_NOTICE)
-        self.assertIn("已保存的研究要求", app.ANALYSIS_NOTICE)
+        self.assertIn("已保存的完整研究 Prompt", app.ANALYSIS_NOTICE)
         self.assertIn("可能产生费用", app.ANALYSIS_NOTICE)
         self.assertIn("Windows DPAPI", app.ANALYSIS_NOTICE)
         self.assertIn("PDF、SQLite 和缓存", app.ANALYSIS_NOTICE)

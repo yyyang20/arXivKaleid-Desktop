@@ -58,8 +58,8 @@ class RequirementsTests(unittest.TestCase):
         target = self.store._path('round1')
         target.parent.mkdir(parents=True)
         for payload in (b'broken', b'\xff', b'x' * 80001,
-                        json.dumps({'format_version': 'unknown', 'research_requirements': None}).encode(),
-                        json.dumps({'format_version': FORMAT_VERSION, 'research_requirements': ''}).encode()):
+                        json.dumps({'format_version': 'unknown', 'research_prompt': None}).encode(),
+                        json.dumps({'format_version': FORMAT_VERSION, 'research_prompt': ''}).encode()):
             target.write_bytes(payload)
             snapshot = self.case.snapshot()
             with self.assertRaises(RequirementsError):
@@ -81,7 +81,7 @@ class RequirementsTests(unittest.TestCase):
         self.store.save('round2', None)
         result = attempt.run('fake-desktop-key')
         tasks = [json.loads(payload['messages' if stage == 'round1' else 'input'][1]['content']) for stage, payload in self.case.requests]
-        self.assertEqual([t['research_requirements'] for t in tasks], list(texts))
+        self.assertEqual([t['research_prompt'] for t in tasks], list(texts))
         conn = self.case.connect()
         dump = '\n'.join(conn.iterdump())
         for text in texts:
@@ -99,8 +99,8 @@ class RequirementsTests(unittest.TestCase):
         config, paths, profile, prompt = run_round2.read_round2_context(self.case.root)
         for stage, builder in (('round1', main.build_round1_messages), ('round2', main.build_round2_messages)):
             fixed = paths[f'{stage}_prompt'].read_text(encoding='utf-8').strip()
-            a = builder(fixed, profile, [], config, research_requirements='要求 A')
-            b = builder(fixed, profile, [], config, research_requirements='要求 B')
+            a = builder(fixed, profile, [], config, research_prompt='要求 A')
+            b = builder(fixed, profile, [], config, research_prompt='要求 B')
             self.assertEqual(a[0], b[0])
             self.assertNotEqual(main.stable_json_hash(a), main.stable_json_hash(b))
         result = self.case.run_snapshot()
@@ -109,8 +109,8 @@ class RequirementsTests(unittest.TestCase):
         from contextlib import closing
         with closing(sqlite3.connect(self.case.root / '.desktop-runtime/work/round2_inputs.sqlite')) as fulltext:
             fulltext.row_factory = sqlite3.Row
-            a = run_round2.build_round2_input_bundle(conn, config, profile, prompt, run_id=result.run_id, fulltext_connection=fulltext, research_requirements=self.store.load('round2').text)
-            b = run_round2.build_round2_input_bundle(conn, config, profile, prompt, run_id=result.run_id, fulltext_connection=fulltext, research_requirements='不同研究要求')
+            a = run_round2.build_round2_input_bundle(conn, config, profile, prompt, run_id=result.run_id, fulltext_connection=fulltext, research_prompt=self.store.load('round2').text)
+            b = run_round2.build_round2_input_bundle(conn, config, profile, prompt, run_id=result.run_id, fulltext_connection=fulltext, research_prompt='不同研究要求')
         self.assertEqual(run_round2.load_valid_round2_cache(conn, a, config)[0], 'cache_hit')
         self.assertEqual(run_round2.load_valid_round2_cache(conn, b, config)[0], 'cache_miss')
 
@@ -157,23 +157,23 @@ class RequirementsTests(unittest.TestCase):
             self.assertEqual(sum(stage == target_stage for stage, _ in self.case.requests), 1)
         self.case.http = original
 
-    def test_illegal_labels_filtered_and_fixed_limits_preserved(self):
+    def test_arbitrary_evaluations_accepted_and_identity_limits_preserved(self):
         papers = [fixtures.paper(i) for i in range(1, 5)]
         self.case.selected_indices = [1, 2, 3, 4]
         raw = self.case.round1_payload()
-        raw['selected_papers'][0]['content_label'] = '任意新标签'
-        raw['selected_papers'][1]['content_label'] = '其他'
+        raw['selected_papers'][0]['evaluation'] = '任意新标签 / score 10'
+        raw['selected_papers'][1]['evaluation'] = '其他'
         raw['selected_papers'][2]['candidate_index'] = True
-        validated, _ = main.validate_round1_result(raw, papers, max_selected=10, profile_version='profile_v2', prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION, selection_policy_version='top_k_daily_budget_v4')
+        validated, _ = main.validate_round1_result(raw, papers, max_selected=10, profile_version='profile_v2', prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION, selection_policy_version='top_k_daily_budget_v5')
         self.assertTrue(validated['batch_valid'])
-        self.assertEqual([p['candidate_index'] for p in validated['selected_papers']], [4])
+        self.assertEqual([p['candidate_index'] for p in validated['selected_papers']], [1, 2, 4])
         raw2 = dict(task_type=main.ROUND2_TASK_TYPE, selection_policy=main.ROUND2_SELECTION_POLICY,
                     profile_version='profile_v2', prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION,
-                    final_recommendations=[dict(arxiv_id=p['arxiv_id'], version=f"v{p['version']}", content_label='任意新标签' if i == 0 else '其他' if i == 1 else '成像', reason='有效中文理由') for i, p in enumerate(papers)])
+                    final_recommendations=[dict(arxiv_id=p['arxiv_id'], version=f"v{p['version']}", evaluation='任意新标签' if i == 0 else '其他' if i == 1 else '任意评价') for i, p in enumerate(papers)])
         checked, _ = main.validate_round2_result(raw2, papers, max_recommendations=5, profile_version='profile_v2', prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION)
         self.assertTrue(checked['batch_valid'])
-        self.assertEqual([p['arxiv_id'] for p in checked['final_recommendations']], [papers[2]['arxiv_id'], papers[3]['arxiv_id']])
-        self.assertEqual([p['recommendation_level'] for p in checked['final_recommendations']], ['deep_read', 'skim_read'])
+        self.assertEqual([p['arxiv_id'] for p in checked['final_recommendations']], [p['arxiv_id'] for p in papers])
+        self.assertTrue(all(p['recommendation_level'] is None for p in checked['final_recommendations']))
 
     def test_frozen_store_does_not_search_source_runtime(self):
         import shutil
@@ -188,7 +188,7 @@ class RequirementsTests(unittest.TestCase):
         with patch.object(sys, 'frozen', True, create=True), patch.object(sys, '_MEIPASS', str(internal), create=True), patch.object(sys, 'executable', str(self.case.root / 'arXivKaleid.exe')):
             self.assertFalse(self.store.load('round1').custom)
             self.store.save('round1', 'portable 独立覆盖')
-            self.assertEqual(self.store._path('round1'), self.case.root / 'runtime/config/round1_research_requirements.json')
+            self.assertEqual(self.store._path('round1'), self.case.root / 'runtime/config/round1_research_prompt.json')
         self.assertEqual(self.store.load('round1').text, '源码目录的覆盖')
 
     def test_historical_prompt_bytes_and_default_research_clauses(self):
@@ -198,7 +198,13 @@ class RequirementsTests(unittest.TestCase):
             old = (PROJECT_ROOT / f'prompts/relevance_{stage}_v{version}.txt').read_text(encoding='utf-8')
             self.assertEqual(hashlib.sha256(old.encode()).hexdigest(), old_hashes[stage])
             default = self.store.default(stage)
-            boundary = old.split('# 普适研究边界\n\n')[1].split('\n# 内容标签')[0].strip()
-            self.assertIn(boundary, default)
+            for domain in ('成像', '新解', '黑洞', 'QNM', 'EVPA', 'Stokes'):
+                self.assertNotIn(domain, default)
+            self.assertIn('查准率优先', default)
+            self.assertIn('公式', default)
+            self.assertIn('格式', default)
+            if stage == 'round2':
+                self.assertIn('pypdf', default)
+                self.assertIn('并非原始 LaTeX', default)
             self.assertNotIn('JSON 输出契约', default)
             self.assertNotIn('candidate_index', default)

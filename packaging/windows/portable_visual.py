@@ -62,10 +62,10 @@ def synthetic_analysis_result(attempt, source_root=None, *, recommendation_count
         round1, _ = main.validate_round1_result(dict(
             task_type="round1_abstract_screening", profile_version="profile_v2",
             prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION, selection_policy="top_k_daily_budget",
-            selection_policy_version="top_k_daily_budget_v4",
-            selected_papers=[dict(candidate_index=i + 1, content_label="成像", reason="离线合成验证：黑洞偏振图像。") for i in range(10)],
+            selection_policy_version="top_k_daily_budget_v5",
+            selected_papers=[dict(candidate_index=i + 1, evaluation="离线合成验证：方法、数值结果与阅读价值。") for i in range(10)],
         ), papers, max_selected=10, profile_version="profile_v2", prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION,
-            selection_policy_version="top_k_daily_budget_v4")
+            selection_policy_version="top_k_daily_budget_v5")
         assert round1["batch_valid"]
         selected = round1["selected_papers"]
         main.save_round1_screening_results(connection, run_id, selected, config, selection_audit=round1["selection_audit"])
@@ -82,7 +82,7 @@ def synthetic_analysis_result(attempt, source_root=None, *, recommendation_count
             task_type=main.ROUND2_TASK_TYPE, selection_policy=main.ROUND2_SELECTION_POLICY,
             profile_version="profile_v2", prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION,
             final_recommendations=[dict(arxiv_id=p["arxiv_id"], version=p["version"],
-                                        content_label="成像", reason="离线合成验证：推荐正文与保存快照一致。")
+                                        evaluation="离线合成验证：推荐正文与保存快照一致。")
                                    for p in selected[:recommendation_count]],
         ), selected, max_recommendations=5, profile_version="profile_v2", prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION)
         assert round2["batch_valid"]
@@ -387,7 +387,7 @@ def exercise_requirements(application, window, capture, output):
         page.editor.setFocus()
         # 通过 Qt 输入法提交事件验证真实控件处理中文，避免仅 setPlainText 冒充输入。
         event = QInputMethodEvent()
-        text = '离线合成研究要求 ' + stage + '：重点关注黑洞阴影和偏振图像。\n排除仅关键词相关论文。'
+        text = '离线合成研究要求 ' + stage + '：关注数值方法和计算结果。\n按用户研究价值排序。'
         event.setCommitString(text)
         QCoreApplication.sendEvent(page.editor, event)
         assert page.editor.toPlainText() == text
@@ -395,7 +395,7 @@ def exercise_requirements(application, window, capture, output):
         capture('15-' + stage + '-editing')
         original = page.store.save
         def fail(*_args, **_kwargs):
-            raise RequirementsError('研究要求保存失败；原来的生效内容未改变。')
+            raise RequirementsError('研究 Prompt 保存失败；原来的生效内容未改变。')
         page.store.save = fail
         try:
             assert not page.save() and page.dirty and not page.saved.custom
@@ -427,7 +427,7 @@ def exercise_requirements(application, window, capture, output):
         widget.setFont(QFont('Microsoft YaHei UI', 12))
     window.resize(850, 680)
     page.begin_edit()
-    page.editor.appendPlainText('\n'.join('较大字体滚动验证：关注强引力偏振图像。' for _ in range(60)))
+    page.editor.appendPlainText('\n'.join('较大字体滚动验证：关注数值方法与计算结果。' for _ in range(60)))
     capture('21-prompts-minimum-large-font')
     assert all(widget.font().pointSizeF() == 12 for widget in controls)
     assert page.editor.height() >= 160

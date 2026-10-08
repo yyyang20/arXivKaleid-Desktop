@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 import generate_round2_report
-import content_labels
 import round2_fulltext_state
 
 
@@ -51,9 +50,7 @@ def load_round1_papers(
             if isinstance(model_position, int) and not isinstance(model_position, bool)
             else None
         )
-        item["content_label"] = content_labels.content_label_from_details_json(
-            item["details_json"], prompt_version=item["prompt_version"]
-        )
+        item["evaluation"] = str(item.get("reason") or "")
         papers.append(item)
     return tuple(papers)
 

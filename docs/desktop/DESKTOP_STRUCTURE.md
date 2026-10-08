@@ -50,8 +50,9 @@
 | `tests/test_desktop_diagnostics.py` | JSONL schema、关联身份、作用域、线程安全、内存降级和隐私 canary |
 | `tests/test_desktop_config.py` | 当前配置、预算、协议和 Prompt 哈希契约 |
 | `tests/test_research_requirements.py` | 独立保存、坏配置、冻结取值、哈希/缓存/Token、隐私和历史默认语义 |
-| `docs/desktop/PROMPT_SPLIT.md` | 旧 Prompt 各规则的固定/研究层拆分核对 |
-| `tests/test_desktop_decoupling.py` | alpha.4 行为基线、schema v1、缓存、预算和独立源码运行 |
+| `docs/desktop/PROMPT_SPLIT.md` | 完整研究 Prompt 与最小技术协议边界核对 |
+| `tests/test_research_prompt_protocol.py` | 两轮身份协议、任意评价、无评价、交接与 Token 裁决独立性 |
+| `tests/test_desktop_decoupling.py` | 技术门禁基线、schema v1、缓存、预算和独立源码运行 |
 | `tests/test_desktop_governance.py` | 根与局部治理、文档路由、当前身份、链接、发行资料副本与发布清单的只读检查 |
 
 portable 根目录包含直接来自仓库根的 GPLv3 `LICENSE`。应用源码说明按用途绑定 `BUILD_INFO.json`：技术候选引用本地冻结 commit，正式发行引用同提交的版本 tag；第三方源码归档位于 `licenses/sources/`，身份和 SHA-256 由 `packaging/windows/source-manifest.json` 固定，原许可不改写。
@@ -64,8 +65,8 @@ portable 根目录包含直接来自仓库根的 GPLv3 `LICENSE`。应用源码�
 .desktop-runtime/
 ├─ config/
 │  ├─ secret.dat
-│  ├─ round1_research_requirements.json
-│  └─ round2_research_requirements.json
+│  ├─ round1_research_prompt.json
+│  └─ round2_research_prompt.json
 ├─ cache/
 │  └─ arxiv/
 │     └─ last_request_time.txt

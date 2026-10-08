@@ -15,13 +15,13 @@ from typing import Any
 from desktop.paths import checked_path
 
 
-CONFIG_VERSION = "desktop_config_v2"
+CONFIG_VERSION = "desktop_config_v3"
 MAX_BATCH_COST_CNY = Decimal("3.00")
 PROMPTS = {
-    "round1_prompt": "prompts/relevance_round1_v21.txt",
-    "round2_prompt": "prompts/relevance_round2_v16.txt",
-    "round1_requirements": "prompts/research_requirements_round1_v1.txt",
-    "round2_requirements": "prompts/research_requirements_round2_v1.txt",
+    "round1_prompt": "prompts/relevance_round1_v22.txt",
+    "round2_prompt": "prompts/relevance_round2_v17.txt",
+    "round1_research_prompt": "prompts/research_prompt_round1_v1.txt",
+    "round2_research_prompt": "prompts/research_prompt_round2_v1.txt",
 }
 
 
@@ -59,7 +59,7 @@ def load_config(config_path: Path) -> dict[str, Any]:
     }:
         raise RuntimeError("desktop_config_fields_invalid")
     if config.get("round1_selection_policy") != "top_k_daily_budget" or (
-        config.get("round1_selection_policy_version") != "top_k_daily_budget_v4"
+        config.get("round1_selection_policy_version") != "top_k_daily_budget_v5"
     ):
         raise RuntimeError("desktop_selection_policy_invalid")
     for name, maximum in (("round1_max_selected_n", 10), ("final_max_recommendations", 5)):
@@ -73,8 +73,8 @@ def load_config(config_path: Path) -> dict[str, Any]:
     versions = config.get("versions")
     if versions != {
         "research_profile_version": "profile_v2",
-        "round1_prompt_version": "round1_v21",
-        "round2_prompt_version": "round2_v16",
+        "round1_prompt_version": "round1_v22",
+        "round2_prompt_version": "round2_v17",
     }:
         raise RuntimeError("desktop_protocol_identity_invalid")
     limits = config.get("limits")

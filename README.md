@@ -1,10 +1,10 @@
 # arXivKaleid Desktop
 
-arXivKaleid Desktop 是面向黑洞与致密天体强引力成像、偏振和新时空解研究的 Windows 论文筛选工具。
+arXivKaleid Desktop 是按用户两轮完整研究 Prompt 筛选 arXiv 论文的 Windows 工具。
 
 本仓库包含 Desktop 应用源码、测试、构建配置和项目文档；Windows portable 成品通过 GitHub Releases 提供。
 
-当前版本为 `0.1.0-alpha.10`，新增两轮独立的研究要求查看、编辑、保存及恢复默认，提示词入口支持整卡点击与键盘，历史详情增加“生成时间”标签。最新公开成品为 [alpha 10 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.10)，下载 ZIP 和同名校验文件后按下述方式核验。
+当前开发版本为 `0.1.0-alpha.11`，两轮完整研究 Prompt 可独立编辑和保存，分析引擎不再强制领域标签、理由或阅读级别，第二轮独立判断。alpha 11 第一阶段只交付绑定本地冻结 commit 的技术候选，尚未公开发布；最新公开成品仍为 [alpha 10 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.10)。
 
 ## 开发方式
 
@@ -43,11 +43,13 @@ alpha 9 的历史保存当次完整原始 Markdown，重启后无需 Key 即可�
 
 详细数据说明见 [PRIVACY.md](PRIVACY.md)，使用本软件前请阅读 [EULA.txt](EULA.txt)。
 
-## 研究要求
+## 完整研究 Prompt
 
-在“提示词”页分别管理第一轮和第二轮研究要求。查看时可选择复制，点击编辑后才可修改；保存成功后下次分析生效，取消恢复最后保存值。恢复默认需要确认并立即持久生效，另一轮不受影响。返回、切页或关闭时会保护未保存修改；分析期间只可查看。
+在“提示词”页分别编写两轮完整研究 Prompt，自定义研究方向、筛选与排除条件、评价方式、严格程度和排序要求。查看时可选择复制，点击编辑后才可修改；保存成功后下次分析生效，取消恢复最后保存值。恢复默认需要确认并立即持久生效，另一轮不受影响。返回、切页或关闭时会保护未保存修改；分析期间只可查看。
 
-研究要求可写研究方向、关注/排除条件和阅读价值偏好，支持 Markdown 风格纯文本，不能为空、含 NUL 或超过 10,000 字符。标签、数量、排序机制、输出字段、校验和费用保护由程序固定。内容以明文保存在当前目录的 `runtime/config/round1_research_requirements.json` 和 `round2_research_requirements.json`，分析时随请求发送给 DeepSeek；不要填写凭据或不宜外发的私人内容。损坏配置会阻止分析并保留文件，可确认恢复本轮默认。新版本解压到新目录后使用该版本默认要求，不迁移旧目录。
+正文支持 Markdown 风格纯文本，不能为空、含 NUL 或超过 10,000 字符。所有研究建议和公式格式提醒均在可编辑默认正文中；程序只保留身份识别、有序结果、10/5 篇上限、PDF 60 页、Token、费用及安全保护。评价可省略或自由表达，不强制标签、中文理由或阅读级别。第一轮只提供标题、摘要和身份；第二轮增加合格提取全文，不接收第一轮评价或排名。
+
+内容以明文保存在当前目录的 `runtime/config/round1_research_prompt.json` 和 `round2_research_prompt.json`，分析时随请求发送给 DeepSeek；不要填写凭据或不宜外发的私人内容。损坏配置会阻止分析并保留文件，可确认恢复本轮默认。alpha 11 解压到新目录使用新版默认，不读取或迁移 alpha 10 用户数据。
 
 ## 卸载
 
