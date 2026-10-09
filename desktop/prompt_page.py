@@ -100,7 +100,7 @@ class PromptEntryCard(QAbstractButton):
 
 
 class PromptPage(QWidget):
-    TITLES = {"round1": "第一轮完整研究 Prompt", "round2": "第二轮完整研究 Prompt"}
+    TITLES = {"round1": "第一轮完整研究提示词", "round2": "第二轮完整研究提示词"}
     PURPOSES = {"round1": "根据题目和摘要，筛选进入全文分析的论文。", "round2": "根据题目、摘要和合格全文，确定最终推荐论文。"}
 
     def __init__(self, store: RequirementsStore, parent=None):
@@ -124,7 +124,7 @@ class PromptPage(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(12)
         root.addWidget(TitleLabel("提示词"))
-        root.addWidget(wrapping_label("分别编写两轮完整研究 Prompt，自定义研究判断和评价；第一轮入选数量由 Prompt 决定。"))
+        root.addWidget(wrapping_label("分别编写两轮完整研究提示词，自定义研究判断、数量和评价；第二轮按提示词要求排序。"))
         self.states = {}
         self.entries = {}
         entries = QWidget()
@@ -160,7 +160,7 @@ class PromptPage(QWidget):
         layout.addWidget(self.purpose)
         self.state = wrapping_label("")
         layout.addWidget(self.state)
-        self.message = wrapping_label("研究判断由本轮完整 Prompt 决定；程序仅保留身份、输出结构、数量和安全保护。")
+        self.message = wrapping_label("研究判断由本轮完整提示词决定；程序保留身份、JSON 结构和安全保护。")
         layout.addWidget(self.message)
         for label in (self.purpose, self.state, self.message):
             label.setStyleSheet(f"color: {TEXT_SECONDARY};")
@@ -196,18 +196,18 @@ class PromptPage(QWidget):
         return self.editing and self.editor.toPlainText() != self.baseline
 
     def boundary_message(self):
-        # 第一轮不设数量上限；第二轮仍保留既有提示和技术门禁。
+        # 两轮数量均由用户决定，第二轮数组顺序用于推荐排名。
         if self.stage == "round1":
-            return "入选数量和评价由本轮完整 Prompt 决定；程序保留身份、JSON 结构和安全保护，不要求研究排序。"
-        return "研究判断由本轮完整 Prompt 决定；程序仅保留身份、输出结构、数量和安全保护。"
+            return "入选数量和评价由本轮完整提示词决定；程序保留身份、JSON 结构和安全保护，不要求研究排序。"
+        return "入选数量、评价和排序依据由本轮完整提示词决定；程序保留身份、JSON 结构和安全保护，日报按模型顺序显示排名。"
 
     def refresh_states(self):
         for stage, label in self.states.items():
             try:
                 saved = self.store.load(stage)
-                label.setText("当前使用自定义 Prompt" if saved.custom else "当前使用默认 Prompt")
+                label.setText("当前使用自定义提示词" if saved.custom else "当前使用默认提示词")
             except (RequirementsError, RuntimeError, OSError, ValueError):
-                label.setText("Prompt 不可用，请进入详情处理")
+                label.setText("提示词不可用，请进入详情处理")
             self.entries[stage].setAccessibleDescription(f"{self.PURPOSES[stage]} {label.text()}；回车或空格查看。")
 
     def open_round(self, stage):
@@ -247,7 +247,7 @@ class PromptPage(QWidget):
         self.save_button.setEnabled(not self.busy and self.dirty)
         self.cancel_button.setEnabled(not self.busy)
         self.restore_button.setEnabled(not self.busy and self.stage is not None)
-        status = "当前使用自定义 Prompt" if self.saved and self.saved.custom else "当前使用默认 Prompt" if self.saved else "Prompt 不可用"
+        status = "当前使用自定义提示词" if self.saved and self.saved.custom else "当前使用默认提示词" if self.saved else "提示词不可用"
         if self.dirty:
             status += "  ·  未保存修改"
         elif self.editing:
@@ -266,7 +266,7 @@ class PromptPage(QWidget):
         self.baseline = self.saved.text
         self.editor.setPlainText(self.baseline)
         self.editing = True
-        self.message.setText("编辑完整研究 Prompt：方向、标准、排除、数量、评价和严格程度；保存后生效。" if self.stage == "round1" else "编辑完整研究 Prompt：方向、标准、排除、评价、严格程度和排序；保存后生效。")
+        self.message.setText("编辑完整研究提示词：方向、标准、排除、数量、评价和严格程度；保存后生效。" if self.stage == "round1" else "编辑完整研究提示词：方向、标准、排除、数量、评价、严格程度和排序；保存后生效。")
         self.update_controls()
         self.editor.setFocus()
 
@@ -280,7 +280,7 @@ class PromptPage(QWidget):
             return False
         self.saved = saved
         self.cancel()
-        self.message.setText("完整研究 Prompt 已保存；下次分析使用这份内容。")
+        self.message.setText("完整研究提示词已保存；下次分析使用这份内容。")
         self.refresh_states()
         return True
 
@@ -296,7 +296,7 @@ class PromptPage(QWidget):
     def restore_default(self):
         if self.busy or self.stage is None:
             return False
-        answer = QMessageBox.question(self, "恢复默认 Prompt", "确认恢复本轮内置默认内容？本轮自定义内容和尚未保存的修改将被替换，另一轮不受影响。", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        answer = QMessageBox.question(self, "恢复默认提示词", "确认恢复本轮内置默认内容？本轮自定义内容和尚未保存的修改将被替换，另一轮不受影响。", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
         if answer != QMessageBox.StandardButton.Yes:
             return False
         try:
@@ -305,7 +305,7 @@ class PromptPage(QWidget):
             self.message.setText("恢复默认失败；原来的保存内容和草稿未改变。")
             return False
         self.cancel()
-        self.message.setText("已恢复本轮内置默认 Prompt。")
+        self.message.setText("已恢复本轮内置默认提示词。")
         self.refresh_states()
         return True
 
@@ -315,7 +315,7 @@ class PromptPage(QWidget):
                 self.cancel()
             return True
         box = QMessageBox(self)
-        box.setWindowTitle("未保存的研究 Prompt")
+        box.setWindowTitle("未保存的研究提示词")
         box.setText("当前修改尚未保存，请选择如何继续。")
         save = box.addButton("保存并继续", QMessageBox.ButtonRole.AcceptRole)
         discard = box.addButton("放弃修改", QMessageBox.ButtonRole.DestructiveRole)

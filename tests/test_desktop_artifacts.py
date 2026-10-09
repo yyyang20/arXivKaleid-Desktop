@@ -437,7 +437,7 @@ class ArtifactTests(ArtifactFixture):
         import validate_windows_portable as validator
         source = self.root / 'dist/synthetic'
         self.write(source / 'arXivKaleid.exe', b'synthetic executable')
-        self.write(source / '_internal/prompts/relevance_round2_v17.txt')
+        self.write(source / '_internal/prompts/relevance_round2_v18.txt')
         self.write(source / '_internal/prompts/research_prompt_round1_v2.txt')
         original = artifacts.inventory(self.root, source, hashes=True)
         calls = []
@@ -463,6 +463,7 @@ class ArtifactTests(ArtifactFixture):
                     dpr = 1.5 if mode == 'native' else int(mode.rsplit('-', 1)[-1]) / 100
                     self.write(copy_root / 'runtime/work/screen.png')
                     self.write(copy_root / 'runtime/work/portable-check.json', json.dumps({'ok': True,
+                        'round2_user_count_and_model_ranking': True,
                         'visual_qa': {'screen': 'primary', 'captures': [{'screen': 'primary', 'dpr': dpr}]}}).encode())
                     code = 0
                 else:

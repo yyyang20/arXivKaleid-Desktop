@@ -34,9 +34,9 @@ RESOURCES = (
     'config.json',
     'assets/app-icon.ico',
     'prompts/relevance_round1_v23.txt',
-    'prompts/relevance_round2_v17.txt',
+    'prompts/relevance_round2_v18.txt',
     'prompts/research_prompt_round1_v2.txt',
-    'prompts/research_prompt_round2_v1.txt',
+    'prompts/research_prompt_round2_v2.txt',
 )
 PUBLIC_DOCUMENTS = ('README.md', 'EULA.txt', 'PRIVACY.md', 'SECURITY.md')
 REQUIRED_RELEASE_FILES = (
@@ -181,7 +181,7 @@ def copy_public_documents(folder: Path, frozen: dict | None = None) -> None:
                       "构建身份以 `BUILD_INFO.json` 为准。")
         else:
             notice = (f"本版[对应源码下载]({SOURCE_URL})固定到 `v{__version__}`，"
-                      "包含应用源码、配置、Prompt、测试、构建脚本及说明，对应 `BUILD_INFO.json` 中的提交。")
+                      "包含应用源码、配置、提示词、测试、构建脚本及说明，对应 `BUILD_INFO.json` 中的提交。")
         readme.write_text(text.replace('{{APPLICATION_SOURCE_NOTICE}}', notice), encoding='utf-8', newline='\n')
     # 应用许可证只有根目录这一份维护源，不从第三方目录或副本推断。
     license_source = checked_path(ROOT, 'LICENSE')

@@ -41,7 +41,7 @@ class ResearchPromptProtocolTests(unittest.TestCase):
         self.assertTrue(all(set(p) == {'candidate_index', 'arxiv_id', 'version', 'title', 'summary'}
                              for p in task['candidate_papers']))
 
-    def test_more_than_ten_round1_papers_reach_pdf_and_unchanged_round2(self):
+    def test_more_than_ten_round1_papers_reach_pdf_and_independent_round2(self):
         # Prompt 的数字不由程序解释；模型返回全部合法项，必须完整下载并交接。
         RequirementsStore(self.case.root).save('round1', '选择最多 3 篇机器学习论文，不需要排序。')
         self.case.selected_indices = list(range(12, 0, -1))
@@ -57,7 +57,8 @@ class ResearchPromptProtocolTests(unittest.TestCase):
         self.assertEqual(first.count('### 论文 '), 12)
         task = json.loads(self.case.requests[1][1]['input'][1]['content'])
         self.assertEqual(len(task['candidate_papers']), 12)
-        self.assertEqual(task['final_max_recommendations'], 5)
+        for key in ('final_max_recommendations', 'max_recommendation_count', 'target_recommendation_count', 'research_profile', 'research_profile_version'):
+            self.assertNotIn(key, task)
         self.assertNotIn('score 0', json.dumps(task, ensure_ascii=False))
 
     def test_round1_full_list_order_zero_and_old_protocol_rejection(self):
@@ -142,7 +143,7 @@ class ResearchPromptProtocolTests(unittest.TestCase):
                    profile_version='profile_v2', prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION,
                    final_recommendations=[dict(arxiv_id=p['arxiv_id'], version=p['version'], evaluation=v)
                                           for p, v in zip(papers, values)])
-        checked, _ = main.validate_round2_result(raw, papers, max_recommendations=5,
+        checked, _ = main.validate_round2_result(raw, papers,
                     profile_version='profile_v2', prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION)
         self.assertTrue(checked['batch_valid'])
         self.assertEqual(len(checked['final_recommendations']), 4)
@@ -150,7 +151,96 @@ class ResearchPromptProtocolTests(unittest.TestCase):
         self.assertEqual(checked['selection_audit']['evaluation_discarded_count'], 2)
         self.assertEqual(checked['selection_audit']['excluded_count'], 0)
 
-    def test_round1_checks_all_items_and_round2_keeps_existing_limit(self):
+    def test_round2_user_count_ranking_cache_and_history_end_to_end(self):
+        from desktop.history import HistoryStore
+        store = RequirementsStore(self.case.root)
+        self.case.selected_indices = list(range(12, 0, -1))
+        order = [8, 2, 11, 0, 7, 4, 10, 3, 9, 1, 6, 5]
+        self.case.recommendations_order = order
+        # 用户数量只是给模型的文字，程序不解析、截取或自动补选。
+        for requested, returned in ((0, 0), (1, 1), (3, 6), (20, 12)):
+            with self.subTest(requested=requested, returned=returned):
+                custom = f'选择最多 {requested} 篇机器学习论文，按实验可复现性排序。'
+                store.save('round2', custom)
+                self.case.recommendations_limit = returned
+                self.case.round2_evaluations = {'2609.00009': '跨领域 / score -999 / ' + '长评价' * 300,
+                                                '2609.00003': {'invalid': True}}
+                result = self.case.run_snapshot(self.case.snapshot(12))
+                connection = self.case.connect()
+                expected = [f'2609.{i+1:05d}' for i in order[:returned]]
+                rows = connection.execute("SELECT arxiv_id,result_rank,reason FROM screening_results WHERE task_type=? ORDER BY result_rank", (main.ROUND2_TASK_TYPE,)).fetchall()
+                self.assertEqual([row['arxiv_id'] for row in rows], expected)
+                self.assertEqual([row['result_rank'] for row in rows], list(range(1, returned+1)))
+                self.assertEqual(result.recommendation_count, returned)
+                section = result.markdown.split('## Round 1 入围论文')[0]
+                self.assertEqual(section.count('### Rank '), returned)
+                ranks = [section.index(f'### Rank {i+1}：') for i in range(returned)]
+                self.assertEqual(ranks, sorted(ranks))
+                if returned:
+                    self.assertIn('长评价' * 300, result.markdown)
+                with closing(sqlite3.connect(self.case.root / '.desktop-runtime/work/round2_inputs.sqlite')) as fulltext:
+                    fulltext.row_factory = sqlite3.Row
+                    bundle = run_round2.build_round2_input_bundle(connection, self.config, self.profile, self.prompt,
+                        run_id=result.run_id, fulltext_connection=fulltext, research_prompt=custom)
+                task = json.loads(bundle.messages[1]['content'])
+                self.assertEqual(task['research_prompt'], custom)
+                self.assertNotIn('final_max_recommendations', task)
+                state, cached, _ = run_round2.load_valid_round2_cache(connection, bundle, self.config)
+                self.assertEqual(state, 'cache_hit')
+                self.assertEqual([p['arxiv_id'] for p in cached['final_recommendations']], expected)
+                self.assertEqual(cached['selection_audit']['ignored_over_budget_count'], 0)
+                history = HistoryStore(self.case.root)
+                history.save(result)
+                self.assertEqual(history.read(result.operation_id).markdown, result.markdown)
+                self.assertEqual(history.read(result.operation_id).summary.recommendation_count, returned)
+                # 即使旧缓存伪造了当前 cache_key，旧协议/策略也不能复用。
+                connection.execute("UPDATE batch_cache SET prompt_version='round2_v17', selection_policy_version='full_text_budget_exclusion_v4' WHERE task_type=?", (main.ROUND2_TASK_TYPE,))
+                connection.commit()
+                self.assertEqual(run_round2.load_valid_round2_cache(connection, bundle, self.config)[0], 'cache_miss')
+                # Windows 下须释放上一轮工作库连接，下一 attempt 才能重置工作库。
+                connection.close()
+
+    def test_round2_invalid_items_after_fifth_do_not_hide_later_valid_papers(self):
+        papers = [fixtures.paper(i) for i in range(1, 13)]
+        entries = [dict(arxiv_id=p['arxiv_id'], version='v1') for p in reversed(papers)]
+        entries[0]['evaluation'] = '任意标签 / score 0'
+        entries[1]['evaluation'] = '\x00'
+        entries[2]['evaluation'] = '\ud800'
+        entries[3]['evaluation'] = 'x' * 2000
+        entries.insert(6, dict(entries[0]))
+        entries.insert(8, dict(arxiv_id='outside', version='v1'))
+        entries.insert(10, False)
+        raw = dict(task_type=main.ROUND2_TASK_TYPE, selection_policy=main.ROUND2_SELECTION_POLICY,
+                   profile_version='profile_v2', prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION,
+                   final_recommendations=entries)
+        checked, _ = main.validate_round2_result(raw, papers, profile_version='profile_v2', prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION)
+        self.assertTrue(checked['batch_valid'])
+        self.assertEqual([p['arxiv_id'] for p in checked['final_recommendations']], [p['arxiv_id'] for p in reversed(papers)])
+        self.assertEqual([p['final_rank'] for p in checked['final_recommendations']], list(range(1, 13)))
+        self.assertEqual(checked['selection_audit']['excluded_count'], 3)
+        self.assertEqual(checked['selection_audit']['evaluation_discarded_count'], 2)
+        raw['prompt_version'] = 'round2_v17'
+        checked, _ = main.validate_round2_result(raw, papers, profile_version='profile_v2', prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION)
+        self.assertFalse(checked['batch_valid'])
+
+    def test_round2_default_is_editable_and_tool_has_no_count_cap(self):
+        store = RequirementsStore(self.case.root)
+        default = store.default('round2')
+        for text in ('最多 **5** 篇', '# 目标', '# 边界', '# 入选说明', '1—3 句话', '优先阅读顺序', 'pypdf', '并非原始 LaTeX'):
+            self.assertIn(text, default)
+        custom = '最多 20 篇计算机论文，按实验质量排序。'
+        store.save('round2', custom)
+        self.assertEqual(RequirementsStore(self.case.root).load('round2').text, custom)
+        store.save('round2', None)
+        self.assertEqual(store.load('round2').text, default)
+        self.assertNotIn('final_max_recommendations', self.config)
+        schema = run_round2.build_round2_result_tool(self.config)['parameters']['properties']['final_recommendations']
+        self.assertNotIn('maxItems', schema)
+        fixed = self.paths['round2_prompt'].read_text(encoding='utf-8')
+        for forbidden in ('黑洞', '1—3', '最多 5', 'final_max_recommendations'):
+            self.assertNotIn(forbidden, fixed)
+
+    def test_both_rounds_check_all_items_without_filling_exclusions(self):
         papers = [fixtures.paper(i) for i in range(1, 13)]
         self.case.selected_indices = [1, 1, True, 999, 2, 3, 4, 5, 6, 7, 8, 9]
         raw = self.case.round1_payload()
@@ -164,16 +254,17 @@ class ResearchPromptProtocolTests(unittest.TestCase):
                     profile_version='profile_v2', prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION,
                     final_recommendations=[dict(arxiv_id=p['arxiv_id'], version=p['version'])
                                            for p in [papers[0], papers[0], dict(papers[1], version=99), papers[2], papers[3], papers[4]]])
-        checked, _ = main.validate_round2_result(raw2, papers, max_recommendations=5,
+        checked, _ = main.validate_round2_result(raw2, papers,
             profile_version='profile_v2', prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION)
         self.assertEqual([p['arxiv_id'] for p in checked['final_recommendations']],
-                         [papers[0]['arxiv_id'], papers[2]['arxiv_id'], papers[3]['arxiv_id']])
+                         [papers[0]['arxiv_id'], papers[2]['arxiv_id'], papers[3]['arxiv_id'], papers[4]['arxiv_id']])
+        self.assertEqual(checked['selection_audit']['ignored_over_budget_count'], 0)
 
     def test_default_format_reminders_can_be_deleted_saved_and_restored(self):
         store = RequirementsStore(self.case.root)
         for stage in ('round1', 'round2'):
             default = store.default(stage)
-            self.assertIn('公式及文本格式注意事项' if stage == 'round1' else '公式和文本格式注意事项', default)
+            self.assertIn('公式及文本格式注意事项', default)
             store.save(stage, '只关注我的研究目标')
             self.assertNotIn('格式', RequirementsStore(self.case.root).load(stage).text)
             store.save(stage, None)

@@ -26,14 +26,14 @@ class RequirementsError(RuntimeError):
 
 def normalize(text: str) -> str:
     if not isinstance(text, str):
-        raise RequirementsError("研究 Prompt 必须是纯文本。")
+        raise RequirementsError("研究提示词必须是纯文本。")
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     if not text.strip() or "\x00" in text or len(text) > MAX_CHARACTERS:
-        raise RequirementsError("研究 Prompt 不能为空、含 NUL 或超过 10,000 字符。")
+        raise RequirementsError("研究提示词不能为空、含 NUL 或超过 10,000 字符。")
     try:
         text.encode("utf-8")
     except UnicodeError:
-        raise RequirementsError("研究 Prompt 包含无法保存的字符。") from None
+        raise RequirementsError("研究提示词包含无法保存的字符。") from None
     return text
 
 
@@ -55,7 +55,7 @@ class RequirementsStore:
 
     def _path(self, stage: str) -> Path:
         if stage not in ROUNDS:
-            raise RequirementsError("研究 Prompt 轮次无效。")
+            raise RequirementsError("研究提示词轮次无效。")
         return paths.runtime_path(self.source_root, "config", f"{stage}_research_prompt.json")
 
     def default(self, stage: str) -> str:
@@ -83,7 +83,7 @@ class RequirementsStore:
                 return SavedRequirements(default, False)
             return SavedRequirements(normalize(text), True)
         except (OSError, UnicodeError, ValueError, RequirementsError):
-            raise RequirementsError("本轮已保存的研究 Prompt 损坏或格式未知；请确认恢复默认后再分析。") from None
+            raise RequirementsError("本轮已保存的研究提示词损坏或格式未知；请确认恢复默认后再分析。") from None
 
     def save(self, stage: str, text: str | None) -> SavedRequirements:
         # 先验证默认资源，避免损坏资源下写入或错误宣称已生效。
@@ -104,7 +104,7 @@ class RequirementsStore:
             os.replace(temporary, target)
             temporary = None
         except (OSError, ValueError):
-            raise RequirementsError("研究 Prompt 保存失败；原来的生效内容未改变，请检查目录权限和磁盘空间。") from None
+            raise RequirementsError("研究提示词保存失败；原来的生效内容未改变，请检查目录权限和磁盘空间。") from None
         finally:
             if temporary is not None:
                 try:

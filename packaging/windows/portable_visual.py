@@ -45,7 +45,7 @@ def synthetic_snapshot(day):
     return app.CandidateSnapshot(day, datetime.now(timezone.utc) - timedelta(hours=2), 126, 117, papers)
 
 
-def synthetic_analysis_result(attempt, source_root=None, *, recommendation_count=4):
+def synthetic_analysis_result(attempt, source_root=None, *, recommendation_count=8):
     """合成 SQLite 事实经真实校验器和日报生成器；不手写日报模板。"""
     source_root = source_root if source_root is not None else pipeline.PROJECT_ROOT
     destination = paths.runtime_path(source_root, "work", "synthetic-report", attempt.operation_id)
@@ -83,13 +83,18 @@ def synthetic_analysis_result(attempt, source_root=None, *, recommendation_count
             profile_version="profile_v2", prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION,
             final_recommendations=[dict(arxiv_id=p["arxiv_id"], version=p["version"],
                                         evaluation="离线合成验证：推荐正文与保存快照一致。")
-                                   for p in selected[:recommendation_count]],
-        ), selected, max_recommendations=5, profile_version="profile_v2", prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION)
+                                   for p in list(reversed(selected))[:recommendation_count]],
+        ), selected, profile_version="profile_v2", prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION)
         assert round2["batch_valid"]
         recommendations = round2["final_recommendations"]
         main.save_round2_screening_results(connection, run_id, recommendations, config, selection_audit=round2["selection_audit"])
         main.finish_run(connection, run_id, "success", "离线合成验证", main.current_time_iso())
         markdown = build_desktop_report(connection, fulltext_database, run_id, attempt.snapshot)
+        # 真实日报生成器必须保留超过五篇的模型顺序，且连续显示排名。
+        assert len(recommendations) == recommendation_count
+        section = markdown.split('## Round 1 入围论文')[0]
+        positions = [section.index(f"### Rank {i+1}：{p['title']}") for i, p in enumerate(recommendations)]
+        assert positions == sorted(positions) and section.count('### Rank ') == recommendation_count
     return app.AnalysisResult(run_id, markdown, len(recommendations), operation_id=attempt.operation_id,
                               snapshot_id=attempt.snapshot.snapshot_id, candidate_count=attempt.snapshot.round1_count,
                               report_completed_at=datetime.now(timezone.utc),
@@ -306,6 +311,8 @@ def exercise_requirements(application, window, capture, output):
         QCoreApplication.sendEvent(first, QEvent(QEvent.Type.Leave))
         application.processEvents()
     for stage, entry in page.entries.items():
+        assert entry.title.text() == ('第一轮完整研究提示词' if stage == 'round1' else '第二轮完整研究提示词')
+        assert '提示词' in entry.state.text() and 'Prompt' not in entry.state.text()
         for point in (entry.icon_rect().center(), QPoint(entry.width() - 100, entry.height() // 2),
                       entry.title.mapTo(entry, entry.title.rect().center()),
                       entry.state.mapTo(entry, entry.state.rect().center()),
@@ -395,7 +402,7 @@ def exercise_requirements(application, window, capture, output):
         capture('15-' + stage + '-editing')
         original = page.store.save
         def fail(*_args, **_kwargs):
-            raise RequirementsError('研究 Prompt 保存失败；原来的生效内容未改变。')
+            raise RequirementsError('研究提示词保存失败；原来的生效内容未改变。')
         page.store.save = fail
         try:
             assert not page.save() and page.dirty and not page.saved.custom
@@ -511,7 +518,7 @@ def exercise(application, window, root, synthetic_key):
             progress(ProgressEvent(task_type='analysis', stage=stage, state=state, message=message))
         assert gate.wait(15)
         for stage, message in [('fulltext', '全文提取完成 · 已处理 9 / 9'),
-                               ('round2', 'Round 2 完成 · 最终推荐 4 篇'), ('report', '日报生成完成')]:
+                               ('round2', 'Round 2 完成 · 最终推荐 8 篇'), ('report', '日报生成完成')]:
             progress(ProgressEvent(task_type='analysis', stage=stage, state='completed', message=message))
         return synthetic_analysis_result(attempt)
 

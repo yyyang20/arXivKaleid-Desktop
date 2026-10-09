@@ -58,6 +58,8 @@ class DesktopAnalysisTests(unittest.TestCase):
         self.selected_indices = [1, 2, 3]
         self.evaluation_by_candidate = {}
         self.recommendations_limit = 5
+        self.recommendations_order = None
+        self.round2_evaluations = {}
         self.page_counts = {}
         self.fail_pdf = set()
         self.fail_extract = set()
@@ -88,9 +90,12 @@ class DesktopAnalysisTests(unittest.TestCase):
             # 从真正构造的全文消息中读取输入身份，覆盖工具传输和共享校验器。
             task = json.loads(payload["input"][1]["content"])
             candidates = task["candidate_papers"]
+            # 合成模型的选择和排序不由程序或评价文本裁决。
+            if self.recommendations_order is not None:
+                candidates = [candidates[i] for i in self.recommendations_order]
             data = dict(task_type=main.ROUND2_TASK_TYPE, selection_policy=main.ROUND2_SELECTION_POLICY,
                         profile_version="profile_v2", prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION,
-                        final_recommendations=[dict(arxiv_id=p["arxiv_id"], version=p["version"], evaluation="全文提供可复核的计算结果。") for p in candidates[:self.recommendations_limit]])
+                        final_recommendations=[dict(arxiv_id=p["arxiv_id"], version=p["version"], evaluation=self.round2_evaluations.get(p["arxiv_id"], "全文提供可复核的计算结果。")) for p in candidates[:self.recommendations_limit]])
             result = dict(model="deepseek-flash", status="completed",
                           output=[dict(type="function_call", name="submit_round2_results", arguments=json.dumps(data))],
                           usage=dict(input_tokens=200, output_tokens=30, total_tokens=230, input_tokens_details=dict(cached_tokens=0)))
@@ -249,14 +254,14 @@ class DesktopAnalysisTests(unittest.TestCase):
         for forbidden in ("fake-desktop-key", "private-fulltext-marker", "response_id", "Authorization"):
             self.assertNotIn(forbidden, serialized)
 
-    def test_round1_full_list_and_round2_limit_preserve_model_order(self):
+    def test_round1_full_list_and_round2_user_count_preserve_model_order(self):
         self.selected_indices = list(range(12, 0, -1))
         self.recommendations_limit = 10
         result = self.run_snapshot(self.snapshot(12))
         self.assertEqual(len(self.pdf_urls), 12)
         self.assertTrue(self.pdf_urls[0].endswith("2609.00001v1"))
         self.assertIn("Round 1 入围数量：12", result.markdown)
-        self.assertIn("Round 2 最终推荐数量：5", result.markdown)
+        self.assertIn("Round 2 最终推荐数量：10", result.markdown)
 
     def test_frozen_two_rounds_use_bundled_resources_and_portable_data(self):
         resources = self.root / "_internal"

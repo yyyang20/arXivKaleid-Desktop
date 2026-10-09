@@ -772,7 +772,6 @@ def load_valid_round2_cache(
     validated, warnings = main.validate_round2_result(
         raw_response,
         bundle.papers,
-        max_recommendations=config["final_max_recommendations"],
         profile_version=config["versions"]["research_profile_version"],
         prompt_version=config["versions"]["round2_prompt_version"],
     )
@@ -968,7 +967,6 @@ def run_round2_model_and_save(
         validated, warnings = main.validate_round2_result(
             call_result.data,
             bundle.papers,
-            max_recommendations=config["final_max_recommendations"],
             profile_version=config["versions"]["research_profile_version"],
             prompt_version=config["versions"]["round2_prompt_version"],
         )

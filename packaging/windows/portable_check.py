@@ -158,6 +158,23 @@ def run(*, network=False, visual=False):
         assert checked['selected_papers'][0]['evaluation'] == raw['selected_papers'][0]['evaluation']
         assert checked['selection_audit']['evaluation_discarded_count'] == 1
         report['minimal_protocol_free_evaluation'] = True
+        # 冻结程序实际接受超过五篇，并保持模型给出的推荐顺序。
+        ordered = list(reversed(candidates))
+        raw2 = dict(task_type=main.ROUND2_TASK_TYPE, selection_policy=main.ROUND2_SELECTION_POLICY,
+                    profile_version=profile['profile_version'], prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION,
+                    final_recommendations=[dict(arxiv_id=p['arxiv_id'], version='v1') for p in ordered])
+        raw2['final_recommendations'][0]['evaluation'] = '任意领域 / score 0 / ' + '长评价' * 400
+        raw2['final_recommendations'][1]['evaluation'] = {'invalid': True}
+        checked2, _ = main.validate_round2_result(raw2, candidates,
+            profile_version=profile['profile_version'], prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION)
+        assert checked2['batch_valid'] and checked2['actual_recommendation_count'] == 12
+        assert [p['arxiv_id'] for p in checked2['final_recommendations']] == [p['arxiv_id'] for p in ordered]
+        assert [p['final_rank'] for p in checked2['final_recommendations']] == list(range(1, 13))
+        assert checked2['selection_audit']['ignored_over_budget_count'] == 0
+        assert checked2['selection_audit']['evaluation_discarded_count'] == 1
+        assert checked2['final_recommendations'][0]['evaluation'] == raw2['final_recommendations'][0]['evaluation']
+        assert 'final_max_recommendations' not in config
+        report['round2_user_count_and_model_ranking'] = True
         from desktop.research_requirements import RequirementsStore
         requirements = RequirementsStore().snapshot()
         messages = main.build_round2_messages(prompt, profile, [], config, research_prompt=requirements.round2)

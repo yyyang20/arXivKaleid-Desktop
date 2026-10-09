@@ -161,7 +161,7 @@ def visual_qa(run):
             raise RuntimeError("qa_analysis_gate_timeout")
         for stage, message in (
             ("fulltext", "全文提取完成 · 已处理 9 / 9"),
-            ("round2", "Round 2 完成 · 最终推荐 4 篇"),
+            ("round2", "Round 2 完成 · 最终推荐 8 篇"),
             ("report", "日报生成完成"),
         ):
             progress(ProgressEvent(task_type="analysis", stage=stage, state="completed", message=message))

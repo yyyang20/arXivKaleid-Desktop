@@ -37,7 +37,7 @@ from desktop.research_requirements import RequirementsError, RequirementsStore
 
 
 ANALYSIS_NOTICE = (
-    "开始分析会将论文标题、摘要、通过门控后的 PDF 提取全文和已保存的完整研究 Prompt"
+    "开始分析会将论文标题、摘要、通过门控后的 PDF 提取全文和已保存的完整研究提示词"
     " 发送到你自己的 DeepSeek API，并可能产生费用。\n\n"
     "API Key 仅在本机使用 Windows DPAPI 加密保存；PDF、SQLite 和缓存保存在本机。"
     "应用没有维护者服务器中转或遥测。\n\n"
@@ -667,7 +667,7 @@ class DesktopWindow(QWidget):
         try:
             requirements = self.requirements_store.snapshot()
         except (RequirementsError, RuntimeError, OSError, ValueError):
-            self.status.setText("研究 Prompt 不可用，未开始分析。请在提示词页面处理保存内容或检查内置资源。")
+            self.status.setText("研究提示词不可用，未开始分析。请在提示词页面处理保存内容或检查内置资源。")
             self.prompt_page.refresh_states()
             self.switch_page(self.prompt_page)
             return

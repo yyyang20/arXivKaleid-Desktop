@@ -96,7 +96,7 @@ class DesktopBuildTests(unittest.TestCase):
         builder.verify_resource_identity(self.root, identity)
         with self.assertRaisesRegex(RuntimeError, 'build_resource_identity'):
             builder.verify_resource_identity(self.root, {'resource_hashes': {}})
-        target = self.root / '_internal/prompts/research_prompt_round2_v1.txt'
+        target = self.root / '_internal/prompts/research_prompt_round2_v2.txt'
         target.write_bytes(target.read_bytes() + b'changed')
         with self.assertRaisesRegex(RuntimeError, 'build_resource_identity'):
             builder.verify_resource_identity(self.root, identity)
@@ -164,7 +164,7 @@ class DesktopBuildTests(unittest.TestCase):
                 (ROOT / 'docs/public_release' / name).read_bytes() if name != 'README.md' else
                 (ROOT / 'docs/public_release' / name).read_text(encoding='utf-8').replace(
                     '{{APPLICATION_SOURCE_NOTICE}}',
-                    f"本版[对应源码下载]({builder.SOURCE_URL})固定到 `v{builder.__version__}`，包含应用源码、配置、Prompt、测试、构建脚本及说明，对应 `BUILD_INFO.json` 中的提交。"
+                    f"本版[对应源码下载]({builder.SOURCE_URL})固定到 `v{builder.__version__}`，包含应用源码、配置、提示词、测试、构建脚本及说明，对应 `BUILD_INFO.json` 中的提交。"
                 ).encode('utf-8'),
             )
         self.assertFalse((self.root / 'RELEASE_CHECKLIST.md').exists())

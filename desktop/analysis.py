@@ -377,8 +377,7 @@ class AnalysisAttempt:
             root = desktop_paths.application_root(pipeline.PROJECT_ROOT)
             resources = desktop_paths.resource_root(pipeline.PROJECT_ROOT)
             config, paths, profile, round2_prompt = run_round2.read_round2_context(resources)
-            if (config["final_max_recommendations"] > 5
-                    or config["limits"]["max_round2_pdf_pages"] != 60
+            if (config["limits"]["max_round2_pdf_pages"] != 60
                     or config["deepseek"]["max_retries"] != 0):
                 raise RuntimeError("desktop_shared_limits_invalid")
             # 唯一候选来源就是此对象；复制扁平 metadata，不查询或重排历史。

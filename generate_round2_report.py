@@ -217,8 +217,6 @@ def load_and_validate_round2(
     prompt_versions = {str(row["prompt_version"] or "") for row in rows}
     if prompt_versions != {main.CURRENT_ROUND2_PROMPT_VERSION}:
         reasons.append("Desktop 仅支持当前版本的第二轮技术协议结果。")
-    if len(rows) > 5:
-        reasons.append("第二轮结果数量超过技术上限 5 篇。")
     ranks = [row["result_rank"] for row in rows]
     if ranks != list(range(1, len(rows) + 1)):
         reasons.append("final rank 不是从 1 开始的连续整数。")

@@ -129,6 +129,7 @@ def validate_portable(run, source, identity, args):
         report = json.loads(report_path.read_text(encoding='utf-8')) if report_path.exists() else {'ok': False}
         if result.returncode or not report.get('ok') or report.get('failure_type'):
             raise RuntimeError('portable_validation_failed:' + mode + ':' + str(report.get('failure_type')))
+        assert report.get('round2_user_count_and_model_ranking') is True
         # 各模式及全部截图必须来自同一主屏，不能将跨屏变化误当作模拟倍率。
         actual_screen, actual_dpr = verify_capture_display(
             report['visual_qa'], native_screen=None if native_dpr is None else native_screen,
@@ -176,7 +177,7 @@ def validate_portable(run, source, identity, args):
     # 缺失资源必须失败，且诊断拒绝重复使用已有 runtime；仅操作本次新副本。
     negative = checked_path(work, 'missing-resource')
     shutil.copytree(source, negative)
-    prompt = negative / '_internal/prompts/relevance_round2_v17.txt'
+    prompt = negative / '_internal/prompts/relevance_round2_v18.txt'
     prompt.rename(prompt.with_suffix('.disabled'))
     run.checkpoint()
     bad = run.process([str(negative / 'arXivKaleid.exe'), '--portable-check'], cwd=work,

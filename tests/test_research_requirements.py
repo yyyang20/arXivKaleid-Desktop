@@ -170,7 +170,7 @@ class RequirementsTests(unittest.TestCase):
         raw2 = dict(task_type=main.ROUND2_TASK_TYPE, selection_policy=main.ROUND2_SELECTION_POLICY,
                     profile_version='profile_v2', prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION,
                     final_recommendations=[dict(arxiv_id=p['arxiv_id'], version=f"v{p['version']}", evaluation='任意新标签' if i == 0 else '其他' if i == 1 else '任意评价') for i, p in enumerate(papers)])
-        checked, _ = main.validate_round2_result(raw2, papers, max_recommendations=5, profile_version='profile_v2', prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION)
+        checked, _ = main.validate_round2_result(raw2, papers, profile_version='profile_v2', prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION)
         self.assertTrue(checked['batch_valid'])
         self.assertEqual([p['arxiv_id'] for p in checked['final_recommendations']], [p['arxiv_id'] for p in papers])
         self.assertTrue(all(p['recommendation_level'] is None for p in checked['final_recommendations']))
@@ -199,8 +199,9 @@ class RequirementsTests(unittest.TestCase):
             self.assertEqual(hashlib.sha256(old.encode()).hexdigest(), old_hashes[stage])
             default = self.store.default(stage)
             if stage == 'round2':
-                for domain in ('成像', '新解', '黑洞', 'QNM', 'EVPA', 'Stokes'):
-                    self.assertNotIn(domain, default)
+                self.assertIn('黑洞阴影', default)
+                self.assertIn('最多 **5** 篇', default)
+                self.assertIn('优先阅读顺序', default)
             else:
                 self.assertIn('黑洞阴影', default)
                 self.assertIn('最多 **10** 篇', default)

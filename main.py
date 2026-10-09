@@ -29,11 +29,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
 ROUND2_TASK_TYPE = "round2_batch_ranking"
 ROUND2_ABSTRACT_SOURCE = "papers.summary"
-ROUND2_SELECTION_POLICY = "full_text_budget_exclusion_v4"
+ROUND2_SELECTION_POLICY = "full_text_budget_exclusion_v5"
 ROUND2_OUTPUT_TRANSPORT = "responses_named_tool_auto_v2"
 CURRENT_ROUND1_PROMPT_VERSION = "round1_v23"
 ROUND1_SELECTION_POLICY = "user_prompt_selection"
-CURRENT_ROUND2_PROMPT_VERSION = "round2_v17"
+CURRENT_ROUND2_PROMPT_VERSION = "round2_v18"
 ROUND1_PRECISION_PROMPT_VERSIONS = {CURRENT_ROUND1_PROMPT_VERSION}
 ROUND2_PRECISION_PROMPT_VERSIONS = {CURRENT_ROUND2_PROMPT_VERSION}
 SELF_CONTAINED_ROUND1_PROMPT_VERSIONS = {CURRENT_ROUND1_PROMPT_VERSION}
@@ -1129,34 +1129,21 @@ def build_round2_messages(
     """构造第二轮同批排序输入；不包含本地路径和被页数门控的长文。"""
     input_mode = "full_text"
     prompt_version = config["versions"]["round2_prompt_version"]
-    target_recommendation_count = min(
-        config["final_max_recommendations"], len(papers)
-    )
     task_input = {
         "task_type": ROUND2_TASK_TYPE,
         "selection_policy": round2_selection_policy_for_prompt(prompt_version),
         "profile_version": research_profile["profile_version"],
-        "research_profile_version": research_profile["profile_version"],
         "prompt_version": prompt_version,
         "abstract_source": ROUND2_ABSTRACT_SOURCE,
         "input_mode": input_mode,
         "pdf_input_fields": ["page_number", "text"],
         "research_prompt": research_prompt,
-        "final_max_recommendations": config["final_max_recommendations"],
-        "max_recommendation_count": config["final_max_recommendations"],
-        "target_recommendation_count": target_recommendation_count,
-        "research_profile": research_profile,
         "candidate_papers": [
             build_round2_candidate_payload(paper)
             for paper in sorted(papers, key=lambda p: (str(p["arxiv_id"]), int(p["version"])))
         ],
     }
-    if prompt_version in SELF_CONTAINED_ROUND2_PROMPT_VERSIONS:
-        task_input.pop("research_profile")
-    if prompt_version in ROUND2_PRECISION_PROMPT_VERSIONS:
-        # 现行协议允许少选或零选，数量由安全解析后的数组确定。
-        task_input.pop("max_recommendation_count")
-        task_input.pop("target_recommendation_count")
+    # 数量和研究排序由用户提示词决定，不发送固定限额或目标数量。
     return [
         {"role": "system", "content": prompt},
         {
@@ -1606,11 +1593,10 @@ def validate_round2_v14_result(
     raw_result: Any,
     papers: list[dict[str, Any]],
     *,
-    max_recommendations: int,
     profile_version: str,
     prompt_version: str,
 ) -> tuple[dict[str, Any], list[str]]:
-    """校验全文精简 Top K，并逐篇排除不可信推荐。"""
+    """检查全部推荐身份，保留模型顺序；可选评价不参与研究裁决。"""
     warnings: list[str] = []
     validated: dict[str, Any] = {
         "task_type": ROUND2_TASK_TYPE,
@@ -1681,9 +1667,9 @@ def validate_round2_v14_result(
             actual_type=type(raw_recommendations).__name__,
         )
 
-    limit = min(5, max(0, int(max_recommendations)))
-    considered = raw_recommendations[:limit]
-    ignored_over_budget_count = max(0, len(raw_recommendations) - limit)
+    # 不解释提示词中的数字，也不按固定篇数截取；逐篇检查整个结果数组。
+    considered = raw_recommendations
+    ignored_over_budget_count = 0
     candidate_map = {
         (paper["arxiv_id"], int(paper["version"])): paper for paper in papers
     }
@@ -1816,14 +1802,13 @@ def validate_round2_result(
     raw_result: Any,
     papers: list[dict[str, Any]],
     *,
-    max_recommendations: int,
     profile_version: str,
     prompt_version: str,
 ) -> tuple[dict[str, Any], list[str]]:
     """仅执行现行最小技术协议，保留逐篇容错校验。"""
     if prompt_version != CURRENT_ROUND2_PROMPT_VERSION:
         raise RuntimeError("desktop_prompt_version_unsupported")
-    return validate_round2_v14_result(raw_result, papers, max_recommendations=max_recommendations, profile_version=profile_version, prompt_version=prompt_version)
+    return validate_round2_v14_result(raw_result, papers, profile_version=profile_version, prompt_version=prompt_version)
 
 
 def stable_json_hash(value: Any) -> str:
