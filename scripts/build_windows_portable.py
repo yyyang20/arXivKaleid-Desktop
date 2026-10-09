@@ -33,9 +33,9 @@ SOURCE_URL = f'https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags
 RESOURCES = (
     'config.json',
     'assets/app-icon.ico',
-    'prompts/relevance_round1_v22.txt',
+    'prompts/relevance_round1_v23.txt',
     'prompts/relevance_round2_v17.txt',
-    'prompts/research_prompt_round1_v1.txt',
+    'prompts/research_prompt_round1_v2.txt',
     'prompts/research_prompt_round2_v1.txt',
 )
 PUBLIC_DOCUMENTS = ('README.md', 'EULA.txt', 'PRIVACY.md', 'SECURITY.md')

@@ -438,7 +438,7 @@ class ArtifactTests(ArtifactFixture):
         source = self.root / 'dist/synthetic'
         self.write(source / 'arXivKaleid.exe', b'synthetic executable')
         self.write(source / '_internal/prompts/relevance_round2_v17.txt')
-        self.write(source / '_internal/prompts/research_prompt_round1_v1.txt')
+        self.write(source / '_internal/prompts/research_prompt_round1_v2.txt')
         original = artifacts.inventory(self.root, source, hashes=True)
         calls = []
         class Restart:

@@ -942,6 +942,18 @@ class DesktopAppTests(IsolatedDesktopTest):
             self.assertTrue(page.restore_default())
         self.assertFalse(page.store.load('round1').custom)
 
+    def test_prompt_round1_count_description_and_round2_unchanged(self):
+        page = self.window.prompt_page
+        page.open_round('round1')
+        self.assertIn('入选数量和评价由', page.message.text())
+        self.assertIn('不要求研究排序', page.message.text())
+        page.begin_edit()
+        self.assertNotIn('排序', page.message.text())
+        page.cancel()
+        self.assertIn('不要求研究排序', page.message.text())
+        page.open_round('round2')
+        self.assertEqual(page.message.text(), '研究判断由本轮完整 Prompt 决定；程序仅保留身份、输出结构、数量和安全保护。')
+
     def test_dirty_leave_three_choices_and_save_failure_stays(self):
         from PySide6.QtWidgets import QMessageBox
         from desktop.research_requirements import RequirementsError

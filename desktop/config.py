@@ -15,12 +15,12 @@ from typing import Any
 from desktop.paths import checked_path
 
 
-CONFIG_VERSION = "desktop_config_v3"
+CONFIG_VERSION = "desktop_config_v4"
 MAX_BATCH_COST_CNY = Decimal("3.00")
 PROMPTS = {
-    "round1_prompt": "prompts/relevance_round1_v22.txt",
+    "round1_prompt": "prompts/relevance_round1_v23.txt",
     "round2_prompt": "prompts/relevance_round2_v17.txt",
-    "round1_research_prompt": "prompts/research_prompt_round1_v1.txt",
+    "round1_research_prompt": "prompts/research_prompt_round1_v2.txt",
     "round2_research_prompt": "prompts/research_prompt_round2_v1.txt",
 }
 
@@ -52,17 +52,17 @@ def load_config(config_path: Path) -> dict[str, Any]:
     if config.get("config_version") != CONFIG_VERSION:
         raise RuntimeError("desktop_config_version_invalid")
     if set(config) != {
-        "config_version", "project_name", "round1_max_selected_n",
+        "config_version", "project_name",
         "round1_selection_policy", "round1_selection_policy_version",
         "final_max_recommendations", "request_timeout_seconds", "deepseek",
         "versions", "limits", "budget", "paths", "resource_integrity",
     }:
         raise RuntimeError("desktop_config_fields_invalid")
-    if config.get("round1_selection_policy") != "top_k_daily_budget" or (
-        config.get("round1_selection_policy_version") != "top_k_daily_budget_v5"
+    if config.get("round1_selection_policy") != "user_prompt_selection" or (
+        config.get("round1_selection_policy_version") != "user_prompt_selection_v1"
     ):
         raise RuntimeError("desktop_selection_policy_invalid")
-    for name, maximum in (("round1_max_selected_n", 10), ("final_max_recommendations", 5)):
+    for name, maximum in (("final_max_recommendations", 5),):
         value = config.get(name)
         if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= maximum:
             raise RuntimeError("desktop_selection_limit_invalid")
@@ -73,7 +73,7 @@ def load_config(config_path: Path) -> dict[str, Any]:
     versions = config.get("versions")
     if versions != {
         "research_profile_version": "profile_v2",
-        "round1_prompt_version": "round1_v22",
+        "round1_prompt_version": "round1_v23",
         "round2_prompt_version": "round2_v17",
     }:
         raise RuntimeError("desktop_protocol_identity_invalid")

@@ -164,7 +164,7 @@ class RequirementsTests(unittest.TestCase):
         raw['selected_papers'][0]['evaluation'] = '任意新标签 / score 10'
         raw['selected_papers'][1]['evaluation'] = '其他'
         raw['selected_papers'][2]['candidate_index'] = True
-        validated, _ = main.validate_round1_result(raw, papers, max_selected=10, profile_version='profile_v2', prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION, selection_policy_version='top_k_daily_budget_v5')
+        validated, _ = main.validate_round1_result(raw, papers, profile_version='profile_v2', prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION, selection_policy_version='user_prompt_selection_v1')
         self.assertTrue(validated['batch_valid'])
         self.assertEqual([p['candidate_index'] for p in validated['selected_papers']], [1, 2, 4])
         raw2 = dict(task_type=main.ROUND2_TASK_TYPE, selection_policy=main.ROUND2_SELECTION_POLICY,
@@ -198,8 +198,12 @@ class RequirementsTests(unittest.TestCase):
             old = (PROJECT_ROOT / f'prompts/relevance_{stage}_v{version}.txt').read_text(encoding='utf-8')
             self.assertEqual(hashlib.sha256(old.encode()).hexdigest(), old_hashes[stage])
             default = self.store.default(stage)
-            for domain in ('成像', '新解', '黑洞', 'QNM', 'EVPA', 'Stokes'):
-                self.assertNotIn(domain, default)
+            if stage == 'round2':
+                for domain in ('成像', '新解', '黑洞', 'QNM', 'EVPA', 'Stokes'):
+                    self.assertNotIn(domain, default)
+            else:
+                self.assertIn('黑洞阴影', default)
+                self.assertIn('最多 **10** 篇', default)
             self.assertIn('查准率优先', default)
             self.assertIn('公式', default)
             self.assertIn('格式', default)

@@ -112,14 +112,14 @@ class DesktopAnalysisTests(unittest.TestCase):
                 item["evaluation"] = self.evaluation_by_candidate[index]
             selected.append(item)
         return dict(task_type="round1_abstract_screening", profile_version="profile_v2",
-                    prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION, selection_policy="top_k_daily_budget",
-                    selection_policy_version="top_k_daily_budget_v5", selected_papers=selected)
+                    prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION, selection_policy=main.ROUND1_SELECTION_POLICY,
+                    selection_policy_version="user_prompt_selection_v1", selected_papers=selected)
 
     def validate_round1(self, papers):
         return main.validate_round1_result(
-            self.round1_payload(), papers, max_selected=10,
+            self.round1_payload(), papers,
             profile_version="profile_v2", prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION,
-            selection_policy_version="top_k_daily_budget_v5",
+            selection_policy_version="user_prompt_selection_v1",
         )
 
     def test_round1_free_evaluation_preserves_long_unicode_text(self):
@@ -249,13 +249,13 @@ class DesktopAnalysisTests(unittest.TestCase):
         for forbidden in ("fake-desktop-key", "private-fulltext-marker", "response_id", "Authorization"):
             self.assertNotIn(forbidden, serialized)
 
-    def test_limits_preserve_model_order_without_promotion(self):
+    def test_round1_full_list_and_round2_limit_preserve_model_order(self):
         self.selected_indices = list(range(12, 0, -1))
         self.recommendations_limit = 10
         result = self.run_snapshot(self.snapshot(12))
-        self.assertEqual(len(self.pdf_urls), 10)
+        self.assertEqual(len(self.pdf_urls), 12)
         self.assertTrue(self.pdf_urls[0].endswith("2609.00001v1"))
-        self.assertIn("Round 1 入围数量：10", result.markdown)
+        self.assertIn("Round 1 入围数量：12", result.markdown)
         self.assertIn("Round 2 最终推荐数量：5", result.markdown)
 
     def test_frozen_two_rounds_use_bundled_resources_and_portable_data(self):

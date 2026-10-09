@@ -139,20 +139,22 @@ def run(*, network=False, visual=False):
         assert config['versions']['research_profile_version'] == profile['profile_version'] and prompt
         import main
         # 冻结程序实际走最小协议；评价不能改变合法身份入选。
-        candidates = [dict(arxiv_id=f'2609.0000{i}', version=1, title='Synthetic paper',
+        candidates = [dict(arxiv_id=f'2609.{i:05d}', version=1, title='Synthetic paper',
                            summary='Numerical method', round2_input_mode='full_text',
                            pdf_extraction_status='success', pdf_page_count=1,
                            pdf_pages=[dict(page_number=1, page_text='Synthetic full text')])
-                      for i in (1, 2)]
-        raw = dict(task_type='round1_abstract_screening', selection_policy='top_k_daily_budget',
+                      for i in range(1, 13)]
+        raw = dict(task_type='round1_abstract_screening', selection_policy=main.ROUND1_SELECTION_POLICY,
                    selection_policy_version=config['round1_selection_policy_version'],
                    profile_version=profile['profile_version'], prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION,
-                   selected_papers=[dict(candidate_index=1, evaluation='其他 / English\n' + '评价' * 400),
-                                    dict(candidate_index=2, evaluation={'invalid': True})])
-        checked, _ = main.validate_round1_result(raw, candidates, max_selected=10,
+                    selected_papers=[dict(candidate_index=i) for i in range(1, 13)])
+        raw['selected_papers'][0]['evaluation'] = '其他 / English\n' + '评价' * 400
+        raw['selected_papers'][1]['evaluation'] = {'invalid': True}
+        checked, _ = main.validate_round1_result(raw, candidates,
             profile_version=profile['profile_version'], prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION,
             selection_policy_version=config['round1_selection_policy_version'])
-        assert checked['batch_valid'] and checked['actual_selected_count'] == 2
+        assert checked['batch_valid'] and checked['actual_selected_count'] == 12
+        assert checked['selection_audit']['ignored_over_budget_count'] == 0
         assert checked['selected_papers'][0]['evaluation'] == raw['selected_papers'][0]['evaluation']
         assert checked['selection_audit']['evaluation_discarded_count'] == 1
         report['minimal_protocol_free_evaluation'] = True

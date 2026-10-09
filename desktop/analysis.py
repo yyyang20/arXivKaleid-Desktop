@@ -278,7 +278,7 @@ def run_round1(
         raise DesktopOperationError(_model_issue("round1", result))
     try:
         validated, _ = main.validate_round1_result(
-            result.data, papers, max_selected=config["round1_max_selected_n"],
+            result.data, papers,
             profile_version=config["versions"]["research_profile_version"],
             prompt_version=config["versions"]["round1_prompt_version"],
             selection_policy_version=config["round1_selection_policy_version"],
@@ -377,7 +377,7 @@ class AnalysisAttempt:
             root = desktop_paths.application_root(pipeline.PROJECT_ROOT)
             resources = desktop_paths.resource_root(pipeline.PROJECT_ROOT)
             config, paths, profile, round2_prompt = run_round2.read_round2_context(resources)
-            if (config["round1_max_selected_n"] > 10 or config["final_max_recommendations"] > 5
+            if (config["final_max_recommendations"] > 5
                     or config["limits"]["max_round2_pdf_pages"] != 60
                     or config["deepseek"]["max_retries"] != 0):
                 raise RuntimeError("desktop_shared_limits_invalid")

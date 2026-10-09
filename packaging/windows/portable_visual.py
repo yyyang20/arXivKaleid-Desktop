@@ -61,11 +61,11 @@ def synthetic_analysis_result(attempt, source_root=None, *, recommendation_count
         main.insert_papers(connection, papers)
         round1, _ = main.validate_round1_result(dict(
             task_type="round1_abstract_screening", profile_version="profile_v2",
-            prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION, selection_policy="top_k_daily_budget",
-            selection_policy_version="top_k_daily_budget_v5",
+            prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION, selection_policy=config["round1_selection_policy"],
+            selection_policy_version=config["round1_selection_policy_version"],
             selected_papers=[dict(candidate_index=i + 1, evaluation="离线合成验证：方法、数值结果与阅读价值。") for i in range(10)],
-        ), papers, max_selected=10, profile_version="profile_v2", prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION,
-            selection_policy_version="top_k_daily_budget_v5")
+        ), papers, profile_version="profile_v2", prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION,
+            selection_policy_version=config["round1_selection_policy_version"])
         assert round1["batch_valid"]
         selected = round1["selected_papers"]
         main.save_round1_screening_results(connection, run_id, selected, config, selection_audit=round1["selection_audit"])

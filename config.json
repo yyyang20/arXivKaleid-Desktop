@@ -1,8 +1,7 @@
 {
   "project_name": "arXivKaleid",
-  "round1_max_selected_n": 10,
-  "round1_selection_policy": "top_k_daily_budget",
-  "round1_selection_policy_version": "top_k_daily_budget_v5",
+  "round1_selection_policy": "user_prompt_selection",
+  "round1_selection_policy_version": "user_prompt_selection_v1",
   "final_max_recommendations": 5,
   "request_timeout_seconds": 30,
   "deepseek": {
@@ -105,7 +104,7 @@
   },
   "versions": {
     "research_profile_version": "profile_v2",
-    "round1_prompt_version": "round1_v22",
+    "round1_prompt_version": "round1_v23",
     "round2_prompt_version": "round2_v17"
   },
   "limits": {
@@ -117,19 +116,19 @@
     "context_safety_margin_tokens": 72000
   },
   "paths": {
-    "round1_prompt": "prompts/relevance_round1_v22.txt",
+    "round1_prompt": "prompts/relevance_round1_v23.txt",
     "round2_prompt": "prompts/relevance_round2_v17.txt",
-    "round1_research_prompt": "prompts/research_prompt_round1_v1.txt",
+    "round1_research_prompt": "prompts/research_prompt_round1_v2.txt",
     "round2_research_prompt": "prompts/research_prompt_round2_v1.txt"
   },
-  "config_version": "desktop_config_v3",
+  "config_version": "desktop_config_v4",
   "budget": {
     "max_batch_cost_cny": "3.00"
   },
   "resource_integrity": {
-    "prompts/relevance_round1_v22.txt": "7331adbf128cce82b38c3dd161b6c9084887431cf878ea4db696bc4af9ff5548",
+    "prompts/relevance_round1_v23.txt": "a197d2e256431e6934114e192e3be42b13da63c1e4563485069780365dc13ca3",
     "prompts/relevance_round2_v17.txt": "bc9a5ff2015885a83e428b121418816c73f7e4504021915aa4bcba697b57585b",
-    "prompts/research_prompt_round1_v1.txt": "fd738c49d3c6ded98b115c729d452e5d8ec05e79ef911d5795d9a1377c92cafd",
+    "prompts/research_prompt_round1_v2.txt": "ce237d7d2afcf2d78330f86e22d92a428743af9ce55f74cbe0bbda847804891e",
     "prompts/research_prompt_round2_v1.txt": "c612e8069bebb3a9431b1feb6fd1d697001d2f440becd60bc20fc6be3762a92b"
   }
 }

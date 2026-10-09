@@ -31,7 +31,8 @@ ROUND2_TASK_TYPE = "round2_batch_ranking"
 ROUND2_ABSTRACT_SOURCE = "papers.summary"
 ROUND2_SELECTION_POLICY = "full_text_budget_exclusion_v4"
 ROUND2_OUTPUT_TRANSPORT = "responses_named_tool_auto_v2"
-CURRENT_ROUND1_PROMPT_VERSION = "round1_v22"
+CURRENT_ROUND1_PROMPT_VERSION = "round1_v23"
+ROUND1_SELECTION_POLICY = "user_prompt_selection"
 CURRENT_ROUND2_PROMPT_VERSION = "round2_v17"
 ROUND1_PRECISION_PROMPT_VERSIONS = {CURRENT_ROUND1_PROMPT_VERSION}
 ROUND2_PRECISION_PROMPT_VERSIONS = {CURRENT_ROUND2_PROMPT_VERSION}
@@ -1056,28 +1057,16 @@ def build_round1_messages(
         for candidate_index, paper in enumerate(papers, start=1)
     ]
     prompt_version = config["versions"]["round1_prompt_version"]
-    target_selected_count = min(config["round1_max_selected_n"], len(candidates))
     task_input = {
         "task_type": "round1_abstract_screening",
         "profile_version": research_profile["profile_version"],
-        "research_profile_version": research_profile["profile_version"],
         "prompt_version": prompt_version,
         "selection_policy": config["round1_selection_policy"],
         "selection_policy_version": config["round1_selection_policy_version"],
-        "max_selected_count": config["round1_max_selected_n"],
-        "target_selected_count": target_selected_count,
-        "expected_candidate_ranking_count": len(candidates),
-        "research_profile": research_profile,
-        "feedback_samples": [],
         "research_prompt": research_prompt,
         "candidate_papers": candidates,
     }
-    if prompt_version in SELF_CONTAINED_ROUND1_PROMPT_VERSIONS:
-        task_input.pop("research_profile")
-    if prompt_version in ROUND1_PRECISION_PROMPT_VERSIONS:
-        # 现行协议将 Top 10 视为上限，不承担全候选排序和精确数量回显。
-        task_input.pop("target_selected_count")
-        task_input.pop("expected_candidate_ranking_count")
+    # 数量与研究判断完全由可编辑 Prompt 决定，不发送隐藏限额或排名任务。
     return [
         {"role": "system", "content": prompt},
         {
@@ -1396,12 +1385,11 @@ def validate_round1_v19_result(
     raw_result: Any,
     papers: list[dict[str, Any]],
     *,
-    max_selected: int,
     profile_version: str,
     prompt_version: str,
     selection_policy_version: str,
 ) -> tuple[dict[str, Any], list[str]]:
-    """校验精简 Top K；结构身份硬拒绝，单篇问题确定性排除。"""
+    """校验完整入选列表；结构身份硬拒绝，单篇问题确定性排除。"""
     warnings: list[str] = []
     validated: dict[str, Any] = {
         "task_type": "round1_abstract_screening",
@@ -1453,7 +1441,7 @@ def validate_round1_v19_result(
             (
                 "selection_policy",
                 raw_result.get("selection_policy"),
-                "top_k_daily_budget",
+                ROUND1_SELECTION_POLICY,
             ),
             (
                 "selection_policy_version",
@@ -1479,9 +1467,9 @@ def validate_round1_v19_result(
             actual_type=type(raw_selected).__name__,
         )
 
-    limit = min(10, max(0, int(max_selected)))
-    considered = raw_selected[:limit]
-    ignored_over_budget_count = max(0, len(raw_selected) - limit)
+    # 检查全部返回项；合法唯一身份自然不超过输入候选，不施加篇数截取。
+    considered = raw_selected
+    ignored_over_budget_count = 0
     candidate_map = {index: paper for index, paper in enumerate(papers, start=1)}
     seen_candidate_indices: set[int] = set()
     accepted: list[dict[str, Any]] = []
@@ -1571,7 +1559,7 @@ def validate_round1_v19_result(
                 "task_type": "round1_abstract_screening",
                 "profile_version": profile_version,
                 "prompt_version": prompt_version,
-                "selection_policy": "top_k_daily_budget",
+                "selection_policy": ROUND1_SELECTION_POLICY,
                 "selection_policy_version": selection_policy_version,
                 "selected_papers": cache_selected,
                 ROUND1_V19_CACHE_AUDIT_KEY: audit,
@@ -1589,7 +1577,6 @@ def validate_round1_result(
     raw_result: Any,
     papers: list[dict[str, Any]],
     *,
-    max_selected: int,
     profile_version: str,
     prompt_version: str,
     selection_policy_version: str,
@@ -1597,7 +1584,7 @@ def validate_round1_result(
     """仅执行现行最小技术协议，保留逐篇容错校验。"""
     if prompt_version != CURRENT_ROUND1_PROMPT_VERSION:
         raise RuntimeError("desktop_prompt_version_unsupported")
-    return validate_round1_v19_result(raw_result, papers, max_selected=max_selected, profile_version=profile_version, prompt_version=prompt_version, selection_policy_version=selection_policy_version)
+    return validate_round1_v19_result(raw_result, papers, profile_version=profile_version, prompt_version=prompt_version, selection_policy_version=selection_policy_version)
 
 
 ROUND2_V14_TOP_LEVEL_KEYS = {

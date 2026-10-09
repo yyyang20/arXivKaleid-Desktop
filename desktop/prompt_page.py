@@ -124,7 +124,7 @@ class PromptPage(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(12)
         root.addWidget(TitleLabel("提示词"))
-        root.addWidget(wrapping_label("分别编写两轮完整研究 Prompt，自定义研究判断、评价和排序。"))
+        root.addWidget(wrapping_label("分别编写两轮完整研究 Prompt，自定义研究判断和评价；第一轮入选数量由 Prompt 决定。"))
         self.states = {}
         self.entries = {}
         entries = QWidget()
@@ -195,6 +195,12 @@ class PromptPage(QWidget):
     def dirty(self):
         return self.editing and self.editor.toPlainText() != self.baseline
 
+    def boundary_message(self):
+        # 第一轮不设数量上限；第二轮仍保留既有提示和技术门禁。
+        if self.stage == "round1":
+            return "入选数量和评价由本轮完整 Prompt 决定；程序保留身份、JSON 结构和安全保护，不要求研究排序。"
+        return "研究判断由本轮完整 Prompt 决定；程序仅保留身份、输出结构、数量和安全保护。"
+
     def refresh_states(self):
         for stage, label in self.states.items():
             try:
@@ -216,7 +222,7 @@ class PromptPage(QWidget):
             self.saved = self.store.load(stage)
             self.baseline = self.saved.text
             self.editor.setPlainText(self.saved.text)
-            self.message.setText("研究判断由本轮完整 Prompt 决定；程序仅保留身份、输出结构、数量和安全保护。")
+            self.message.setText(self.boundary_message())
         except (RequirementsError, RuntimeError, OSError, ValueError):
             self.baseline = ""
             self.editor.clear()
@@ -260,7 +266,7 @@ class PromptPage(QWidget):
         self.baseline = self.saved.text
         self.editor.setPlainText(self.baseline)
         self.editing = True
-        self.message.setText("编辑完整研究 Prompt：方向、标准、排除、评价、严格程度和排序；保存后生效。")
+        self.message.setText("编辑完整研究 Prompt：方向、标准、排除、数量、评价和严格程度；保存后生效。" if self.stage == "round1" else "编辑完整研究 Prompt：方向、标准、排除、评价、严格程度和排序；保存后生效。")
         self.update_controls()
         self.editor.setFocus()
 
@@ -284,7 +290,7 @@ class PromptPage(QWidget):
         self.editing = False
         self.baseline = self.saved.text if self.saved else ""
         self.editor.setPlainText(self.baseline)
-        self.message.setText("研究判断由本轮完整 Prompt 决定；程序仅保留身份、输出结构、数量和安全保护。")
+        self.message.setText(self.boundary_message())
         self.update_controls()
 
     def restore_default(self):

@@ -67,12 +67,12 @@ docs/
 
 | 路径 | 职责 |
 |---|---|
-| `desktop/config.py` | `desktop_config_v3` 只读契约、预算边界和四份资源文本哈希校验 |
+| `desktop/config.py` | `desktop_config_v4` 只读契约、预算边界和四份资源文本哈希校验 |
 | `desktop/research_requirements.py` | 两轮独立保存、校验、默认读取及分析快照 |
 | `desktop/prompt_page.py` | 完整研究 Prompt 查看/编辑、保存、取消、恢复与未保存保护 |
-| `prompts/relevance_round1_v22.txt` | Round 1 最小技术协议 |
+| `prompts/relevance_round1_v23.txt` | Round 1 最小技术协议，无固定篇数限制 |
 | `prompts/relevance_round2_v17.txt` | Round 2 最小技术协议 |
-| `prompts/research_prompt_round1_v1.txt`、`prompts/research_prompt_round2_v1.txt` | 两轮可编辑的版本化完整默认研究 Prompt |
+| `prompts/research_prompt_round1_v2.txt`、`prompts/research_prompt_round2_v1.txt` | 两轮可编辑的版本化完整默认研究 Prompt |
 | 其他历史 Prompt | 原样保留，不进入运行与打包 |
 
 提示词按版本新增，不覆盖旧文件。当前运行和发行资源只包含 `config.json` 与上述四份 Prompt；不依赖独立自动化策略或 Research Profile 文件。`profile_v2` 保留为请求、SQLite 和缓存兼容标识。

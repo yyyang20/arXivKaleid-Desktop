@@ -24,8 +24,8 @@ from desktop import app, paths
 from desktop.diagnostics import DesktopDiagnostics
 internal = copy / '_internal'
 for name in ['config.json', 'assets/app-icon.ico',
-             'prompts/relevance_round1_v22.txt', 'prompts/relevance_round2_v17.txt',
-             'prompts/research_prompt_round1_v1.txt', 'prompts/research_prompt_round2_v1.txt']:
+             'prompts/relevance_round1_v23.txt', 'prompts/relevance_round2_v17.txt',
+             'prompts/research_prompt_round1_v2.txt', 'prompts/research_prompt_round2_v1.txt']:
     target = internal / name
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(root / name, target)

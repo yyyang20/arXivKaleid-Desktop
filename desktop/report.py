@@ -91,7 +91,7 @@ def build_desktop_report(
     for row in round1:
         identity = f"{row['arxiv_id']}v{row['version']}"
         lines.extend([
-            f"### Rank {row['result_rank']}：{text(row['title'])}", "",
+            f"### 论文 {row['result_rank']}：{text(row['title'])}", "",
             f"- arXiv ID：{identity}", f"- 作者：{text(row['authors'])}",
             f"- 分类：{text(row['categories'])}",
             *(["- Round 1 评价：" + "\n  ".join(text(line, empty="") for line in row['evaluation'].splitlines())] if row['evaluation'] else []),
