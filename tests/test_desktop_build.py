@@ -70,6 +70,8 @@ class DesktopBuildTests(unittest.TestCase):
         for name, content in (('secret.dat', b'fake'), ('data.sqlite-wal', b'fake'),
                               ('round1_research_requirements.json', b'private-canary'),
                               ('round2_research_requirements.json', b'private-canary'),
+                              ('round1_research_prompt.json', b'private-canary'),
+                              ('round2_research_prompt.json', b'private-canary'),
                               ('paper.pdf', b'fake'), ('diagnostic.jsonl', b'{}\n'),
                               ('runtime/cache/data', b'fake'),
                               ('tests/helper.py', b'fake'), ('screenshots/initial.png', b'fake'),
@@ -82,9 +84,26 @@ class DesktopBuildTests(unittest.TestCase):
                     builder.verify_tree(self.root)
                 path.unlink()
 
+    def test_frozen_resource_identity_rejects_tampering_and_missing_hashes(self):
+        import shutil
+        hashes = {}
+        for name in builder.RESOURCES:
+            target = self.root / '_internal' / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / name, target)
+            hashes[name] = builder.sha(target.read_bytes())
+        identity = {'resource_hashes': hashes}
+        builder.verify_resource_identity(self.root, identity)
+        with self.assertRaisesRegex(RuntimeError, 'build_resource_identity'):
+            builder.verify_resource_identity(self.root, {'resource_hashes': {}})
+        target = self.root / '_internal/prompts/research_prompt_round2_v2.txt'
+        target.write_bytes(target.read_bytes() + b'changed')
+        with self.assertRaisesRegex(RuntimeError, 'build_resource_identity'):
+            builder.verify_resource_identity(self.root, identity)
+
     def test_resource_allowlist_matches_current_config(self):
         config = json.loads((ROOT / 'config.json').read_text(encoding='utf-8'))
-        for name in ('round1_prompt', 'round2_prompt', 'round1_requirements', 'round2_requirements'):
+        for name in ('round1_prompt', 'round2_prompt', 'round1_research_prompt', 'round2_research_prompt'):
             self.assertIn(config['paths'][name], builder.RESOURCES)
         self.assertNotIn('config/research_profile.json', builder.RESOURCES)
         self.assertNotIn('profiles/research_profile.md', builder.RESOURCES)
@@ -92,6 +111,8 @@ class DesktopBuildTests(unittest.TestCase):
         self.assertNotIn('config/automation_policy.json', builder.RESOURCES)
         self.assertNotIn('config/local_secret.json', builder.RESOURCES)
         self.assertIn('assets/app-icon.ico', builder.RESOURCES)
+        self.assertIn('assets/user-guide.svg', builder.RESOURCES)
+        self.assertIn('_internal/assets/user-guide.svg', builder.REQUIRED_RELEASE_FILES)
         self.assertIn('_internal/assets/app-icon.ico', builder.REQUIRED_RELEASE_FILES)
         self.assertIn('_internal/PySide6/plugins/imageformats/qico.dll',
                       builder.REQUIRED_RELEASE_FILES)
@@ -145,7 +166,7 @@ class DesktopBuildTests(unittest.TestCase):
                 (ROOT / 'docs/public_release' / name).read_bytes() if name != 'README.md' else
                 (ROOT / 'docs/public_release' / name).read_text(encoding='utf-8').replace(
                     '{{APPLICATION_SOURCE_NOTICE}}',
-                    f"本版[对应源码下载]({builder.SOURCE_URL})固定到 `v{builder.__version__}`，包含应用源码、配置、Prompt、测试、构建脚本及说明，对应 `BUILD_INFO.json` 中的提交。"
+                    f"本版[对应源码下载]({builder.SOURCE_URL})固定到 `v{builder.__version__}`，包含应用源码、配置、提示词、测试、构建脚本及说明，对应 `BUILD_INFO.json` 中的提交。"
                 ).encode('utf-8'),
             )
         self.assertFalse((self.root / 'RELEASE_CHECKLIST.md').exists())

@@ -433,12 +433,13 @@ class ArtifactTests(ArtifactFixture):
         self.assertTrue((run.evidence / 'copy/runtime/work/screen.png').exists())
         self.assertFalse(any(p.suffix in ('.dat', '.sqlite') for p in run.evidence.rglob('*')))
 
-    def test_all_portable_stages_mocked_then_seven_copies_released(self):
+    def test_all_portable_stages_mocked_then_nine_copies_released(self):
         import validate_windows_portable as validator
         source = self.root / 'dist/synthetic'
         self.write(source / 'arXivKaleid.exe', b'synthetic executable')
-        self.write(source / '_internal/prompts/relevance_round2_v16.txt')
-        self.write(source / '_internal/prompts/research_requirements_round1_v1.txt')
+        self.write(source / '_internal/prompts/relevance_round2_v18.txt')
+        self.write(source / '_internal/prompts/research_prompt_round1_v2.txt')
+        self.write(source / '_internal/docs/desktop/USER_GUIDE.md')
         original = artifacts.inventory(self.root, source, hashes=True)
         calls = []
         class Restart:
@@ -455,7 +456,7 @@ class ArtifactTests(ArtifactFixture):
                 calls.append(command[1:])
                 if '--portable-recovery-check' in command:
                     self.write(copy_root / 'runtime/work/recovery-check.json', json.dumps({
-                        'synthetic_dpapi_recovered': True, 'history_restored_exactly': True,
+                        'synthetic_dpapi_recovered': True, 'user_guide_restored': True, 'history_restored_exactly': True,
                         'deleted_history_stays_deleted': True, 'research_requirements_restored_exactly': True}).encode())
                     code = 0
                 elif '--visual-qa' in command:
@@ -463,7 +464,10 @@ class ArtifactTests(ArtifactFixture):
                     dpr = 1.5 if mode == 'native' else int(mode.rsplit('-', 1)[-1]) / 100
                     self.write(copy_root / 'runtime/work/screen.png')
                     self.write(copy_root / 'runtime/work/portable-check.json', json.dumps({'ok': True,
-                        'visual_qa': {'screen': 'primary', 'captures': [{'screen': 'primary', 'dpr': dpr}]}}).encode())
+                        'round2_user_count_and_model_ranking': True,
+                        'user_guide_loaded': True,
+                        'visual_qa': {'user_guide': {'keyboard_link': True},
+                                      'screen': 'primary', 'captures': [{'screen': 'primary', 'dpr': dpr}]}}).encode())
                     code = 0
                 else:
                     code = 2 if copy_root.name.startswith('隔离副本') else 1
@@ -473,7 +477,7 @@ class ArtifactTests(ArtifactFixture):
                     patch.object(validator.subprocess, 'Popen', side_effect=lambda *a, **kw: Restart()), \
                     patch.object(run, 'process', side_effect=process):
                 validator.validate_portable(run, source, {'commit': 'a' * 40}, type('Args', (), {'arxiv': False})())
-                self.assertEqual(len(list(run.work.iterdir())), 12)  # 七份副本及五份过程日志。
+                self.assertEqual(len(list(run.work.iterdir())), 14)  # 九份副本及五份过程日志。
                 validator.collect_validation_evidence(run)
         self.assertFalse(run.work.exists())
         self.assertEqual(artifacts.inventory(self.root, source, hashes=True), original)
@@ -659,6 +663,8 @@ class ArtifactTests(ArtifactFixture):
         with artifacts.ArtifactRun('build', root=self.root) as run:
             def fake_process(*args, **kwargs):
                 self.write(run.work / 'dist/arXivKaleid/arXivKaleid.exe', b'new-exe')
+                for name in build.RESOURCES:
+                    self.write(run.work / 'dist/arXivKaleid/_internal' / name, b'synthetic-resource')
                 return subprocess.CompletedProcess(args, 0)
             with patch.object(build, 'ROOT', self.root), patch.object(build, 'prepare_resources'), \
                     patch.object(build, 'prepare_curl'), patch.object(build, 'inspect_python_archive', return_value={}), \

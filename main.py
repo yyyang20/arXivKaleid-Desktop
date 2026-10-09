@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Any, Callable
 
 import arxiv_transport_evidence
-import content_labels
 import model_usage
 from deepseek_client import DeepSeekClient
 from desktop.config import load_config
@@ -30,10 +29,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
 ROUND2_TASK_TYPE = "round2_batch_ranking"
 ROUND2_ABSTRACT_SOURCE = "papers.summary"
-ROUND2_SELECTION_POLICY = "full_text_budget_exclusion_v3"
+ROUND2_SELECTION_POLICY = "full_text_budget_exclusion_v5"
 ROUND2_OUTPUT_TRANSPORT = "responses_named_tool_auto_v2"
-CURRENT_ROUND1_PROMPT_VERSION = "round1_v21"
-CURRENT_ROUND2_PROMPT_VERSION = "round2_v16"
+CURRENT_ROUND1_PROMPT_VERSION = "round1_v23"
+ROUND1_SELECTION_POLICY = "user_prompt_selection"
+CURRENT_ROUND2_PROMPT_VERSION = "round2_v18"
 ROUND1_PRECISION_PROMPT_VERSIONS = {CURRENT_ROUND1_PROMPT_VERSION}
 ROUND2_PRECISION_PROMPT_VERSIONS = {CURRENT_ROUND2_PROMPT_VERSION}
 SELF_CONTAINED_ROUND1_PROMPT_VERSIONS = {CURRENT_ROUND1_PROMPT_VERSION}
@@ -41,7 +41,7 @@ SELF_CONTAINED_ROUND2_PROMPT_VERSIONS = {CURRENT_ROUND2_PROMPT_VERSION}
 
 
 def round2_selection_policy_for_prompt(prompt_version: str) -> str:
-    """Desktop 只接受 alpha.4 当前全文筛选协议。"""
+    """Desktop 只接受当前版本的领域无关技术协议。"""
     if prompt_version != CURRENT_ROUND2_PROMPT_VERSION:
         raise RuntimeError("desktop_prompt_version_unsupported")
     return ROUND2_SELECTION_POLICY
@@ -121,8 +121,8 @@ def resolve_configured_paths(
         in {
             "round1_prompt",
             "round2_prompt",
-            "round1_requirements",
-            "round2_requirements",
+            "round1_research_prompt",
+            "round2_research_prompt",
         }
     }
 
@@ -1043,44 +1043,30 @@ def build_round1_messages(
     research_profile: dict[str, Any],
     papers: list[dict[str, Any]],
     config: dict[str, Any],
-    *, research_requirements: str,
+    *, research_prompt: str,
 ) -> list[dict[str, str]]:
-    """固定协议与研究要求分别序列化，论文输入仅使用允许的公开元数据。"""
+    """完整研究 Prompt 与技术协议分离；只向模型提供身份、标题和摘要。"""
     candidates = [
         {
             "candidate_index": candidate_index,
             "arxiv_id": paper["arxiv_id"],
             "version": f"v{paper['version']}",
             "title": paper["title"],
-            "authors": paper.get("authors", ""),
-            "categories": paper.get("categories", ""),
             "summary": paper.get("summary", ""),
         }
         for candidate_index, paper in enumerate(papers, start=1)
     ]
     prompt_version = config["versions"]["round1_prompt_version"]
-    target_selected_count = min(config["round1_max_selected_n"], len(candidates))
     task_input = {
         "task_type": "round1_abstract_screening",
         "profile_version": research_profile["profile_version"],
-        "research_profile_version": research_profile["profile_version"],
         "prompt_version": prompt_version,
         "selection_policy": config["round1_selection_policy"],
         "selection_policy_version": config["round1_selection_policy_version"],
-        "max_selected_count": config["round1_max_selected_n"],
-        "target_selected_count": target_selected_count,
-        "expected_candidate_ranking_count": len(candidates),
-        "research_profile": research_profile,
-        "feedback_samples": [],
-        "research_requirements": research_requirements,
+        "research_prompt": research_prompt,
         "candidate_papers": candidates,
     }
-    if prompt_version in SELF_CONTAINED_ROUND1_PROMPT_VERSIONS:
-        task_input.pop("research_profile")
-    if prompt_version in ROUND1_PRECISION_PROMPT_VERSIONS:
-        # 现行协议将 Top 10 视为上限，不承担全候选排序和精确数量回显。
-        task_input.pop("target_selected_count")
-        task_input.pop("expected_candidate_ranking_count")
+    # 数量与研究判断完全由可编辑 Prompt 决定，不发送隐藏限额或排名任务。
     return [
         {"role": "system", "content": prompt},
         {
@@ -1106,39 +1092,14 @@ def safe_round2_string_list(
 
 
 def build_round2_candidate_payload(paper: dict[str, Any]) -> dict[str, Any]:
-    """构造当前第二轮完整全文输入。"""
+    """明确白名单构造第二轮输入，任何第一轮研究结果都不能越过此边界。"""
     payload = {
         "arxiv_id": paper["arxiv_id"],
         "version": f"v{paper['version']}",
         "title": paper.get("title", ""),
-        "authors": paper.get("authors", ""),
-        "categories": paper.get("categories", ""),
-        "primary_category": paper.get("primary_category", ""),
         "abstract_source": ROUND2_ABSTRACT_SOURCE,
         "metadata_abstract": paper.get("summary", ""),
-        "round1": {
-            "rank": paper.get("round1_rank"),
-            "reason": paper.get("round1_reason", paper.get("reason", "")),
-            "matched_reasons": safe_round2_string_list(
-                paper.get("matched_reasons")
-            ),
-            "negative_reasons": safe_round2_string_list(
-                paper.get("negative_reasons")
-            ),
-            "evidence_from_title_or_abstract": safe_round2_string_list(
-                paper.get("evidence_from_title_or_abstract")
-            ),
-            **(
-                {"content_label": paper["content_label"]}
-                if paper.get("content_label") in content_labels.CORE_CONTENT_LABEL_SET
-                else {}
-            ),
-        },
     }
-    if paper.get("score") is not None:
-        payload["round1"]["score"] = paper["score"]
-    if paper.get("confidence") is not None:
-        payload["round1"]["confidence"] = paper["confidence"]
     if paper.get("round2_input_mode") != "full_text":
         raise RuntimeError("round2_fulltext_required")
     raw_pages = paper.get("pdf_pages")
@@ -1163,38 +1124,26 @@ def build_round2_messages(
     research_profile: dict[str, Any],
     papers: list[dict[str, Any]],
     config: dict[str, Any],
-    *, research_requirements: str,
+    *, research_prompt: str,
 ) -> list[dict[str, str]]:
     """构造第二轮同批排序输入；不包含本地路径和被页数门控的长文。"""
     input_mode = "full_text"
     prompt_version = config["versions"]["round2_prompt_version"]
-    target_recommendation_count = min(
-        config["final_max_recommendations"], len(papers)
-    )
     task_input = {
         "task_type": ROUND2_TASK_TYPE,
         "selection_policy": round2_selection_policy_for_prompt(prompt_version),
         "profile_version": research_profile["profile_version"],
-        "research_profile_version": research_profile["profile_version"],
         "prompt_version": prompt_version,
         "abstract_source": ROUND2_ABSTRACT_SOURCE,
         "input_mode": input_mode,
         "pdf_input_fields": ["page_number", "text"],
-        "research_requirements": research_requirements,
-        "final_max_recommendations": config["final_max_recommendations"],
-        "max_recommendation_count": config["final_max_recommendations"],
-        "target_recommendation_count": target_recommendation_count,
-        "research_profile": research_profile,
+        "research_prompt": research_prompt,
         "candidate_papers": [
-            build_round2_candidate_payload(paper) for paper in papers
+            build_round2_candidate_payload(paper)
+            for paper in sorted(papers, key=lambda p: (str(p["arxiv_id"]), int(p["version"])))
         ],
     }
-    if prompt_version in SELF_CONTAINED_ROUND2_PROMPT_VERSIONS:
-        task_input.pop("research_profile")
-    if prompt_version in ROUND2_PRECISION_PROMPT_VERSIONS:
-        # 现行协议允许少选或零选，数量由安全解析后的数组确定。
-        task_input.pop("max_recommendation_count")
-        task_input.pop("target_recommendation_count")
+    # 数量和研究排序由用户提示词决定，不发送固定限额或目标数量。
     return [
         {"role": "system", "content": prompt},
         {
@@ -1366,12 +1315,21 @@ ROUND1_V19_TOP_LEVEL_KEYS = {
 }
 ROUND1_V19_SELECTED_KEYS = {
     "candidate_index",
-    "content_label",
-    "reason",
-    "evidence",
+    "evaluation",
 }
 ROUND1_V19_CACHE_AUDIT_KEY = "_arxivkaleid_selection_audit"
-CORE_RECOMMENDATION_LABELS = frozenset({"成像", "新解", "成像｜新解"})
+
+
+def optional_evaluation(item: dict[str, Any]) -> tuple[str, int]:
+    """评价没有研究语义校验或长度截断；结构不合法仅丢弃可选评价。"""
+    value = item.get("evaluation", "")
+    if not isinstance(value, str) or "\x00" in value:
+        return "", 1
+    try:
+        value.encode("utf-8")
+    except UnicodeError:
+        return "", 1
+    return value, 0
 
 
 def validate_optional_round1_evidence(
@@ -1414,12 +1372,11 @@ def validate_round1_v19_result(
     raw_result: Any,
     papers: list[dict[str, Any]],
     *,
-    max_selected: int,
     profile_version: str,
     prompt_version: str,
     selection_policy_version: str,
 ) -> tuple[dict[str, Any], list[str]]:
-    """校验精简 Top K；结构身份硬拒绝，单篇问题确定性排除。"""
+    """校验完整入选列表；结构身份硬拒绝，单篇问题确定性排除。"""
     warnings: list[str] = []
     validated: dict[str, Any] = {
         "task_type": "round1_abstract_screening",
@@ -1471,7 +1428,7 @@ def validate_round1_v19_result(
             (
                 "selection_policy",
                 raw_result.get("selection_policy"),
-                "top_k_daily_budget",
+                ROUND1_SELECTION_POLICY,
             ),
             (
                 "selection_policy_version",
@@ -1497,16 +1454,15 @@ def validate_round1_v19_result(
             actual_type=type(raw_selected).__name__,
         )
 
-    limit = max(0, int(max_selected))
-    considered = raw_selected[:limit]
-    ignored_over_budget_count = max(0, len(raw_selected) - limit)
+    # 检查全部返回项；合法唯一身份自然不超过输入候选，不施加篇数截取。
+    considered = raw_selected
+    ignored_over_budget_count = 0
     candidate_map = {index: paper for index, paper in enumerate(papers, start=1)}
     seen_candidate_indices: set[int] = set()
     accepted: list[dict[str, Any]] = []
     exclusions: list[dict[str, Any]] = []
     accepted_positions: list[dict[str, int]] = []
-    evidence_discarded_count = 0
-    evidence_missing_count = 0
+    evaluation_discarded_count = 0
     extra_item_field_count = 0
 
     def exclude(model_position: int, code: str, candidate_index: Any = None) -> None:
@@ -1531,25 +1487,9 @@ def validate_round1_v19_result(
             exclude(model_position, "candidate_duplicate", candidate_index)
             continue
 
-        label = item.get("content_label")
-        if label not in content_labels.CORE_CONTENT_LABEL_SET:
-            exclude(model_position, "content_label_invalid", candidate_index)
-            continue
-        if label not in CORE_RECOMMENDATION_LABELS:
-            exclude(model_position, "non_core_content_label", candidate_index)
-            continue
-        reason = strict_round2_text(item.get("reason"), max_chars=300)
-        if reason is None:
-            exclude(model_position, "reason_invalid", candidate_index)
-            continue
-
+        evaluation, discarded = optional_evaluation(item)
+        evaluation_discarded_count += discarded
         seen_candidate_indices.add(candidate_index)
-        evidence, evidence_status, discarded = validate_optional_round1_evidence(
-            item.get("evidence"), candidate_map[candidate_index]
-        )
-        evidence_discarded_count += discarded
-        if evidence_status in {"missing", "empty"}:
-            evidence_missing_count += 1
         final_rank = len(accepted) + 1
         accepted_positions.append(
             {
@@ -1564,25 +1504,8 @@ def validate_round1_v19_result(
                 "candidate_index": candidate_index,
                 "model_position": model_position,
                 "round1_rank": final_rank,
-                "content_label": label,
-                "reason": reason,
-                "recommendation_hint": reason,
-                "recommendation_hint_truncated": False,
-                "recommendation_hint_original_length": len(reason),
-                "matched_reasons": [reason],
-                "negative_reasons": [],
-                "evidence": evidence,
-                "evidence_status": evidence_status,
-                "evidence_invalid_count": discarded,
-                "evidence_repaired": False,
-                "evidence_repair_code": None,
-                "evidence_repair_reason_code": None,
-                "evidence_repair_source": None,
-                "evidence_repair_quote_length": None,
-                "evidence_repair_item_index": None,
-                "evidence_from_title_or_abstract": [
-                    evidence_item["quote"] for evidence_item in evidence
-                ],
+                "evaluation": evaluation,
+                "reason": evaluation,
                 "score": None,
                 "confidence": None,
             }
@@ -1598,8 +1521,7 @@ def validate_round1_v19_result(
         "ignored_over_budget_count": ignored_over_budget_count,
         "accepted_positions": accepted_positions,
         "exclusions": exclusions,
-        "evidence_discarded_count": evidence_discarded_count,
-        "evidence_missing_count": evidence_missing_count,
+        "evaluation_discarded_count": evaluation_discarded_count,
         "extra_top_level_field_count": len(
             set(raw_result) - ROUND1_V19_TOP_LEVEL_KEYS - {ROUND1_V19_CACHE_AUDIT_KEY}
         ),
@@ -1609,16 +1531,9 @@ def validate_round1_v19_result(
     for paper in accepted:
         cache_item: dict[str, Any] = {
             "candidate_index": paper["candidate_index"],
-            "content_label": paper["content_label"],
-            "reason": paper["reason"],
+            "evaluation": paper["evaluation"],
             "_arxivkaleid_model_position": paper["model_position"],
-            "_arxivkaleid_evidence_status": paper["evidence_status"],
-            "_arxivkaleid_evidence_invalid_count": paper[
-                "evidence_invalid_count"
-            ],
         }
-        if paper["evidence"]:
-            cache_item["evidence"] = paper["evidence"]
         cache_selected.append(cache_item)
     validated.update(
         {
@@ -1631,16 +1546,16 @@ def validate_round1_v19_result(
                 "task_type": "round1_abstract_screening",
                 "profile_version": profile_version,
                 "prompt_version": prompt_version,
-                "selection_policy": "top_k_daily_budget",
+                "selection_policy": ROUND1_SELECTION_POLICY,
                 "selection_policy_version": selection_policy_version,
                 "selected_papers": cache_selected,
                 ROUND1_V19_CACHE_AUDIT_KEY: audit,
             },
         }
     )
-    if exclusions or ignored_over_budget_count or evidence_discarded_count:
+    if exclusions or ignored_over_budget_count or evaluation_discarded_count:
         warnings.append(
-            "第一轮已按逐篇容错规则排除非法条目或无效证据；有效论文顺序保持不变。"
+            "第一轮已排除非法身份条目或丢弃无效可选评价；有效论文顺序保持不变。"
         )
     return validated, warnings
 
@@ -1649,26 +1564,14 @@ def validate_round1_result(
     raw_result: Any,
     papers: list[dict[str, Any]],
     *,
-    max_selected: int,
     profile_version: str,
     prompt_version: str,
     selection_policy_version: str,
 ) -> tuple[dict[str, Any], list[str]]:
-    """仅执行 alpha.4 的当前协议，保留既有逐篇容错校验器。"""
+    """仅执行现行最小技术协议，保留逐篇容错校验。"""
     if prompt_version != CURRENT_ROUND1_PROMPT_VERSION:
         raise RuntimeError("desktop_prompt_version_unsupported")
-    return validate_round1_v19_result(raw_result, papers, max_selected=max_selected, profile_version=profile_version, prompt_version=prompt_version, selection_policy_version=selection_policy_version)
-
-
-def round2_recommendation_level_for_rank(final_rank: int) -> str:
-    """新版阅读级别只由最终名次确定，不接收模型决定。"""
-    if final_rank == 1:
-        return "deep_read"
-    if 2 <= final_rank <= 4:
-        return "skim_read"
-    if final_rank == 5:
-        return "backup"
-    raise RuntimeError("round2_final_rank_out_of_budget")
+    return validate_round1_v19_result(raw_result, papers, profile_version=profile_version, prompt_version=prompt_version, selection_policy_version=selection_policy_version)
 
 
 ROUND2_V14_TOP_LEVEL_KEYS = {
@@ -1681,8 +1584,7 @@ ROUND2_V14_TOP_LEVEL_KEYS = {
 ROUND2_V14_RECOMMENDATION_KEYS = {
     "arxiv_id",
     "version",
-    "content_label",
-    "reason",
+    "evaluation",
 }
 ROUND2_V14_CACHE_AUDIT_KEY = "_arxivkaleid_selection_audit"
 
@@ -1691,11 +1593,10 @@ def validate_round2_v14_result(
     raw_result: Any,
     papers: list[dict[str, Any]],
     *,
-    max_recommendations: int,
     profile_version: str,
     prompt_version: str,
 ) -> tuple[dict[str, Any], list[str]]:
-    """校验全文精简 Top K，并逐篇排除不可信推荐。"""
+    """检查全部推荐身份，保留模型顺序；可选评价不参与研究裁决。"""
     warnings: list[str] = []
     validated: dict[str, Any] = {
         "task_type": ROUND2_TASK_TYPE,
@@ -1766,9 +1667,9 @@ def validate_round2_v14_result(
             actual_type=type(raw_recommendations).__name__,
         )
 
-    limit = max(0, int(max_recommendations))
-    considered = raw_recommendations[:limit]
-    ignored_over_budget_count = max(0, len(raw_recommendations) - limit)
+    # 不解释提示词中的数字，也不按固定篇数截取；逐篇检查整个结果数组。
+    considered = raw_recommendations
+    ignored_over_budget_count = 0
     candidate_map = {
         (paper["arxiv_id"], int(paper["version"])): paper for paper in papers
     }
@@ -1777,6 +1678,7 @@ def validate_round2_v14_result(
     exclusions: list[dict[str, Any]] = []
     accepted_positions: list[dict[str, Any]] = []
     extra_item_field_count = 0
+    evaluation_discarded_count = 0
 
     def exclude(
         model_position: int,
@@ -1820,33 +1722,8 @@ def validate_round2_v14_result(
             )
             continue
 
-        label = item.get("content_label")
-        if label not in content_labels.CORE_CONTENT_LABEL_SET:
-            exclude(
-                model_position,
-                "content_label_invalid",
-                arxiv_id=arxiv_id,
-                version=version,
-            )
-            continue
-        if label not in CORE_RECOMMENDATION_LABELS:
-            exclude(
-                model_position,
-                "non_core_content_label",
-                arxiv_id=arxiv_id,
-                version=version,
-            )
-            continue
-        reason = strict_round2_text(item.get("reason"), max_chars=300)
-        if reason is None:
-            exclude(
-                model_position,
-                "reason_invalid",
-                arxiv_id=arxiv_id,
-                version=version,
-            )
-            continue
-
+        evaluation, discarded = optional_evaluation(item)
+        evaluation_discarded_count += discarded
         seen.add(typed_key)
         final_rank = len(accepted) + 1
         accepted_positions.append(
@@ -1862,20 +1739,11 @@ def validate_round2_v14_result(
                 **candidate_map[typed_key],
                 "model_position": model_position,
                 "final_rank": final_rank,
-                "recommendation_level": round2_recommendation_level_for_rank(
-                    final_rank
-                ),
-                "content_label": label,
-                "reason": reason,
-                "matched_reasons": [reason],
-                "negative_reasons": [],
-                "suggested_reading_scope": "",
+                "recommendation_level": None,
+                "evaluation": evaluation,
+                "reason": evaluation,
                 "score": None,
                 "confidence": None,
-                "evidence": [],
-                "evidence_repaired": False,
-                "evidence_repair_code": None,
-                "evidence_repair_indices": [],
             }
         )
 
@@ -1895,13 +1763,13 @@ def validate_round2_v14_result(
             - {ROUND2_V14_CACHE_AUDIT_KEY}
         ),
         "extra_item_field_count": extra_item_field_count,
+        "evaluation_discarded_count": evaluation_discarded_count,
     }
     cache_recommendations = [
         {
             "arxiv_id": paper["arxiv_id"],
             "version": f"v{paper['version']}",
-            "content_label": paper["content_label"],
-            "reason": paper["reason"],
+            "evaluation": paper["evaluation"],
             "_arxivkaleid_model_position": paper["model_position"],
         }
         for paper in accepted
@@ -1923,9 +1791,9 @@ def validate_round2_v14_result(
             },
         }
     )
-    if exclusions or ignored_over_budget_count:
+    if exclusions or ignored_over_budget_count or evaluation_discarded_count:
         warnings.append(
-            "第二轮已按逐篇容错规则排除非法条目；有效论文顺序保持不变。"
+            "第二轮已排除非法身份条目或丢弃无效可选评价；有效论文顺序保持不变。"
         )
     return validated, warnings
 
@@ -1934,14 +1802,13 @@ def validate_round2_result(
     raw_result: Any,
     papers: list[dict[str, Any]],
     *,
-    max_recommendations: int,
     profile_version: str,
     prompt_version: str,
 ) -> tuple[dict[str, Any], list[str]]:
-    """仅执行 alpha.4 的当前协议，保留既有逐篇容错校验器。"""
+    """仅执行现行最小技术协议，保留逐篇容错校验。"""
     if prompt_version != CURRENT_ROUND2_PROMPT_VERSION:
         raise RuntimeError("desktop_prompt_version_unsupported")
-    return validate_round2_v14_result(raw_result, papers, max_recommendations=max_recommendations, profile_version=profile_version, prompt_version=prompt_version)
+    return validate_round2_v14_result(raw_result, papers, profile_version=profile_version, prompt_version=prompt_version)
 
 
 def stable_json_hash(value: Any) -> str:
@@ -1963,6 +1830,7 @@ SCREENING_AUDIT_COUNT_KEYS = (
     "ignored_over_budget_count",
 )
 SCREENING_AUDIT_OPTIONAL_COUNT_KEYS = (
+    "evaluation_discarded_count",
     "evidence_discarded_count",
     "evidence_missing_count",
     "extra_top_level_field_count",
@@ -2216,59 +2084,14 @@ def save_round1_screening_results(
                         paper["arxiv_id"],
                         paper["version"],
                         paper["round1_rank"],
-                        (
-                            None
-                            if config["versions"]["round1_prompt_version"]
-                            in ROUND1_PRECISION_PROMPT_VERSIONS
-                            else paper["recommendation_hint"]
-                        ),
-                        paper["score"],
-                        paper["confidence"],
+                        None,
+                        None,
+                        None,
                         1,
-                        "；".join(paper["matched_reasons"]),
+                        paper["evaluation"],
                         json.dumps(
                             {
-                                **(
-                                    {"content_label": paper["content_label"]}
-                                    if "content_label" in paper
-                                    else {
-                                        "relevance_band": paper["relevance_band"],
-                                        "reason_codes": paper["reason_codes"],
-                                    }
-                                ),
-                                "matched_reasons": paper["matched_reasons"],
-                                "negative_reasons": paper["negative_reasons"],
-                                "evidence": paper["evidence"],
                                 "model_position": paper.get("model_position"),
-                                "evidence_status": paper.get("evidence_status"),
-                                "evidence_invalid_count": paper.get(
-                                    "evidence_invalid_count", 0
-                                ),
-                                "evidence_repaired": paper["evidence_repaired"],
-                                "evidence_repair_code": paper[
-                                    "evidence_repair_code"
-                                ],
-                                "evidence_repair_reason_code": paper[
-                                    "evidence_repair_reason_code"
-                                ],
-                                "evidence_repair_source": paper[
-                                    "evidence_repair_source"
-                                ],
-                                "evidence_repair_quote_length": paper[
-                                    "evidence_repair_quote_length"
-                                ],
-                                "evidence_repair_item_index": paper[
-                                    "evidence_repair_item_index"
-                                ],
-                                "recommendation_hint_truncated": paper[
-                                    "recommendation_hint_truncated"
-                                ],
-                                "recommendation_hint_original_length": paper[
-                                    "recommendation_hint_original_length"
-                                ],
-                                "evidence_from_title_or_abstract": paper[
-                                    "evidence_from_title_or_abstract"
-                                ],
                             },
                             ensure_ascii=False,
                             separators=(",", ":"),
@@ -2344,44 +2167,14 @@ def save_round2_screening_results(
                         paper["arxiv_id"],
                         int(paper["version"]),
                         paper["final_rank"],
-                        paper["recommendation_level"],
-                        paper["score"],
-                        paper["confidence"],
+                        None,
+                        None,
+                        None,
                         1,
-                        paper["reason"],
+                        paper["evaluation"],
                         json.dumps(
                             {
-                                "matched_reasons": paper["matched_reasons"],
-                                "negative_reasons": paper["negative_reasons"],
-                                "evidence": paper["evidence"],
-                                "evidence_repaired": paper.get(
-                                    "evidence_repaired"
-                                )
-                                is True,
-                                "evidence_repair_code": paper.get(
-                                    "evidence_repair_code"
-                                ),
-                                "evidence_repair_indices": paper.get(
-                                    "evidence_repair_indices", []
-                                ),
-                                "suggested_reading_scope": paper[
-                                    "suggested_reading_scope"
-                                ],
                                 "model_position": paper.get("model_position"),
-                                **(
-                                    {"content_label": paper["content_label"]}
-                                    if "content_label" in paper
-                                    else {}
-                                ),
-                                **(
-                                    {
-                                        "contribution_tier": paper[
-                                            "contribution_tier"
-                                        ]
-                                    }
-                                    if "contribution_tier" in paper
-                                    else {}
-                                ),
                             },
                             ensure_ascii=False,
                             separators=(",", ":"),

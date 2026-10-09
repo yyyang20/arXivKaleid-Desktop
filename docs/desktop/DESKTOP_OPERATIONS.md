@@ -12,7 +12,7 @@
 python -B -m desktop.app
 ```
 
-当前版本为 `0.1.0-alpha.10`。使用 PySide6 / Qt `6.9.2`、PySide6-Fluent-Widgets `1.11.3` 基础版、PySideSix-Frameless-Window `0.8.2`、darkdetect `0.8.0`、Windows pywin32 `312`，均固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。不安装 full 的 scipy、pillow、colorthief。该文件同时引入 [requirements.txt](../../requirements.txt) 中的 pypdf 核心运行依赖；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
+当前版本为 `0.1.0-alpha.11`，第一阶段为本地技术候选，尚未公开发布。使用 PySide6 / Qt `6.9.2`、PySide6-Fluent-Widgets `1.11.3` 基础版、PySideSix-Frameless-Window `0.8.2`、darkdetect `0.8.0`、Windows pywin32 `312`，均固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。不安装 full 的 scipy、pillow、colorthief。该文件同时引入 [requirements.txt](../../requirements.txt) 中的 pypdf 核心运行依赖；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
 
 仅在用户已授权且已核实为本项目专用的 Conda 环境中，才可安装 Desktop 依赖：
 
@@ -41,6 +41,8 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 
 ## 本机构建
 
+资源 allowlist 同时收集 `docs/desktop/USER_GUIDE.md` 和 `assets/user-guide.svg` 到 `_internal/` 原相对路径，`BUILD_INFO.json` 绑定其原始字节哈希，源码与冻结程序的说明及书本图标一致。仅修改指南文字时无需修改 GUI 代码，但仍须按现有更新义务检查、测试并重新打包；已交付 ZIP 不自动更新。
+
 alpha 7 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windows 11 样式、SVG 图标插件及 ICO 图像解码插件；不带 QtNetwork、qsvg 图像插件或 offscreen 平台。Fluent 图标/QSS 由其内嵌 Qt 资源模块提供，不从网络获取图标；正式 `assets/app-icon.ico` 同时进入 `_internal/` 资源和 EXE 文件图标。应用图标可用现有项目环境运行 `python -B scripts/generate_app_icon.py` 从 SVG 母版确定性重建，不额外引入图像依赖。不额外收集整个 site-packages、full 依赖或系统字体。实际模块/PYZ、运行时 hook、DLL 和插件随冻结成品核验。
 
 源码 manifest 固定 QtBase、QtSvg、PySide/Shiboken、pypdf、Fluent、frameless、darkdetect 和 pywin32 的版本、许可及哈希；原始归档随包保留。新增依赖的原许可与版权文本按实际分发内容收集，pywin32 保留多层同名许可；实际使用的 hooks-contrib 运行时 hook 保留原许可。Fluent 1.11.3 wheel/sdist 许可原文及元数据声明 GPLv3，上游另有商业用途措辞；歧义记录在第三方声明，不因此推定本项目必须购买许可或改变 GPL-3.0-only。原许可、版权和固定对应源码全部保留；只有与实际分发直接相关且现有材料无法解决的具体发行权利缺口才停止 Release，不把其他项目当成许可依据。
@@ -54,7 +56,7 @@ alpha 7 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windo
 ./scripts/build_windows_portable.ps1 -PythonExe $desktopPython -LicenseInputManifest '.desktop-build/inputs/conda-licenses/alpha9/manifest.json'
 ```
 
-构建入口按现有 spec 生成 Windows GUI one-folder；资源 allowlist 包含 `config.json`、正式 ICO、两份现行固定协议和两份默认研究要求，不包含用户覆盖记录、历史 Prompt、独立自动化策略或 Profile 文件。curl `8.22.0_2` 来自 curl 官方固定 x64 归档，并核验 manifest 中的 SHA-256 后才运行。时区数据来自专用环境，不依赖系统 IANA 数据。
+构建入口按现有 spec 生成 Windows GUI one-folder；资源 allowlist 包含 `config.json`、正式 ICO、使用说明 SVG 与 Markdown、两份现行技术协议和两份默认完整研究提示词，不包含用户覆盖记录、历史提示词、领域标签模块、独立自动化策略或 Profile 文件。`BUILD_INFO.json` 的 `resource_hashes` 绑定全部允许资源，发行树检查同时复核配置内部的提示词哈希。curl `8.22.0_2` 来自 curl 官方固定 x64 归档，并核验 manifest 中的 SHA-256 后才运行。时区数据来自专用环境，不依赖系统 IANA 数据。
 
 构建前必须在已授权范围内冻结干净提交；本地技术验证使用 `codex/` 开发分支，要求其是已核验 `origin/main` 基线的后代，不要求 HEAD 等于基线。产物为根 `dist/` 下带版本目录、`release/` 下同名 ZIP 和 `.zip.sha256`。`BUILD_INFO.json` 记录分支、基线、冻结提交、验证用途和环境版本。旧干净发行物移入本次 `.desktop-build/managed-artifacts/build-<ID>/preserved/previous-*` 留存并核对移动前后逐文件哈希；已有 `runtime/` 的发行目录拒绝覆盖。stage、缓存和重复构建副本在保存审计证据后收尾，最终输出和 previous-* 不自动清理。构建目录、vendor 下载和输出均被 Git 忽略。所有下载都先校验固定哈希，缓存不符即停止。
 
@@ -84,7 +86,7 @@ manifest 记录组件 name/version/build/包归档 SHA-256、来源发行归档 
 
 验证器先检查干净发行树，再复制到本次 `.desktop-build/managed-artifacts/portable-<ID>/work/`，使用非源码 cwd 和仅包含 Windows System32 的 PATH 启动 EXE。诊断窗口创建前仅对当前诊断线程调用 [ImmDisableIME](https://learn.microsoft.com/en-us/windows/win32/api/imm/nf-imm-immdisableime)，避免第三方输入法 DLL 干扰严格来源检查；不改变系统输入法、正式 GUI 或普通重启入口，不覆盖真实输入法交互。检查资源、Qt GUI/Markdown、进度控件、首次分析告知默认拒绝、拒绝后快照未消费且分析线程未启动、DPAPI 假值、SQLite、pypdf、时区、bundled curl 与重启。`--arxiv` 通过实际 GUI/QThread 抓取候选，不点击分析按钮；诊断进程硬禁用模型入口。结果只写验证副本的 `runtime/` 和项目内验证摘要，不接触真实 Key。已有 runtime 的副本拒绝诊断。
 
-五组 DPI、恢复、普通重启和反例全部完成，所属进程退出且合成数据隐私检查通过后，将报告与必要截图复制到本次 `evidence/` 并核对哈希，再释放七份程序副本和合成运行数据。失败保存已有安全证据；证据收集失败则保留 work 并停止后续运行。原始干净发行目录始终受保护，人工验收截图保留到明确结案，规则见根运行手册的 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期)。
+五组 DPI、恢复、普通重启和反例全部完成，所属进程退出且合成数据隐私检查通过后，将报告与必要截图复制到本次 `evidence/` 并核对哈希，再释放九份程序副本和合成运行数据。失败保存已有安全证据；证据收集失败则保留 work 并停止后续运行。原始干净发行目录始终受保护，人工验收截图保留到明确结案，规则见根运行手册的 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期)。
 
 默认离线验证在真实 Windows 平台抓取七个主要状态、详情、失败、设置禁改与最小窗口截图，使用真实 QThread 与合成计算，不分发 unittest/mock 或开发 QA 脚本。Python 网络及非本地版本检查的子进程传输被硬禁止。新建副本写入合成 DPAPI 后，只有匹配验证器随机诊断令牌的新进程才检查恢复；普通 GUI 额外重复启动/关闭三次。图像和诊断只在副本 `runtime/work/`，绝不回流发行包。
 
@@ -98,11 +100,11 @@ Qt `QDomDocument.setContent` 弃用提示暂为非阻塞已知问题，以冻结
 
 ## 运行目录与凭据
 
-研究要求在本目录 `config/round1_research_requirements.json` 与 `round2_research_requirements.json` 中以 UTF-8 明文保存。重启生效；损坏或未知格式会阻止分析，不自动覆盖。通过 GUI 确认恢复对应轮默认可修复覆盖记录，内置资源损坏则重新解压。升级到新目录使用新版默认，不复制或迁移旧 `runtime/`。
+完整研究 Prompt 在本目录 `config/round1_research_prompt.json` 与 `round2_research_prompt.json` 中以 UTF-8 明文保存，格式为 `research_prompt_v1`。重启生效；损坏或未知格式会阻止分析，不自动覆盖。通过 GUI 确认恢复对应轮默认可修复覆盖记录，内置资源损坏则重新解压。alpha 11 解压到新目录使用新版默认，不读取或迁移 alpha 10 `runtime/`。
 
-研究要求变更须先通过源码离线测试、实际 GUI、请求哈希/缓存/预算与隐私边界验证，再冻结本地中文 commit。构建前核验已有 vendor 固定哈希，缺失或异常时停止，不安装依赖或下载替代材料。自动合成数据只写验证副本；分别验收四页、两轮查看/编辑、保存失败、恢复确认、离开保护、分析禁改、原生 DPI 与模拟 100/125/150/200%，并检查输入法提交中文、滚动及较大字体。提示词入口还须核对实际历史卡片外框、间隔与图标，执行整卡各区域点击及回车/空格进入，检查悬停/聚焦、最小窗口下实际放大文字的换行和裁切。此处输入法事件检查不等于所有第三方 IME 的实机兼容覆盖。
+完整研究提示词变更须先通过源码离线测试、实际 GUI、请求哈希/缓存/预算与隐私边界验证，再冻结本地中文 commit。还须验证跨领域结果、可选自由评价、无固定阅读级别，以及改变第一轮研究顺序和评价不影响第二轮请求、缓存身份或 Token 并列裁决；两轮超过默认篇数仍接受全部合法结果，第二轮在冻结校验器、真实日报和历史中保持模型顺序。构建前核验已有 vendor 固定哈希，缺失或异常时停止，不安装依赖或下载替代材料。自动合成数据只写验证副本；分别验收五页、两轮查看/编辑、保存失败、恢复确认、离开保护、分析禁改、原生 DPI 与模拟 100/125/150/200%，并检查输入法提交中文、滚动及较大字体。提示词入口还须核对实际历史卡片外框、间隔与图标，执行整卡各区域点击及回车/空格进入，检查悬停/聚焦、最小窗口下实际放大文字的换行和裁切及中文“提示词”文案。此处输入法事件检查不等于所有第三方 IME 的实机兼容覆盖。
 
-干净构建目录与 ZIP 必须无 runtime、测试/个人数据和用户覆盖配置，逐文件核对资源、许可、身份和哈希。技术候选的 `BUILD_INFO.json` 使用 `local-portable-technical-validation`，README 绑定冻结 commit；正式包使用 `public-release` 并绑定正式 main 与同版 tag。构建器按准确文件名把旧 ZIP/校验和被替换候选原样移入被忽略的构建审计目录，核对留存哈希，不删除历史材料。当前 `release/` 仅保留正式 alpha 10 ZIP 与 `.sha256`，技术候选及历史审计仍留存。
+干净构建目录与 ZIP 必须无 runtime、测试/个人数据和用户覆盖配置，逐文件核对资源、许可、身份和哈希。技术候选的 `BUILD_INFO.json` 使用 `local-portable-technical-validation`，README 绑定冻结 commit；正式包使用 `public-release` 并绑定正式 main 与同版 tag。构建器按准确文件名把同名旧 ZIP/校验和被替换候选原样移入被忽略的构建审计目录，核对留存哈希，不删除历史材料。第一阶段交付时 `release/` 只保留当次技术候选 ZIP 与 `.sha256`；其他既有 ZIP 必须依当次明确范围原样归档保留，不能当作正式发布后的删除收口，也不能仅凭版本号认定本地包等于远端正式包。
 
 本地技术候选交付即停止，不 push、PR、merge、tag、GitHub Release 或上传资产。正式发布需另行授权，从合并后的干净 main 重建，技术候选不可直接发布。发布及匿名核验通过后，仅以文档 PR 收口，不重建或替换已公开资产。
 
@@ -130,6 +132,8 @@ alpha 9 历史库独立位于 `history/history.sqlite`，以明文保存当次�
 
 ## 离线验证
 
+使用说明需实际验证五页导航、只读 Markdown、四个蓝色链接的鼠标与键盘跳转、未保存保护、最小窗口、大字体、正文滚动及分析期间查看。冻结程序增加指南加载、缺失、篡改和重启检查；仍禁止真实网络与付费调用，证据按受管生命周期留存。
+
 隔离视觉 QA 使用已有环境运行 `python -X utf8 -B scripts/visual_qa_desktop.py`，入口为当前进程设置独立 TEMP/TMP 并在退出时恢复。该入口不启动正式业务、不读取用户 Secret、不运行真实网络或模型；内存假 Key、合成快照/事件与 SQLite 事实经过真实校验器、日报生成器、QThread 与 GUI，urllib/socket/子进程网络入口硬禁止。截图与 qa.json 保存在 `.desktop-build/managed-artifacts/visual-<ID>/evidence/`，包含初始、抓取、成功收缩/展开、分析、真实生成日报、设置/禁改、历史空态/列表/详情/零推荐、确认删除及保存失败、两轮研究要求查看/编辑和保护对话框、最小窗口和实际放大的控件字体；线程和数据库退出后收尾本次 work，截图等待明确结案。Windows 使用当前进程 `QT_QPA_PLATFORM=windows`；可分别以 `QT_SCALE_FACTOR=1` 和 `1.5` 复核不同缩放，包含日期弹层、边界月份和最小窗口日历；实际 DPR 在 qa.json 中记录，不改变持久系统设置。
 
 在项目根目录及已有匹配依赖的环境中运行。推荐受管薄入口，独立 TEMP/TMP 和测试夹具根只作用于子进程；已有 TemporaryDirectory、addCleanup 和测试内容保持原职责：
@@ -148,4 +152,4 @@ git status --short
 
 新增测试使用 `.codex-validation/` 下的隔离目录，不接触实际 Desktop Secret。治理测试只读文档、JSON 配置及源码 AST；检查文档与发行资料契约，不启动应用或读取运行数据。GUI 测试自动使用 Qt offscreen；有 PySide6 与 qfluentwidgets 时必须实际执行，缺少 GUI 依赖时安全跳过 GUI 部分；pipeline 和 Secret 文件边界测试不依赖 Qt。Windows 额外运行真实 DPAPI 往返测试，仅使用合成假值；非 Windows 跳过该项。所有跳过须报告原因和未覆盖范围，涉及 GUI、DPAPI 或 Windows 发行的任务不能以跳过代替对应验收。
 
-普通单元测试的网络全部使用 mock，不访问真实 arXiv、不调用真实 DeepSeek、不下载真实 PDF。分析测试使用真实客户端解析合成 HTTP 响应，核验单次 attempt、冻结顺序、非空证据规范化与无效证据容错、预算、页数门控与日报事实；冻结诊断也使用合成数据执行非空证据校验。诊断测试覆盖身份关联、作用域、线程安全、内存降级、绝对路径与敏感内容 canary；GUI 测试覆盖展示失败不改写分析成功。构建扫描必须拒绝 `runtime/`、`logs/`、JSONL、SQLite、PDF 和 Secret。Git/GitHub 收尾遵循根 [运行手册](../OPERATIONS.md)。
+普通单元测试的网络全部使用 mock，不访问真实 arXiv、不调用真实 DeepSeek、不下载真实 PDF。分析测试使用真实客户端解析合成 HTTP 响应，核验单次 attempt、输入边界、自由评价及无效可选字段容错、预算、页数门控与日报事实；冻结诊断也使用合成数据执行当前技术协议校验。诊断测试覆盖身份关联、作用域、线程安全、内存降级、绝对路径与敏感内容 canary；GUI 测试覆盖展示失败不改写分析成功。构建扫描必须拒绝 `runtime/`、`logs/`、JSONL、SQLite、PDF 和 Secret。Git/GitHub 收尾遵循根 [运行手册](../OPERATIONS.md)。

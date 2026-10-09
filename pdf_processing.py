@@ -23,7 +23,6 @@ MIN_PDF_SIZE_BYTES = 1024
 MAX_PDF_SIZE_BYTES = 100 * 1024 * 1024
 PDF_REQUEST_INTERVAL_SECONDS = 3
 PDF_REQUEST_TIMEOUT_SECONDS = 60
-MAX_FIRST_ROUND_PDF_DOWNLOADS = 10
 SUCCESSFUL_PDF_DOWNLOAD_STATUSES = ("downloaded", "reused_existing_pdf")
 
 
@@ -349,7 +348,8 @@ def download_selected_papers(
     progress_callback: Callable[[PdfDownloadResult], None] | None = None,
 ) -> list[PdfDownloadResult]:
     """下载或复用本轮入围 PDF；单篇失败时记录状态并继续后续论文。"""
-    selected = list(papers[:MAX_FIRST_ROUND_PDF_DOWNLOADS])
+    # 第一轮已完成身份校验，全部入围论文都需下载，不在交接处暗中截取。
+    selected = list(papers)
     download_one = downloader or download_or_reuse_pdf
     results: list[PdfDownloadResult] = []
     previous_network_attempt = False

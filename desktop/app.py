@@ -37,8 +37,8 @@ from desktop.research_requirements import RequirementsError, RequirementsStore
 
 
 ANALYSIS_NOTICE = (
-    "开始分析会将论文标题、摘要、通过门控后的 PDF 提取全文和已保存的研究要求"
-    "发送到你自己的 DeepSeek API，并可能产生费用。\n\n"
+    "开始分析会将论文标题、摘要、通过门控后的 PDF 提取全文和已保存的完整研究提示词"
+    " 发送到你自己的 DeepSeek API，并可能产生费用。\n\n"
     "API Key 仅在本机使用 Windows DPAPI 加密保存；PDF、SQLite 和缓存保存在本机。"
     "应用没有维护者服务器中转或遥测。\n\n"
     "是否同意并继续？详情见随附 PRIVACY.md。"
@@ -203,11 +203,14 @@ class DesktopWindow(QWidget):
         self.home_page = HomePage()
         self.prompt_page = PromptPage(self.requirements_store)
         self.history_page = HistoryPage()
+        from desktop.user_guide import UserGuidePage
+        self.user_guide_page = UserGuidePage(pipeline.PROJECT_ROOT)
         self.settings_page = SettingsPage()
         for page, icon, title in (
             (self.home_page, FluentIcon.HOME, "首页"),
             (self.prompt_page, FluentIcon.DOCUMENT, "提示词"),
             (self.history_page, FluentIcon.HISTORY, "历史"),
+            (self.user_guide_page, self.user_guide_page.navigation_icon, "使用说明"),
             (self.settings_page, FluentIcon.SETTING, "设置"),
         ):
             self.pages.addWidget(page)
@@ -242,6 +245,7 @@ class DesktopWindow(QWidget):
         self.report = self.home_page.report
         self.report.anchorClicked.connect(self.open_report_link)
         self.history_page.report.anchorClicked.connect(self.open_report_link)
+        self.user_guide_page.browser.anchorClicked.connect(self.open_guide_link)
         self.history_page.open_requested.connect(self.open_history_record)
         self.history_page.delete_requested.connect(self.delete_history_record)
         self.history_page.more_requested.connect(self.load_more_history)
@@ -667,7 +671,7 @@ class DesktopWindow(QWidget):
         try:
             requirements = self.requirements_store.snapshot()
         except (RequirementsError, RuntimeError, OSError, ValueError):
-            self.status.setText("研究要求不可用，未开始分析。请在提示词页面处理保存内容或检查内置资源。")
+            self.status.setText("研究提示词不可用，未开始分析。请在提示词页面处理保存内容或检查内置资源。")
             self.prompt_page.refresh_states()
             self.switch_page(self.prompt_page)
             return
@@ -764,6 +768,14 @@ class DesktopWindow(QWidget):
         self.worker = None
         self.prompt_page.set_busy(False)
         worker.deleteLater()
+
+    @Slot(QUrl)
+    def open_guide_link(self, url: QUrl) -> None:
+        # 只允许四个页面入口；保持切页保护，不调用业务入口或系统浏览器。
+        from desktop.user_guide import GUIDE_ROUTES
+        target = GUIDE_ROUTES.get(url.toString())
+        if self.user_guide_page.loaded and target is not None:
+            self.switch_page(getattr(self, target))
 
     @Slot(QUrl)
     def open_report_link(self, url: QUrl) -> None:

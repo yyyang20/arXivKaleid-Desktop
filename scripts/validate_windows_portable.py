@@ -129,6 +129,8 @@ def validate_portable(run, source, identity, args):
         report = json.loads(report_path.read_text(encoding='utf-8')) if report_path.exists() else {'ok': False}
         if result.returncode or not report.get('ok') or report.get('failure_type'):
             raise RuntimeError('portable_validation_failed:' + mode + ':' + str(report.get('failure_type')))
+        assert report.get('round2_user_count_and_model_ranking') is True
+        assert report.get('user_guide_loaded') is True and report['visual_qa']['user_guide']['keyboard_link']
         # 各模式及全部截图必须来自同一主屏，不能将跨屏变化误当作模拟倍率。
         actual_screen, actual_dpr = verify_capture_display(
             report['visual_qa'], native_screen=None if native_dpr is None else native_screen,
@@ -142,6 +144,7 @@ def validate_portable(run, source, identity, args):
         assert recovery.returncode == 0
         restored = json.loads((copy / 'runtime/work/recovery-check.json').read_text())
         assert restored['synthetic_dpapi_recovered']
+        assert restored['user_guide_restored']
         assert restored['history_restored_exactly'] and restored['deleted_history_stays_deleted']
         assert restored['research_requirements_restored_exactly']
         for _ in range(3):
@@ -176,7 +179,7 @@ def validate_portable(run, source, identity, args):
     # 缺失资源必须失败，且诊断拒绝重复使用已有 runtime；仅操作本次新副本。
     negative = checked_path(work, 'missing-resource')
     shutil.copytree(source, negative)
-    prompt = negative / '_internal/prompts/relevance_round2_v16.txt'
+    prompt = negative / '_internal/prompts/relevance_round2_v18.txt'
     prompt.rename(prompt.with_suffix('.disabled'))
     run.checkpoint()
     bad = run.process([str(negative / 'arXivKaleid.exe'), '--portable-check'], cwd=work,
@@ -185,7 +188,7 @@ def validate_portable(run, source, identity, args):
     # 默认研究资源同样受发行完整性校验，篡改后不可启动分析。
     tampered = checked_path(work, 'tampered-requirements')
     shutil.copytree(source, tampered)
-    requirement = checked_path(tampered, '_internal/prompts/research_requirements_round1_v1.txt')
+    requirement = checked_path(tampered, '_internal/prompts/research_prompt_round1_v2.txt')
     requirement.write_bytes(requirement.read_bytes() + b'\nsynthetic-tamper')
     run.checkpoint()
     bad = run.process([str(tampered / 'arXivKaleid.exe'), '--portable-check'], cwd=work,
@@ -194,11 +197,25 @@ def validate_portable(run, source, identity, args):
     rejected = run.process([str(copy / 'arXivKaleid.exe'), '--portable-check'], cwd=work,
                               env=env, timeout=30, creationflags=0x08000000)
     assert rejected.returncode == 2
+    # 指南失效仅在本页提示；诊断拒绝将缺失/篡改的说明记为通过。
+    for mode in ('missing', 'tampered'):
+        guide_copy = checked_path(work, mode + '-user-guide')
+        shutil.copytree(source, guide_copy)
+        guide = checked_path(guide_copy, '_internal/docs/desktop/USER_GUIDE.md')
+        if mode == 'missing':
+            guide.rename(guide.with_suffix('.disabled'))
+        else:
+            guide.write_bytes(guide.read_bytes() + b'\nsynthetic-tamper')
+        run.checkpoint()
+        bad = run.process([str(guide_copy / 'arXivKaleid.exe'), '--portable-check'], cwd=work,
+                          env=env, timeout=30, creationflags=0x08000000)
+        assert bad.returncode != 0
     # 应用曾用过的验证目录不回流干净发行树。
     verify_tree(source)
     verify_synthetic_privacy(work)
     summary = {'commit': identity['commit'], 'runs': results, 'missing_resource_rejected': True,
                'tampered_requirements_rejected': True,
+               'missing_user_guide_rejected': True, 'tampered_user_guide_rejected': True,
                'used_runtime_rejected': True, 'clean_distribution_preserved': True}
     (run.evidence / 'validation.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
     print('Validation audit:', run.evidence.relative_to(ROOT).as_posix())

@@ -15,10 +15,10 @@ import rebuild_daily_report
 from desktop.pipeline import CandidateSnapshot
 
 
-def text(value: object) -> str:
+def text(value: object, *, empty: str = "未提供") -> str:
     """元数据按文本呈现，避免标题和理由变成额外 Markdown 链接。"""
-    value = escape(str(value or "未提供"), quote=False).replace("\n", " ")
-    for char in ("\\", "`", "*", "_", "[", "]", "#"):
+    value = escape(str(value or empty), quote=False).replace("\n", " ")
+    for char in ("\\", "`", "*", "_", "[", "]", "#", "~", "|"):
         value = value.replace(char, "\\" + char)
     return value
 
@@ -44,8 +44,10 @@ def build_desktop_report(
     for row in round2.recommendations:
         item = dict(row)
         item["page_count"] = counts.get((row["arxiv_id"], row["version"]))
-        for field in ("title", "authors", "categories", "reason"):
+        for field in ("title", "authors", "categories"):
             item[field] = text(item.get(field))
+        # 自由评价按纯文本逐行转义，不生成模型提供的可点击链接或 HTML。
+        item["evaluation"] = "\n  ".join(text(line, empty="") for line in str(item.get("evaluation") or "").splitlines())
         identity = f"{row['arxiv_id']}v{row['version']}"
         item.update(abs_url=f"https://arxiv.org/abs/{identity}", pdf_url=f"https://arxiv.org/pdf/{identity}")
         recommendations.append(item)
@@ -89,10 +91,10 @@ def build_desktop_report(
     for row in round1:
         identity = f"{row['arxiv_id']}v{row['version']}"
         lines.extend([
-            f"### Rank {row['result_rank']}：{text(row['title'])}", "",
+            f"### 论文 {row['result_rank']}：{text(row['title'])}", "",
             f"- arXiv ID：{identity}", f"- 作者：{text(row['authors'])}",
-            f"- 分类：{text(row['categories'])}", f"- 内容标签：{text(row['content_label'])}",
-            f"- Round 1 理由：{text(row['reason'])}",
+            f"- 分类：{text(row['categories'])}",
+            *(["- Round 1 评价：" + "\n  ".join(text(line, empty="") for line in row['evaluation'].splitlines())] if row['evaluation'] else []),
             f"- PDF 实际页数：{row.get('page_count') or '未获取'}",
             f"- Round 2 门控状态：{statuses.get(row.get('round2_decision'), '未通过门控')}",
             f"- arXiv 摘要页：[打开摘要页](https://arxiv.org/abs/{identity})",

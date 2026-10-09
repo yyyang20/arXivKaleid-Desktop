@@ -296,7 +296,7 @@ class DesktopPipelineTests(IsolatedDesktopTest):
                 elif isinstance(node, ast.ImportFrom):
                     imports.add(node.module.split(".")[0])
             # Fluent 只允许进入 GUI 模块，候选/分析/凭据等业务模块继续独立于界面。
-            gui_modules = {"app.py", "pages.py", "style.py", "task_panel.py", "date_picker.py", "history_page.py", "prompt_page.py"}
+            gui_modules = {"app.py", "pages.py", "style.py", "task_panel.py", "date_picker.py", "history_page.py", "prompt_page.py", "user_guide.py"}
             module_allowed = allowed | ({"qfluentwidgets"} if source.name in gui_modules else set())
             if source.name == "history.py":
                 module_allowed |= {"contextlib"}  # 标准库事务连接，不扩展业务依赖。

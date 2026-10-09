@@ -1,13 +1,13 @@
 # 隐私说明
 
-更新日期：2026-10-05
+更新日期：2026-10-09
 
 arXivKaleid Desktop 是在用户 Windows 电脑上运行的 portable 工具。应用没有维护者服务器中转、用户账户系统、广告或遥测。
 
 ## 网络请求
 
 - 应用从 arXiv 读取公开论文元数据和用户选择分析的 PDF。
-- 用户同意开始分析后，论文标题、摘要、分类、固定筛选协议、已保存生效的默认或自定义研究要求，以及通过门控后的 PDF 提取全文会发送给 DeepSeek API；未保存草稿不会发送，应用不会另行发送 Research Profile 文件内容。
+- 用户同意开始分析后，论文身份、标题、摘要、最小技术协议、已保存生效的默认或自定义完整研究 Prompt，以及第二轮通过门控后的 PDF 提取全文会发送给 DeepSeek API；作者、分类和第一轮评价或排名不进入第二轮研究输入，未保存草稿不会发送，应用不会另行发送 Research Profile 文件内容。
 - DeepSeek API Key 仅用于用户自己的 API 请求，不会发送给维护者。DeepSeek 对请求数据的处理受其当前服务条款和隐私政策约束。
 
 应用没有其他网络遥测或维护者统计上报。
@@ -21,14 +21,14 @@ arXivKaleid Desktop 是在用户 Windows 电脑上运行的 portable 工具。�
 portable 模式的数据位于 `arXivKaleid.exe` 同级 `runtime/` 目录，包括：
 
 - 经 Windows DPAPI 绑定当前 Windows 用户和电脑加密的 `runtime/config/secret.dat`；
-- 两轮独立 UTF-8 明文研究要求记录 `runtime/config/round1_research_requirements.json` 和 `round2_research_requirements.json`；不加密、不跨目录迁移，确认恢复默认替换对应覆盖记录；
+- 两轮独立 UTF-8 明文完整研究 Prompt 记录 `runtime/config/round1_research_prompt.json` 和 `round2_research_prompt.json`；不加密、不跨目录迁移，确认恢复默认替换对应覆盖记录；
 - 候选请求间隔缓存；
 - 当前分析使用的 SQLite 工作库；
-- 独立 `runtime/history/history.sqlite` 中以明文保存的成功日报原始 Markdown、日报完成时间、实际抓取完成时间、论文日期及候选/推荐数量；正文可能包含论文标题、作者、摘要、推荐理由、费用与本地 PDF 相对路径，但不保存 API Key 或模型原始响应；
+- 独立 `runtime/history/history.sqlite` 中以明文保存的成功日报原始 Markdown、日报完成时间、实际抓取完成时间、论文日期及候选/推荐数量；正文可能包含论文标题、作者、摘要、可选自由评价、费用与本地 PDF 相对路径，但不保存 API Key 或模型原始响应；
 - 已下载的论文 PDF 及提取后的全文工作数据。
 - `runtime/logs/` 下按应用会话生成的脱敏 JSONL 诊断，包括阶段、稳定代码、耗时、计数、关联 ID 和安全网络字段。
 
-诊断日志不保存 API Key、Authorization、Cookie、DPAPI 密文、完整 Prompt、研究要求正文、标题、摘要、论文全文、逐页文本、模型请求或原始响应、response ID、curl 原始 stderr、HTTP 原始正文或未知响应头、环境变量全集、命令行全集、traceback locals 或用户绝对路径。未预见异常的 traceback 只保留模块、函数和行号。工作库审计只保存请求哈希等安全字段，不存原始研究要求；模型生成的推荐理由可能复述用户输入，仍会随日报保存。
+诊断日志不保存 API Key、Authorization、Cookie、DPAPI 密文、完整 Prompt、标题、摘要、论文全文、逐页文本、模型请求或原始响应、response ID、curl 原始 stderr、HTTP 原始正文或未知响应头、环境变量全集、命令行全集、traceback locals 或用户绝对路径。未预见异常的 traceback 只保留模块、函数和行号。工作库审计只保存请求哈希等安全字段，不存原始研究 Prompt；模型生成的自由评价可能复述用户输入，仍会保存在工作库及日报历史中。
 
 DPAPI 密文通常不能在另一台电脑或另一个 Windows 用户下解密。不要转发已使用过的 portable 目录或 `runtime/` 内容。
 

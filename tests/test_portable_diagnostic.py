@@ -15,7 +15,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 
 FIXTURE = r'''
-import importlib.util, json, shutil, sys
+import importlib.util, json, shutil, sys, hashlib
 from pathlib import Path
 from unittest.mock import patch
 root, copy, failure = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3] == 'failure'
@@ -23,12 +23,17 @@ sys.path.insert(0, str(root))
 from desktop import app, paths
 from desktop.diagnostics import DesktopDiagnostics
 internal = copy / '_internal'
-for name in ['config.json', 'assets/app-icon.ico',
-             'prompts/relevance_round1_v21.txt', 'prompts/relevance_round2_v16.txt',
-             'prompts/research_requirements_round1_v1.txt', 'prompts/research_requirements_round2_v1.txt']:
+for name in ['config.json', 'assets/app-icon.ico', 'assets/user-guide.svg',
+             'prompts/relevance_round1_v23.txt', 'prompts/relevance_round2_v18.txt',
+             'prompts/research_prompt_round1_v2.txt', 'prompts/research_prompt_round2_v2.txt',
+             'docs/desktop/USER_GUIDE.md']:
     target = internal / name
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(root / name, target)
+(copy / 'BUILD_INFO.json').write_text(json.dumps({'resource_hashes': {
+    name: hashlib.sha256((internal / name).read_bytes()).hexdigest()
+    for name in ('docs/desktop/USER_GUIDE.md', 'assets/user-guide.svg')
+}}), encoding='utf-8')
 spec = importlib.util.spec_from_file_location('portable_check', root / 'packaging/windows/portable_check.py')
 diagnostic = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(diagnostic)
@@ -54,7 +59,8 @@ with patch.object(sys, 'frozen', True, create=True), \
     rejected = diagnostic.run()
 report = json.loads((copy / 'runtime/work/portable-check.json').read_text(encoding='utf-8'))
 print('RESULT:' + json.dumps({'code': code, 'ok': report['ok'], 'injected': bool(injected),
-                            'round1_nonempty_evidence': report.get('round1_nonempty_evidence'),
+                            'minimal_protocol_free_evaluation': report.get('minimal_protocol_free_evaluation'),
+                            'round2_independent_handoff': report.get('round2_independent_handoff'),
                             'research_requirements_requests_and_hashes': report.get('research_requirements_requests_and_hashes'),
                             'diagnostic_ime_thread_only': report.get('diagnostic_ime_thread_only'),
                             'failure_type': report.get('failure_type'), 'used_runtime': rejected}))
@@ -87,7 +93,8 @@ class PortableDiagnosticTests(unittest.TestCase):
         result = self.exercise('success')
         self.assertTrue(result['ok'])
         self.assertEqual(result['code'], 0)
-        self.assertTrue(result['round1_nonempty_evidence'])
+        self.assertTrue(result['minimal_protocol_free_evaluation'])
+        self.assertTrue(result['round2_independent_handoff'])
         self.assertTrue(result['research_requirements_requests_and_hashes'])
         self.assertTrue(result['diagnostic_ime_thread_only'])
         self.assertEqual(result['used_runtime'], 2)

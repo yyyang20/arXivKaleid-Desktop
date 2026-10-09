@@ -243,14 +243,14 @@ def checked_usage(connection, run_id, config):
 def run_round1(
     connection, run_id, papers, config, profile, prompt, api_key,
     diagnostic_observer: Callable[[str, object], None] | None = None,
-    *, research_requirements: str,
+    *, research_prompt: str,
 ):
     if not papers:
         main.save_round1_screening_results(
             connection, run_id, [], config, selection_audit=main.empty_screening_stage_audit()
         )
         return []
-    messages = main.build_round1_messages(prompt, profile, papers, config, research_requirements=research_requirements)
+    messages = main.build_round1_messages(prompt, profile, papers, config, research_prompt=research_prompt)
     validate_budget(connection, run_id, config, "round1", messages)
     stage = main.deepseek_stage_config(config, "round1")
     client = main.DeepSeekClient(
@@ -278,7 +278,7 @@ def run_round1(
         raise DesktopOperationError(_model_issue("round1", result))
     try:
         validated, _ = main.validate_round1_result(
-            result.data, papers, max_selected=config["round1_max_selected_n"],
+            result.data, papers,
             profile_version=config["versions"]["research_profile_version"],
             prompt_version=config["versions"]["round1_prompt_version"],
             selection_policy_version=config["round1_selection_policy_version"],
@@ -377,8 +377,7 @@ class AnalysisAttempt:
             root = desktop_paths.application_root(pipeline.PROJECT_ROOT)
             resources = desktop_paths.resource_root(pipeline.PROJECT_ROOT)
             config, paths, profile, round2_prompt = run_round2.read_round2_context(resources)
-            if (config["round1_max_selected_n"] > 10 or config["final_max_recommendations"] > 5
-                    or config["limits"]["max_round2_pdf_pages"] != 60
+            if (config["limits"]["max_round2_pdf_pages"] != 60
                     or config["deepseek"]["max_retries"] != 0):
                 raise RuntimeError("desktop_shared_limits_invalid")
             # 唯一候选来源就是此对象；复制扁平 metadata，不查询或重排历史。
@@ -450,7 +449,7 @@ class AnalysisAttempt:
                 connection, run_id, papers, config, profile,
                 main.load_prompt(paths["round1_prompt"]), api_key,
                 diagnostic_observer=observe_round1,
-                research_requirements=self.requirements.round1,
+                research_prompt=self.requirements.round1,
             )
             if not selected:
                 normal = outcome(
@@ -699,7 +698,7 @@ class AnalysisAttempt:
                 bundle = run_round2.build_round2_input_bundle(
                     connection, config, profile, round2_prompt,
                     run_id=run_id, fulltext_connection=fulltext,
-                    research_requirements=self.requirements.round2,
+                    research_prompt=self.requirements.round2,
                 )
             else:
                 bundle = run_round2.Round2InputBundle(

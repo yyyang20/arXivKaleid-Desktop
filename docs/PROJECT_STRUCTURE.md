@@ -15,12 +15,12 @@
 | `requirements.txt` | 固定 pypdf 核心运行依赖 |
 | `requirements-desktop.txt` | 核心 PDF、PySide6、基础 Fluent 与 Windows 必要依赖固定版本，不使用 full |
 | `requirements-build.txt` | 固定 PyInstaller 及仅构建阶段依赖 |
-| `assets/` | A0 应用图标 SVG 母版与 Windows 多尺寸 ICO 正式资源 |
+| `assets/` | A0 应用图标 SVG 母版、Windows 多尺寸 ICO 与使用说明线框书本 SVG |
 | `desktop/` | GUI、候选快照、DPAPI、配置、诊断、进度、一次性分析和 Markdown 日报；详见 [Desktop 结构](desktop/DESKTOP_STRUCTURE.md) |
 | `main.py` | arXiv URL、curl 传输、Atom 解析、排序合并、Desktop 主库 schema 与筛选保存核心函数；无 CLI 启动入口 |
 | `arxiv_transport_evidence.py` | curl write-out、timing 和响应头白名单纯解析边界 |
 | `deepseek_client.py` | Chat Completions 与 Responses 单次请求、命名函数结果传输、usage 和安全错误分类 |
-| `content_labels.py` | 四类内容标签和现有标签解析辅助函数 |
+| `content_labels.py` | 历史领域标签辅助函数；当前引擎与冻结程序不依赖 |
 | `pdf_processing.py` | 精确版本 PDF 下载、校验、哈希、文本提取和进度回调 |
 | `round2_fulltext_state.py` | 全文库、物理页数门控、逐页全文、Token 预检和进度回调 |
 | `build_round2_inputs.py` | 当前工作库 Round 1 结果、全文资格与只读 SQLite 输入辅助函数 |
@@ -56,6 +56,7 @@ docs/
    ├─ DESKTOP_SPEC.md
    ├─ DESKTOP_OPERATIONS.md
    ├─ DESKTOP_STRUCTURE.md
+   ├─ USER_GUIDE.md
    └─ PROMPT_SPLIT.md
 ```
 
@@ -67,15 +68,17 @@ docs/
 
 | 路径 | 职责 |
 |---|---|
-| `desktop/config.py` | `desktop_config_v2` 只读契约、预算边界和四份资源文本哈希校验 |
+| `desktop/config.py` | `desktop_config_v5` 只读契约、预算边界和四份资源文本哈希校验 |
 | `desktop/research_requirements.py` | 两轮独立保存、校验、默认读取及分析快照 |
-| `desktop/prompt_page.py` | 研究要求查看/编辑、保存、取消、恢复与未保存保护 |
-| `prompts/relevance_round1_v21.txt` | Round 1 固定协议 |
-| `prompts/relevance_round2_v16.txt` | Round 2 固定协议 |
-| `prompts/research_requirements_round1_v1.txt`、`prompts/research_requirements_round2_v1.txt` | 两轮版本化默认研究要求 |
-| `prompts/relevance_round1_v20.txt`、`prompts/relevance_round2_v15.txt` | 原样保留的历史身份，不进入运行与打包 |
+| `desktop/prompt_page.py` | 完整研究提示词查看/编辑、保存、取消、恢复与未保存保护 |
+| `desktop/user_guide.py` | 使用说明资源读取、冻结哈希、只读 Markdown 和内部导航入口 |
+| `docs/desktop/USER_GUIDE.md` | GUI 使用说明唯一正文维护源，用户可见功能变化时按文档路由同步 |
+| `prompts/relevance_round1_v23.txt` | Round 1 最小技术协议，无固定篇数限制 |
+| `prompts/relevance_round2_v18.txt` | Round 2 最小技术协议，无固定篇数限制，以数组顺序表达排名 |
+| `prompts/research_prompt_round1_v2.txt`、`prompts/research_prompt_round2_v2.txt` | 两轮可编辑的版本化完整默认研究提示词 |
+| 其他历史 Prompt | 原样保留，不进入运行与打包 |
 
-提示词按版本新增，不覆盖旧文件。当前运行和发行资源只包含 `config.json` 与上述两份 Prompt；不依赖独立自动化策略或 Research Profile 文件。`profile_v2` 保留为请求、SQLite 和缓存兼容标识。
+提示词按版本新增，不覆盖旧文件。研究资源包含 `config.json` 与上述四份 Prompt；发行还包含正式 ICO、使用说明 SVG 和只读用户指南，均绑定 BUILD_INFO 哈希。不依赖独立自动化策略或 Research Profile 文件。`profile_v2` 保留为请求、SQLite 和缓存兼容标识。
 
 ## 测试
 
@@ -84,9 +87,10 @@ docs/
 | 测试 | 当前覆盖 |
 |---|---|
 | `test_desktop_config.py` | 当前配置、预算、模型协议、Prompt 路径及哈希，拒绝旧 Online 配置字段 |
-| `test_desktop_decoupling.py` | alpha.4 合成场景行为基线、主库 schema v1、缓存、预算、导入边界和隔离源码运行 |
+| `test_desktop_decoupling.py` | 合成场景技术门禁基线、主库 schema v1、缓存、预算、导入边界和隔离源码运行 |
 | `test_desktop_pipeline.py` | 假 Atom、日期边界、计数、排序、冻结快照、进度及安全传输诊断 |
-| `test_desktop_analysis.py` | mock HTTP 两轮集成、非空证据规范化与无效证据容错、门控、预算、单次 attempt、工作数据隔离和日报事实 |
+| `test_desktop_analysis.py` | mock HTTP 两轮集成、可选自由评价、门控、预算、单次 attempt、工作数据隔离和日报事实 |
+| `test_research_prompt_protocol.py` | 最小身份协议、跨领域自由评价、第二轮交接独立性、Token 并列裁决、缓存及安全日报 |
 | `test_desktop_secrets.py` | 密文落盘、错误、路径和 Windows DPAPI 假值往返 |
 | `test_desktop_app.py` | offscreen GUI、告知拒绝、线程、凭据交互和日报展示失败 |
 | `test_desktop_diagnostics.py` | JSONL、身份关联、作用域、线程安全、内存降级和隐私 canary |

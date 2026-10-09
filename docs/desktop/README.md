@@ -1,6 +1,6 @@
 # Desktop 文档入口
 
-当前版本为 `0.1.0-alpha.10`，新增两轮独立研究要求管理、整卡提示词入口及历史详情“生成时间”标签。导航为首页、提示词、历史、设置；延续现有 Fluent、灰蓝卡片、正式图标、任务进度及安全边界。最新公开成品为 [alpha 10 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.10)，运行与验证方式见运行手册。
+当前版本为 `0.1.0-alpha.11`，两轮编辑窗口管理完整研究 Prompt，研究判断及排序由用户定义，第二轮不继承第一轮评价或排名。导航与现有 Fluent、灰蓝卡片、正式图标、任务进度及安全边界保持。alpha 11 当前为本地技术候选；最新公开成品仍为 [alpha 10 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.10)，运行与验证方式见运行手册。
 
 每次启动后首次开始分析前必须显示模型数据发送、费用、DPAPI 凭据与本地运行数据告知；用户拒绝时不消费快照、不调用模型。
 
@@ -9,6 +9,7 @@
 | [Desktop 规范](DESKTOP_SPEC.md) | GUI、DPAPI、候选快照、一次性分析与日报行为 |
 | [Desktop 运行手册](DESKTOP_OPERATIONS.md) | 源码启动、依赖、本机构建、portable 验证与运行排错 |
 | [Desktop 结构](DESKTOP_STRUCTURE.md) | Desktop 包内文件及 runtime 数据职责 |
+| [用户指南](USER_GUIDE.md) | GUI 内置使用说明唯一正文，面向普通用户的当前操作方法 |
 
 根 [项目文档索引](../README.md) 和 [AGENTS.md](../../AGENTS.md) 继续约束本入口。核心筛选规则唯一来源为 [PROJECT_SPEC.md](../PROJECT_SPEC.md)；本目录说明 GUI、凭据、候选快照和运行行为，不复制两轮筛选、PDF 或标签规范。
 

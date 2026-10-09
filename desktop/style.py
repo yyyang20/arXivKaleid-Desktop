@@ -44,7 +44,7 @@ class SurfaceCard(CardWidget):
 
 
 PAGE_STYLE = f"""
-QWidget#homePage, QWidget#historyPage, QWidget#settingsContent {{
+QWidget#homePage, QWidget#historyPage, QWidget#settingsContent, QWidget#userGuidePage {{
     background: {PAGE_BACKGROUND};
     color: {TEXT_PRIMARY};
 }}

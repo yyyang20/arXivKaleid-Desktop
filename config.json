@@ -1,9 +1,7 @@
 {
   "project_name": "arXivKaleid",
-  "round1_max_selected_n": 10,
-  "round1_selection_policy": "top_k_daily_budget",
-  "round1_selection_policy_version": "top_k_daily_budget_v4",
-  "final_max_recommendations": 5,
+  "round1_selection_policy": "user_prompt_selection",
+  "round1_selection_policy_version": "user_prompt_selection_v1",
   "request_timeout_seconds": 30,
   "deepseek": {
     "round1_model": "deepseek-flash",
@@ -105,8 +103,8 @@
   },
   "versions": {
     "research_profile_version": "profile_v2",
-    "round1_prompt_version": "round1_v21",
-    "round2_prompt_version": "round2_v16"
+    "round1_prompt_version": "round1_v23",
+    "round2_prompt_version": "round2_v18"
   },
   "limits": {
     "max_round1_request_tokens": 800000,
@@ -117,19 +115,19 @@
     "context_safety_margin_tokens": 72000
   },
   "paths": {
-    "round1_prompt": "prompts/relevance_round1_v21.txt",
-    "round2_prompt": "prompts/relevance_round2_v16.txt",
-    "round1_requirements": "prompts/research_requirements_round1_v1.txt",
-    "round2_requirements": "prompts/research_requirements_round2_v1.txt"
+    "round1_prompt": "prompts/relevance_round1_v23.txt",
+    "round2_prompt": "prompts/relevance_round2_v18.txt",
+    "round1_research_prompt": "prompts/research_prompt_round1_v2.txt",
+    "round2_research_prompt": "prompts/research_prompt_round2_v2.txt"
   },
-  "config_version": "desktop_config_v2",
+  "config_version": "desktop_config_v5",
   "budget": {
     "max_batch_cost_cny": "3.00"
   },
   "resource_integrity": {
-    "prompts/relevance_round1_v21.txt": "b42c5c9c26c3cd67c89a08d86533f04bf85e08f7027732da8684ffb1a4976571",
-    "prompts/relevance_round2_v16.txt": "a1b5b0f8f4937dca73ac3dc9c94bf0bd16b34ee69e11d225a2f9dc7cfd02b7c1",
-    "prompts/research_requirements_round1_v1.txt": "1a0929a40f280e0904973d8512d40812112ed889b93d322fb73985f34ac2efda",
-    "prompts/research_requirements_round2_v1.txt": "ef7c61e972032715ed4e8a7ca56b1d38d9970db66eb815780ba88db1c43715b1"
+    "prompts/relevance_round1_v23.txt": "a197d2e256431e6934114e192e3be42b13da63c1e4563485069780365dc13ca3",
+    "prompts/relevance_round2_v18.txt": "1f49bc0a35a6e51d4167189410d33fb761d34b4fccf7aac8694fd7c3677d3820",
+    "prompts/research_prompt_round1_v2.txt": "ce237d7d2afcf2d78330f86e22d92a428743af9ce55f74cbe0bbda847804891e",
+    "prompts/research_prompt_round2_v2.txt": "25ec485dc74c2ed415c0a65c90ec453579708a18b5adfe820cf90ee6565bcc70"
   }
 }

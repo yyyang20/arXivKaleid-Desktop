@@ -31,7 +31,7 @@ from desktop.paths import checked_path
 from desktop.progress import ProgressEvent
 from scripts.local_artifacts import ArtifactRun, inventory, temporary_environment
 from desktop.history import HistoryStore
-from portable_visual import synthetic_snapshot as report_snapshot, synthetic_analysis_result, exercise_history, exercise_requirements
+from portable_visual import synthetic_snapshot as report_snapshot, synthetic_analysis_result, exercise_history, exercise_requirements, exercise_user_guide
 
 
 class MemorySecretStore:
@@ -161,7 +161,7 @@ def visual_qa(run):
             raise RuntimeError("qa_analysis_gate_timeout")
         for stage, message in (
             ("fulltext", "全文提取完成 · 已处理 9 / 9"),
-            ("round2", "Round 2 完成 · 最终推荐 4 篇"),
+            ("round2", "Round 2 完成 · 最终推荐 8 篇"),
             ("report", "日报生成完成"),
         ):
             progress(ProgressEvent(task_type="analysis", stage=stage, state="completed", message=message))
@@ -179,6 +179,7 @@ def visual_qa(run):
             window.show()
             capture("01-initial")
             requirements = exercise_requirements(application, window, capture, output)
+            user_guide = exercise_user_guide(application, window, capture)
             window.switch_page(window.history_page)
             wait_until(lambda: window.history_worker is None)
             assert window.history_page.model.rowCount() == 0
@@ -216,6 +217,9 @@ def visual_qa(run):
             window.prompt_page.open_round('round2')
             assert window.prompt_page.busy and not window.prompt_page.restore_button.isEnabled()
             capture('05b-prompts-locked')
+            window.switch_page(window.user_guide_page)
+            assert window.user_guide_page.loaded and window.worker is not None
+            capture('26-user-guide-during-analysis')
             window.switch_page(window.settings_page)
             capture("06-settings-locked")
             window.switch_page(window.home_page)
@@ -261,7 +265,7 @@ def visual_qa(run):
         run.finish_evidence(close_qa)
     (output / "qa.json").write_text(json.dumps({
         "version": app.__version__, "qt_platform": application.platformName(),
-        "offline_synthetic": True, "history": history, "requirements": requirements, "captures": captures,
+        "offline_synthetic": True, "history": history, "requirements": requirements, "user_guide": user_guide, "captures": captures,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     compose_captures(output, "overview.png", [
         ("01-initial", "初始状态"), ("02-fetching", "正在获取候选"),

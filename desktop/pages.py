@@ -146,7 +146,7 @@ class SettingsPage(ScrollArea):
         about_card, about = card("关于 arXivKaleid Desktop")
         self.version_label = SubtitleLabel(f"v{__version__}")
         about.addWidget(self.version_label)
-        about.addWidget(wrapping_label("面向强引力成像、偏振和新时空解研究的论文筛选工具。"))
+        about.addWidget(wrapping_label("按用户两轮完整研究提示词筛选 arXiv 论文的工具。"))
         about.addWidget(wrapping_label(
             "两轮分析使用你自己的 DeepSeek API，可能产生费用。\n"
             "没有维护者服务器中转或遥测；本地运行数据与凭据由你管理。\n"

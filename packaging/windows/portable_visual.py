@@ -45,7 +45,7 @@ def synthetic_snapshot(day):
     return app.CandidateSnapshot(day, datetime.now(timezone.utc) - timedelta(hours=2), 126, 117, papers)
 
 
-def synthetic_analysis_result(attempt, source_root=None, *, recommendation_count=4):
+def synthetic_analysis_result(attempt, source_root=None, *, recommendation_count=8):
     """合成 SQLite 事实经真实校验器和日报生成器；不手写日报模板。"""
     source_root = source_root if source_root is not None else pipeline.PROJECT_ROOT
     destination = paths.runtime_path(source_root, "work", "synthetic-report", attempt.operation_id)
@@ -61,11 +61,11 @@ def synthetic_analysis_result(attempt, source_root=None, *, recommendation_count
         main.insert_papers(connection, papers)
         round1, _ = main.validate_round1_result(dict(
             task_type="round1_abstract_screening", profile_version="profile_v2",
-            prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION, selection_policy="top_k_daily_budget",
-            selection_policy_version="top_k_daily_budget_v4",
-            selected_papers=[dict(candidate_index=i + 1, content_label="成像", reason="离线合成验证：黑洞偏振图像。") for i in range(10)],
-        ), papers, max_selected=10, profile_version="profile_v2", prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION,
-            selection_policy_version="top_k_daily_budget_v4")
+            prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION, selection_policy=config["round1_selection_policy"],
+            selection_policy_version=config["round1_selection_policy_version"],
+            selected_papers=[dict(candidate_index=i + 1, evaluation="离线合成验证：方法、数值结果与阅读价值。") for i in range(10)],
+        ), papers, profile_version="profile_v2", prompt_version=main.CURRENT_ROUND1_PROMPT_VERSION,
+            selection_policy_version=config["round1_selection_policy_version"])
         assert round1["batch_valid"]
         selected = round1["selected_papers"]
         main.save_round1_screening_results(connection, run_id, selected, config, selection_audit=round1["selection_audit"])
@@ -82,14 +82,19 @@ def synthetic_analysis_result(attempt, source_root=None, *, recommendation_count
             task_type=main.ROUND2_TASK_TYPE, selection_policy=main.ROUND2_SELECTION_POLICY,
             profile_version="profile_v2", prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION,
             final_recommendations=[dict(arxiv_id=p["arxiv_id"], version=p["version"],
-                                        content_label="成像", reason="离线合成验证：推荐正文与保存快照一致。")
-                                   for p in selected[:recommendation_count]],
-        ), selected, max_recommendations=5, profile_version="profile_v2", prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION)
+                                        evaluation="离线合成验证：推荐正文与保存快照一致。")
+                                   for p in list(reversed(selected))[:recommendation_count]],
+        ), selected, profile_version="profile_v2", prompt_version=main.CURRENT_ROUND2_PROMPT_VERSION)
         assert round2["batch_valid"]
         recommendations = round2["final_recommendations"]
         main.save_round2_screening_results(connection, run_id, recommendations, config, selection_audit=round2["selection_audit"])
         main.finish_run(connection, run_id, "success", "离线合成验证", main.current_time_iso())
         markdown = build_desktop_report(connection, fulltext_database, run_id, attempt.snapshot)
+        # 真实日报生成器必须保留超过五篇的模型顺序，且连续显示排名。
+        assert len(recommendations) == recommendation_count
+        section = markdown.split('## Round 1 入围论文')[0]
+        positions = [section.index(f"### Rank {i+1}：{p['title']}") for i, p in enumerate(recommendations)]
+        assert positions == sorted(positions) and section.count('### Rank ') == recommendation_count
     return app.AnalysisResult(run_id, markdown, len(recommendations), operation_id=attempt.operation_id,
                               snapshot_id=attempt.snapshot.snapshot_id, candidate_count=attempt.snapshot.round1_count,
                               report_completed_at=datetime.now(timezone.utc),
@@ -262,6 +267,70 @@ def memory_bytes():
     return values.private
 
 
+def exercise_user_guide(application, window, capture):
+    """真实鼠标、键盘和滚动检查；不运行抓取、分析或外部浏览器。"""
+    from desktop.user_guide import GUIDE_ROUTES
+    page = window.user_guide_page
+    window.switch_page(page)
+    assert page.loaded and page.browser.isReadOnly()
+    capture('23-user-guide')
+    text = page.browser.toPlainText()
+    assert '## ' not in text and '**' not in text and '60 页' in text
+    # 使用实际渲染的链接位置点击，不用信号代替鼠标命中。
+    for label, address in [('设置', 'arxivkaleid://settings'), ('提示词', 'arxivkaleid://prompts'),
+                           ('首页', 'arxivkaleid://home'), ('历史', 'arxivkaleid://history')]:
+        window.switch_page(page)
+        cursor = page.browser.document().find(label)
+        assert not cursor.isNull()
+        cursor.setPosition(cursor.selectionStart() + 1)
+        page.browser.setTextCursor(cursor)
+        page.browser.ensureCursorVisible()
+        application.processEvents()
+        point = page.browser.cursorRect(cursor).center()
+        assert page.browser.anchorAt(point) == address
+        viewport = page.browser.viewport()
+        for kind, buttons in [(QEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton),
+                              (QEvent.Type.MouseButtonRelease, Qt.MouseButton.NoButton)]:
+            event = QMouseEvent(kind, QPointF(point), QPointF(viewport.mapToGlobal(point)),
+                                Qt.MouseButton.LeftButton, buttons, Qt.KeyboardModifier.NoModifier)
+            QCoreApplication.sendEvent(viewport, event)
+        application.processEvents()
+        assert window.pages.currentWidget() is getattr(window, GUIDE_ROUTES[address])
+    window.switch_page(page)
+    page.browser.setFocus()
+    for key, modifiers in [(Qt.Key.Key_Home, Qt.KeyboardModifier.ControlModifier),
+                            (Qt.Key.Key_Tab, Qt.KeyboardModifier.NoModifier),
+                            (Qt.Key.Key_Return, Qt.KeyboardModifier.NoModifier)]:
+        QCoreApplication.sendEvent(page.browser, QKeyEvent(QEvent.Type.KeyPress, key, modifiers))
+        QCoreApplication.sendEvent(page.browser, QKeyEvent(QEvent.Type.KeyRelease, key, modifiers))
+    assert window.pages.currentWidget() is window.settings_page, 'guide_keyboard_link_failed'
+    window.switch_page(page)
+    for address in ('file:///C:/private', 'https://example.org', 'arxivkaleid://home?run=1'):
+        page.browser.anchorClicked.emit(QUrl(address))
+        assert window.pages.currentWidget() is page
+    old_font, old_size = window.font(), window.size()
+    old_body_font = page.browser.font()
+    initial_document_height = page.browser.document().size().height()
+    window.setFont(QFont('Microsoft YaHei UI', 20))
+    page.browser.setFont(QFont('Microsoft YaHei UI', 20))
+    window.resize(window.minimumWidth(), window.minimumHeight())
+    capture('24-user-guide-minimum-large-font')
+    assert page.browser.document().defaultFont().pointSizeF() == 20
+    assert page.browser.document().size().height() > initial_document_height
+    bar = page.browser.verticalScrollBar()
+    assert bar.maximum() > 0 and page.browser.horizontalScrollBar().maximum() == 0
+    bar.setValue(bar.maximum())
+    capture('25-user-guide-scrolled')
+    assert page.browser.toPlainText() == text
+    window.setFont(old_font)
+    page.browser.setFont(old_body_font)
+    window.resize(old_size)
+    bar.setValue(0)
+    window.switch_page(window.home_page)
+    return dict(readonly=True, mouse_links=4, keyboard_link=True, illegal_links_rejected=True,
+                minimum_large_font=True, scrolling=True)
+
+
 def exercise_requirements(application, window, capture, output):
     """真实纯文本输入、模态对话框和保存失败；只供隔离验证副本使用。"""
     from desktop.research_requirements import RequirementsError
@@ -306,6 +375,8 @@ def exercise_requirements(application, window, capture, output):
         QCoreApplication.sendEvent(first, QEvent(QEvent.Type.Leave))
         application.processEvents()
     for stage, entry in page.entries.items():
+        assert entry.title.text() == ('第一轮完整研究提示词' if stage == 'round1' else '第二轮完整研究提示词')
+        assert '提示词' in entry.state.text() and 'Prompt' not in entry.state.text()
         for point in (entry.icon_rect().center(), QPoint(entry.width() - 100, entry.height() // 2),
                       entry.title.mapTo(entry, entry.title.rect().center()),
                       entry.state.mapTo(entry, entry.state.rect().center()),
@@ -387,7 +458,7 @@ def exercise_requirements(application, window, capture, output):
         page.editor.setFocus()
         # 通过 Qt 输入法提交事件验证真实控件处理中文，避免仅 setPlainText 冒充输入。
         event = QInputMethodEvent()
-        text = '离线合成研究要求 ' + stage + '：重点关注黑洞阴影和偏振图像。\n排除仅关键词相关论文。'
+        text = '离线合成研究要求 ' + stage + '：关注数值方法和计算结果。\n按用户研究价值排序。'
         event.setCommitString(text)
         QCoreApplication.sendEvent(page.editor, event)
         assert page.editor.toPlainText() == text
@@ -395,7 +466,7 @@ def exercise_requirements(application, window, capture, output):
         capture('15-' + stage + '-editing')
         original = page.store.save
         def fail(*_args, **_kwargs):
-            raise RequirementsError('研究要求保存失败；原来的生效内容未改变。')
+            raise RequirementsError('研究提示词保存失败；原来的生效内容未改变。')
         page.store.save = fail
         try:
             assert not page.save() and page.dirty and not page.saved.custom
@@ -427,7 +498,7 @@ def exercise_requirements(application, window, capture, output):
         widget.setFont(QFont('Microsoft YaHei UI', 12))
     window.resize(850, 680)
     page.begin_edit()
-    page.editor.appendPlainText('\n'.join('较大字体滚动验证：关注强引力偏振图像。' for _ in range(60)))
+    page.editor.appendPlainText('\n'.join('较大字体滚动验证：关注数值方法与计算结果。' for _ in range(60)))
     capture('21-prompts-minimum-large-font')
     assert all(widget.font().pointSizeF() == 12 for widget in controls)
     assert page.editor.height() >= 160
@@ -511,7 +582,7 @@ def exercise(application, window, root, synthetic_key):
             progress(ProgressEvent(task_type='analysis', stage=stage, state=state, message=message))
         assert gate.wait(15)
         for stage, message in [('fulltext', '全文提取完成 · 已处理 9 / 9'),
-                               ('round2', 'Round 2 完成 · 最终推荐 4 篇'), ('report', '日报生成完成')]:
+                               ('round2', 'Round 2 完成 · 最终推荐 8 篇'), ('report', '日报生成完成')]:
             progress(ProgressEvent(task_type='analysis', stage=stage, state='completed', message=message))
         return synthetic_analysis_result(attempt)
 
@@ -528,6 +599,7 @@ def exercise(application, window, root, synthetic_key):
         window.show()
         capture('01-initial')
         requirements = exercise_requirements(application, window, capture, output)
+        user_guide = exercise_user_guide(application, window, capture)
         window.switch_page(window.history_page)
         wait(lambda: window.history_worker is None)
         assert window.history_page.model.rowCount() == 0
@@ -565,6 +637,9 @@ def exercise(application, window, root, synthetic_key):
         window.prompt_page.open_round('round1')
         assert window.prompt_page.busy and not window.prompt_page.edit_button.isEnabled()
         capture('05b-prompts-locked')
+        window.switch_page(window.user_guide_page)
+        assert window.user_guide_page.loaded and window.worker is not None
+        capture('26-user-guide-during-analysis')
         window.switch_page(window.settings_page)
         capture('06-settings-locked')
         window.switch_page(window.home_page)
@@ -659,7 +734,7 @@ def exercise(application, window, root, synthetic_key):
         samples.append(memory_bytes())
     assert samples[-1] - samples[3] < 32 * 1024 * 1024, 'portable_window_memory_growth'
     assert not gc.garbage
-    return {'captures': captures, 'history': history, 'requirements': requirements, 'qt_platform': application.platformName(),
+    return {'captures': captures, 'history': history, 'requirements': requirements, 'user_guide': user_guide, 'qt_platform': application.platformName(),
             'screen': screen.name(),
             'style': application.style().objectName(), 'loaded_libraries': loaded_libraries(root),
             'autosave': True, 'save_failure': True, 'key_locked': True, 'safe_links': True, 'log_directory_action': True,

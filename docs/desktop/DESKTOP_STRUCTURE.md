@@ -9,6 +9,8 @@
 | `desktop/config.py` | Desktop 只读配置契约、预算和 Prompt 资源哈希校验 |
 | `desktop/research_requirements.py` | 无 Qt 的两轮保存记录、文本校验、原子替换、默认资源及不可变分析快照 |
 | `desktop/prompt_page.py` | 两轮统一详情、纯文本编辑、保存/取消/恢复默认和未保存保护 |
+| `desktop/user_guide.py` | 用户指南安全读取、冻结哈希校验、只读 Markdown；内部跳转复用主窗口切页保护 |
+| `docs/desktop/USER_GUIDE.md` | 内置使用说明唯一正文；portable 位于 `_internal/docs/desktop/USER_GUIDE.md` |
 | `desktop/paths.py` | application/resource/runtime 根、路径安全、时区与 bundled curl 校验 |
 | `desktop/errors.py` | 稳定错误和 outcome、GUI 文案及按实际影响范围判定 paper/system 的纯模型 |
 | `desktop/diagnostics.py` | session/operation/snapshot/fetch/run 关联、脱敏 JSONL、安全 traceback、计时与内存降级 |
@@ -38,6 +40,7 @@
 | `scripts/visual_qa_desktop.py` | 禁止网络/模型、内存假 Key、合成业务事件驱动的真实 Qt 截图；产物仅在项目忽略目录 |
 | `scripts/generate_app_icon.py` | 使用现有 PySide6 从 A0 SVG 母版确定性生成 16～256 px Windows ICO 与可选验收预览 |
 | `assets/app-icon.svg`、`assets/app-icon.ico` | 透明画布 A0 矢量母版及 Qt/EXE 共用的正式多尺寸图标 |
+| `assets/user-guide.svg` | 使用说明的线框书本图标，源码与冻结程序共用，随包绑定资源哈希 |
 | `packaging/windows/portable_visual.py` | 冻结诊断专用合成 QThread 状态、真实截图、DLL 来源和窗口生命周期验证，不进入正式业务流程 |
 | `tests/test_portable_diagnostic.py` | Windows 合成 DPAPI 的独立进程完整诊断路径、后置检查失败与已用 runtime 拒绝回归 |
 | `tests/test_desktop_portable.py` | source/frozen 路径、链接、可写性、bundled curl 与工作库边界 |
@@ -50,8 +53,9 @@
 | `tests/test_desktop_diagnostics.py` | JSONL schema、关联身份、作用域、线程安全、内存降级和隐私 canary |
 | `tests/test_desktop_config.py` | 当前配置、预算、协议和 Prompt 哈希契约 |
 | `tests/test_research_requirements.py` | 独立保存、坏配置、冻结取值、哈希/缓存/Token、隐私和历史默认语义 |
-| `docs/desktop/PROMPT_SPLIT.md` | 旧 Prompt 各规则的固定/研究层拆分核对 |
-| `tests/test_desktop_decoupling.py` | alpha.4 行为基线、schema v1、缓存、预算和独立源码运行 |
+| `docs/desktop/PROMPT_SPLIT.md` | 完整研究 Prompt 与最小技术协议边界核对 |
+| `tests/test_research_prompt_protocol.py` | 两轮身份协议、任意评价、无评价、交接与 Token 裁决独立性 |
+| `tests/test_desktop_decoupling.py` | 技术门禁基线、schema v1、缓存、预算和独立源码运行 |
 | `tests/test_desktop_governance.py` | 根与局部治理、文档路由、当前身份、链接、发行资料副本与发布清单的只读检查 |
 
 portable 根目录包含直接来自仓库根的 GPLv3 `LICENSE`。应用源码说明按用途绑定 `BUILD_INFO.json`：技术候选引用本地冻结 commit，正式发行引用同提交的版本 tag；第三方源码归档位于 `licenses/sources/`，身份和 SHA-256 由 `packaging/windows/source-manifest.json` 固定，原许可不改写。
@@ -64,8 +68,8 @@ portable 根目录包含直接来自仓库根的 GPLv3 `LICENSE`。应用源码�
 .desktop-runtime/
 ├─ config/
 │  ├─ secret.dat
-│  ├─ round1_research_requirements.json
-│  └─ round2_research_requirements.json
+│  ├─ round1_research_prompt.json
+│  └─ round2_research_prompt.json
 ├─ cache/
 │  └─ arxiv/
 │     └─ last_request_time.txt

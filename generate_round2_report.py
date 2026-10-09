@@ -13,17 +13,11 @@ from pathlib import Path
 from typing import Any
 
 import build_round2_inputs
-import content_labels
+import main
 
 
 ROUND1_TASK_TYPE = "round1_abstract_screening"
 ROUND2_TASK_TYPE = "round2_batch_ranking"
-LEVEL_BUDGETS = {"deep_read": 1, "skim_read": 3, "backup": 1}
-RECOMMENDATION_LEVEL_DISPLAY = {
-    "deep_read": "Deep Read",
-    "skim_read": "Skim Read",
-    "backup": "Backup",
-}
 REPORT_LINK_MODE_LOCAL = "local"
 REPORT_LINK_MODE_CLOUD = "cloud"
 REPORT_LINK_MODES = (REPORT_LINK_MODE_LOCAL, REPORT_LINK_MODE_CLOUD)
@@ -55,13 +49,6 @@ def submission_date_utc(value: object) -> str:
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise RuntimeError("report_submission_timestamp_missing_timezone")
     return parsed.astimezone(timezone.utc).date().isoformat()
-
-
-def recommendation_level_display(value: object) -> str:
-    try:
-        return RECOMMENDATION_LEVEL_DISPLAY[str(value)]
-    except KeyError as exc:
-        raise RuntimeError("report_recommendation_level_invalid") from exc
 
 
 def open_readonly_database(database_path: Path) -> sqlite3.Connection:
@@ -142,23 +129,6 @@ def load_and_validate_round2(
     selected_ids = {
         (str(row["arxiv_id"]), int(row["version"])) for row in selected_rows
     }
-    round1_ranks = {
-        (str(row["arxiv_id"]), int(row["version"])): int(row["result_rank"])
-        for row in selected_rows
-    }
-    round1_labels: dict[tuple[str, int], str | None] = {}
-    for row in connection.execute(
-        """
-        SELECT arxiv_id, version, prompt_version, details_json
-        FROM screening_results
-        WHERE run_id = ? AND task_type = ? AND is_selected = 1
-        """,
-        (run["run_id"], ROUND1_TASK_TYPE),
-    ).fetchall():
-        key = (str(row["arxiv_id"]), int(row["version"]))
-        round1_labels[key] = content_labels.content_label_from_details_json(
-            row["details_json"], prompt_version=row["prompt_version"]
-        )
     candidate_ids = (
         selected_ids
         if eligible_paper_keys is None
@@ -207,9 +177,8 @@ def load_and_validate_round2(
     ).fetchall()
     if not rows:
         if (
-            audit_prompt_version in {"round2_v16"}
-            and isinstance(audit, dict)
-            and audit.get("accepted_count") == 0
+            audit_prompt_version == main.CURRENT_ROUND2_PROMPT_VERSION
+            and main.screening_stage_audit_valid(audit, expected_accepted_count=0)
         ):
             return Round2ReportData(
                 run_id=int(run["run_id"]),
@@ -246,56 +215,20 @@ def load_and_validate_round2(
 
     reasons: list[str] = []
     prompt_versions = {str(row["prompt_version"] or "") for row in rows}
-    uses_core_content_label = (
-        len(prompt_versions) == 1
-        and content_labels.round2_prompt_uses_core_content_label(
-            next(iter(prompt_versions))
-        )
-    )
-    uses_tolerant_contract = prompt_versions == {"round2_v16"}
-    if not uses_tolerant_contract:
-        reasons.append("Desktop 仅支持 round2_v16 结果。")
-    expected_count = min(5, len(candidate_ids))
-    if not uses_tolerant_contract and len(rows) != expected_count:
-        reasons.append(
-            f"第二轮结果数量应为 {expected_count}，实际为 {len(rows)}。"
-        )
+    if prompt_versions != {main.CURRENT_ROUND2_PROMPT_VERSION}:
+        reasons.append("Desktop 仅支持当前版本的第二轮技术协议结果。")
     ranks = [row["result_rank"] for row in rows]
     if ranks != list(range(1, len(rows) + 1)):
         reasons.append("final rank 不是从 1 开始的连续整数。")
-    if uses_tolerant_contract and (
-        not isinstance(audit, dict) or audit.get("accepted_count") != len(rows)
-    ):
-        reasons.append("查准率优先契约缺少与有效推荐数量一致的选择审计。")
+    if not main.screening_stage_audit_valid(audit, expected_accepted_count=len(rows)):
+        reasons.append("缺少与有效推荐数量一致的技术选择审计。")
 
-    level_counts = {level: 0 for level in LEVEL_BUDGETS}
     for row in rows:
         key = (str(row["arxiv_id"]), int(row["version"]))
         if key not in candidate_ids:
             reasons.append(
                 f"{key[0]}v{key[1]} 不属于该 run 通过页数门控的第二轮候选集合。"
             )
-        level = str(row["recommendation_level"] or "")
-        if uses_core_content_label:
-            expected_level = (
-                "deep_read"
-                if int(row["result_rank"]) == 1
-                else "skim_read"
-                if 2 <= int(row["result_rank"]) <= 4
-                else "backup"
-            )
-            if level != expected_level:
-                reasons.append(
-                    f"Rank {row['result_rank']} 的确定性推荐级别应为 {expected_level}。"
-                )
-        elif level not in level_counts:
-            reasons.append(f"存在非法 recommendation_level：{level or 'empty'}。")
-        else:
-            level_counts[level] += 1
-    if not uses_core_content_label:
-        for level, count in level_counts.items():
-            if count > LEVEL_BUDGETS[level]:
-                reasons.append(f"{level} 数量 {count} 超过预算 {LEVEL_BUDGETS[level]}。")
 
     for field in ("model_name", "prompt_version", "research_profile_version"):
         values = {str(row[field] or "") for row in rows}
@@ -310,9 +243,7 @@ def load_and_validate_round2(
             details = {}
         if not isinstance(details, dict):
             details = {}
-        item["suggested_reading_scope"] = str(
-            details.get("suggested_reading_scope") or ""
-        )
+        item["evaluation"] = str(item.get("reason") or "")
         model_position = details.get("model_position")
         item["model_position"] = (
             model_position
@@ -320,31 +251,6 @@ def load_and_validate_round2(
             else None
         )
         item["submission_date_utc"] = submission_date_utc(item.get("updated"))
-        key = (str(item["arxiv_id"]), int(item["version"]))
-        round1_result_rank = round1_ranks.get(key)
-        if round1_result_rank is None or round1_result_rank < 1:
-            reasons.append(
-                f"{item['arxiv_id']}v{item['version']} 无法连接对应的 Round 1 Rank。"
-            )
-        item["round1_result_rank"] = round1_result_rank
-        if key not in round1_labels:
-            reasons.append(
-                f"{item['arxiv_id']}v{item['version']} 无法连接对应的第一轮内容标签。"
-            )
-        if uses_core_content_label:
-            try:
-                item["content_label"] = (
-                    content_labels.round2_content_label_from_details_json(
-                        item.get("details_json"),
-                        prompt_version=item.get("prompt_version"),
-                    )
-                )
-            except RuntimeError:
-                reasons.append(
-                    f"{item['arxiv_id']}v{item['version']} 缺少合法的第二轮全文标签。"
-                )
-        else:
-            item["content_label"] = round1_labels.get(key)
         recommendations_list.append(item)
     recommendations = tuple(recommendations_list)
     return Round2ReportData(
@@ -427,14 +333,6 @@ def build_round2_section(
             and page_count > 0
             else "未记录"
         )
-        round1_result_rank = row.get("round1_result_rank")
-        round1_rank_text = (
-            f"Rank {round1_result_rank}"
-            if isinstance(round1_result_rank, int)
-            and not isinstance(round1_result_rank, bool)
-            and round1_result_rank > 0
-            else "未记录"
-        )
         lines.extend(
             [
                 f"### Rank {row['result_rank']}：{row['title']}",
@@ -444,16 +342,8 @@ def build_round2_section(
                 f"{submission_date_utc(row.get('updated'))}",
                 f"- 作者：{row.get('authors') or '未知'}",
                 f"- 分类：{row.get('categories') or '未知'}",
-                *(
-                    [f"- 内容标签：{row['content_label']}"]
-                    if row.get("content_label")
-                    else []
-                ),
                 f"- PDF 实际页数：{page_count_text}",
-                f"- Round 1 原始位置：{round1_rank_text}",
-                "- 推荐级别："
-                f"{recommendation_level_display(row['recommendation_level'])}",
-                f"- Round 2 理由：{row['reason'] or '未提供'}",
+                *([f"- Round 2 评价：{row['evaluation']}"] if row.get("evaluation") else []),
                 "- arXiv 摘要页："
                 f"[打开摘要页]({row.get('abs_url') or '未知'})",
                 "- 在线 PDF："

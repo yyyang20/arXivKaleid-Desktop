@@ -1,8 +1,8 @@
 # Desktop 规范
 
-当前版本 `0.1.0-alpha.10` 使用 PySide6 与基础版 PySide6-Fluent-Widgets。主窗口采用 Windows 原生标题栏与 Fluent 导航，顺序为首页、提示词、历史、设置；版本显示统一读取 `desktop.__version__`。
+当前版本 `0.1.0-alpha.11` 使用 PySide6 与基础版 PySide6-Fluent-Widgets。主窗口采用 Windows 原生标题栏与 Fluent 导航，顺序为首页、提示词、历史、使用说明、设置；版本显示统一读取 `desktop.__version__`。
 
-四页统一使用浅灰蓝背景、略浅的同色卡片、低对比度冷灰边框、8 px 卡片圆角和一致的页面边距；不使用阴影或装饰性渐变。设置页 API Key 输入框使用接近卡片的灰蓝底色与淡边框，仅在聚焦时显示蓝色描边。
+五页统一使用浅灰蓝背景、略浅的同色卡片、低对比度冷灰边框、8 px 卡片圆角和一致的页面边距；不使用阴影或装饰性渐变。设置页 API Key 输入框使用接近卡片的灰蓝底色与淡边框，仅在聚焦时显示蓝色描边。
 
 ## 页面与任务展示
 
@@ -16,13 +16,21 @@
 
 ## Portable 路径与资源
 
-Windows 10/11 x64 发行形式为 PyInstaller one-folder ZIP，解压后双击 `arXivKaleid.exe`。application root 是 EXE 所在目录，只读 bundled resource root 是其 `_internal/`，所有运行数据均在 EXE 同级 `runtime/`。源码模式使用项目根与 `.desktop-runtime/`。两种模式使用同一 `config.json`、两份固定协议和两份默认研究要求，四份资源均校验哈希。
+Windows 10/11 x64 发行形式为 PyInstaller one-folder ZIP，解压后双击 `arXivKaleid.exe`。application root 是 EXE 所在目录，只读 bundled resource root 是其 `_internal/`，所有运行数据均在 EXE 同级 `runtime/`。源码模式使用项目根与 `.desktop-runtime/`。两种模式使用同一 `config.json`、两份领域无关技术协议和两份默认完整研究 Prompt，四份资源均校验哈希。
 
 正式 A0 图标使用透明画布上的深海军蓝圆角底板和四色几何 K；SVG 母版位于 `assets/app-icon.svg`，Windows ICO 包含 16、24、32、48、64、256 px 图层，其中 16/24 px 使用同一几何的无渐变简化渲染。`assets/app-icon.ico` 同时用于 Qt 应用/窗口图标和 PyInstaller EXE 图标。
 
 路径由 `sys.frozen`、`sys.executable` 和资源目录确定，不依赖 cwd；拒绝 `..`、越界路径及 symlink/reparse point。运行目录不可写或资源缺失时，GUI 显示固定错误并禁止操作，不回退到 AppData、Documents、home 或注册表。bundled curl 缺失或哈希不符时安全失败，不搜索系统 PATH；源码模式继续使用系统 curl。
 
 portable 的 SQLite、锁、缓存、PDF、诊断日志、DPAPI 密文分别使用 `runtime/work/`、`runtime/cache/arxiv/`、`runtime/pdfs/<候选日期>/`、`runtime/logs/`、`runtime/config/secret.dat`。文档下文的 `.desktop-runtime/` 路径指源码模式，portable 对应替换为 `runtime/`。IANA `Asia/Shanghai` 数据随包提供，不更改业务时区语义。
+
+## 使用说明
+
+导航使用 `assets/user-guide.svg` 的打开书本线框图标，与其他入口的线框风格保持一致。
+
+“使用说明”在设置上方，正文来自 [用户指南](USER_GUIDE.md)，以只读、可复制、独立滚动的 Markdown 显示。标题和简介从正文提取，不重复显示。四个蓝色内部链接 `arxivkaleid://home`、`arxivkaleid://prompts`、`arxivkaleid://history`、`arxivkaleid://settings` 仅复用受未保存保护的页面切换，不触发抓取、模型或系统浏览器。其他地址及附加参数拒绝，日报 arXiv 外链权限不扩大。分析期间仍可查看说明和导航，原控件禁改规则保持。
+
+源码读取项目内指南，portable 读取 `_internal/docs/desktop/USER_GUIDE.md` 并核对 BUILD_INFO 资源哈希；不依赖 cwd，不加载图片或其他外部资源。指南缺失、编码/结构错误或校验失败时只在本页显示固定提示，不替换正文，不影响正常分析入口。指南不进入模型请求或运行数据。
 
 ## API Key
 
@@ -77,11 +85,11 @@ portable 的 SQLite、锁、缓存、PDF、诊断日志、DPAPI 密文分别使�
 
 ## 一次性两轮分析
 
-每次启动窗口后，第一次开始分析前显示简短告知：标题、摘要、通过门控后的 PDF 提取全文和已保存研究要求会发送到用户自己的 DeepSeek API，并可能产生费用；API Key 在本机由 DPAPI 加密保存，PDF、SQLite 和缓存位于本机，没有维护者服务器中转或遥测。对话框默认为拒绝；拒绝时不创建分析 attempt、不消费快照、不启动线程或模型请求。用户接受后，本次窗口生命周期不重复提示。
+每次启动窗口后，第一次开始分析前显示简短告知：标题、摘要、通过门控后的 PDF 提取全文和已保存完整研究 Prompt 会发送到用户自己的 DeepSeek API，并可能产生费用；API Key 在本机由 DPAPI 加密保存，PDF、SQLite 和缓存位于本机，没有维护者服务器中转或遥测。对话框默认为拒绝；拒绝时不创建分析 attempt、不消费快照、不启动线程或模型请求。用户接受后，本次窗口生命周期不重复提示。
 
 分析前检查冻结快照、尚未尝试标记和 Key。通过检查后立即消费快照并禁用抓取、日历和分析按钮；后台直接按冻结顺序处理全部 `(arxiv_id, version)` 候选，不重新请求 arXiv、不改变日期、不从历史 SQLite 重建候选。
 
-分析使用现行固定协议、冻结研究要求、`profile_v2` 兼容标识、模型、严格校验、选择策略、PDF 下载和全文门控函数；不会另行发送 Research Profile 内容。核心筛选规则见 [PROJECT_SPEC.md](../PROJECT_SPEC.md)。Round 1 完成状态和入围结果写入当前工作库，PDF 只处理实际入围论文，Round 2 只接受当前 run 的合格全文，不补位或重排。
+分析使用现行技术协议、冻结完整研究 Prompt、`profile_v2` 兼容标识、模型、结构校验、技术策略、PDF 下载和全文门控函数；不会另行发送 Research Profile 内容。核心筛选规则见 [PROJECT_SPEC.md](../PROJECT_SPEC.md)。Round 1 完成状态和入围结果写入当前工作库，PDF 只处理实际入围论文；Round 2 只接受当前 run 的合格全文，按论文身份排列输入，不接收第一轮评价或排名，不补位或按研究语义重排结果。
 
 GUI 当前 Key 显式注入两个客户端；Round 2 需要非空 Key override，不读取传统 Secret 文件。Desktop 不执行 DeepSeek self check；每轮最多一次 HTTP attempt，失败不重试。无候选不调用模型，Round 1 零入围或无合格全文不调用 Round 2，两轮均允许零推荐。
 
@@ -107,19 +115,19 @@ PDF 与全文异常按实际影响范围判断：已进入单篇边界、共享�
 
 ## Desktop 日报
 
-`desktop/report.py` 从当前 run 的 SQLite 读取计数、筛选结果、标签、PDF 页数、门控决定、模型、Token 和费用，使用 `rebuild_daily_report.py` 的数据辅助函数及 `generate_round2_report.py` 的 Round 2 推荐区块。Desktop 外壳显示候选日期、两轮输入和结果数量，以及 Round 1 入围详情；没有计划槽位或日报发布身份。
+`desktop/report.py` 从当前 run 的 SQLite 读取计数、有序结果、各轮可选评价、PDF 页数、门控决定、模型、Token 和费用，使用 `rebuild_daily_report.py` 的数据辅助函数及 `generate_round2_report.py` 的 Round 2 推荐区块。评价按安全文本展示，不强制标签或阅读级别。Desktop 外壳显示候选日期、两轮输入和结果数量，以及 Round 1 入围详情；没有计划槽位或日报发布身份。
 
 日报通过 `QTextBrowser.setMarkdown()` 渲染；仅允许打开正常的 HTTPS arXiv 摘要和 PDF 链接，本地 PDF 以相对路径信息显示。日报不写入根 `reports/daily/`，没有编辑或导出功能。分析及日报生成成功后若仅 GUI Markdown 渲染失败，SQLite run 保持成功，界面明确显示“分析成功、日报展示失败”；该日报仍可保存到历史。
 
 ## 提示词页面
 
-主页面提供两轮研究要求入口、用途和已保存的默认/自定义状态。整张入口卡片均可点击，也可用 Tab 聚焦、回车或空格进入只读详情；右侧箭头仅提示入口方向，左侧笔图标不直接开始编辑。正常字体下卡片外框高度与间隔以历史卡片为准，笔图标沿用历史文档图标的尺寸与位置；较大字体下按文字换行增高。详情页采用同一布局：紧凑左对齐返回、轮次标题、用途、状态、可滚动纯文本正文及底部操作。沿用现有标题、浅灰蓝卡片与次要文字层级；正文查看时只读但可选择复制，编辑聚焦使用细蓝边框，固定协议不在编辑区域显示。主页面可滚动；最小窗口和较大字体下正文保留独立滚动与可见按钮。
+主页面提供两轮完整研究提示词入口、用途和已保存的默认/自定义状态，用户可见文案统一使用“提示词”。整张入口卡片均可点击，也可用 Tab 聚焦、回车或空格进入只读详情；右侧箭头仅提示入口方向，左侧笔图标不直接开始编辑。正常字体下卡片外框高度与间隔以历史卡片为准，笔图标沿用历史文档图标的尺寸与位置；较大字体下按文字换行增高。详情页采用同一布局：紧凑左对齐返回、轮次标题、用途、状态、可滚动纯文本正文及底部操作。沿用现有标题、浅灰蓝卡片与次要文字层级；正文查看时只读但可选择复制，编辑聚焦使用细蓝边框。所有研究建议与格式提醒均在编辑正文中；仅技术身份、输出结构及安全保护由程序管理。两轮默认的领域、10／5 篇、入选说明和第二轮排序依据均可修改；第一轮日报采用列表编号，第二轮按模型顺序显示 Rank 排名。主页面可滚动；最小窗口和较大字体下正文保留独立滚动与可见按钮。
 
 编辑从最后保存值建立草稿；保存成功后退出编辑，失败保留草稿和旧生效值。取消不写磁盘，恢复进入编辑前的保存值。即使自定义文本等于默认，也仍显示自定义状态。恢复默认确认默认为取消；确认后持久替换本轮覆盖记录为 null、丢弃本轮草稿并返回查看，不影响另一轮。
 
 未保存修改单独标记。返回、切页、关闭或开始分析前提供“保存并继续 / 放弃修改 / 留在此页”，默认留在此页；保存失败不能继续离开，没有修改不弹框。分析期间可查看但禁用编辑、保存和恢复默认。候选抓取、页面切换和历史查看不销毁已有任务、候选或日报。
 
-保存格式、读取错误和实际分析取值见 [研究要求](../PROJECT_SPEC.md#研究要求)。
+保存格式、读取错误和实际分析取值见 [完整研究 Prompt](../PROJECT_SPEC.md#完整研究-prompt)。
 
 ## 日报历史
 
