@@ -15,7 +15,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 
 FIXTURE = r'''
-import importlib.util, json, shutil, sys
+import importlib.util, json, shutil, sys, hashlib
 from pathlib import Path
 from unittest.mock import patch
 root, copy, failure = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3] == 'failure'
@@ -25,10 +25,14 @@ from desktop.diagnostics import DesktopDiagnostics
 internal = copy / '_internal'
 for name in ['config.json', 'assets/app-icon.ico',
              'prompts/relevance_round1_v23.txt', 'prompts/relevance_round2_v18.txt',
-             'prompts/research_prompt_round1_v2.txt', 'prompts/research_prompt_round2_v2.txt']:
+             'prompts/research_prompt_round1_v2.txt', 'prompts/research_prompt_round2_v2.txt',
+             'docs/desktop/USER_GUIDE.md']:
     target = internal / name
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(root / name, target)
+(copy / 'BUILD_INFO.json').write_text(json.dumps({'resource_hashes': {
+    'docs/desktop/USER_GUIDE.md': hashlib.sha256((internal / 'docs/desktop/USER_GUIDE.md').read_bytes()).hexdigest()
+}}), encoding='utf-8')
 spec = importlib.util.spec_from_file_location('portable_check', root / 'packaging/windows/portable_check.py')
 diagnostic = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(diagnostic)

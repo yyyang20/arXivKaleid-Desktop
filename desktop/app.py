@@ -203,11 +203,14 @@ class DesktopWindow(QWidget):
         self.home_page = HomePage()
         self.prompt_page = PromptPage(self.requirements_store)
         self.history_page = HistoryPage()
+        from desktop.user_guide import UserGuidePage
+        self.user_guide_page = UserGuidePage(pipeline.PROJECT_ROOT)
         self.settings_page = SettingsPage()
         for page, icon, title in (
             (self.home_page, FluentIcon.HOME, "首页"),
             (self.prompt_page, FluentIcon.DOCUMENT, "提示词"),
             (self.history_page, FluentIcon.HISTORY, "历史"),
+            (self.user_guide_page, FluentIcon.BOOK_SHELF, "使用说明"),
             (self.settings_page, FluentIcon.SETTING, "设置"),
         ):
             self.pages.addWidget(page)
@@ -242,6 +245,7 @@ class DesktopWindow(QWidget):
         self.report = self.home_page.report
         self.report.anchorClicked.connect(self.open_report_link)
         self.history_page.report.anchorClicked.connect(self.open_report_link)
+        self.user_guide_page.browser.anchorClicked.connect(self.open_guide_link)
         self.history_page.open_requested.connect(self.open_history_record)
         self.history_page.delete_requested.connect(self.delete_history_record)
         self.history_page.more_requested.connect(self.load_more_history)
@@ -764,6 +768,14 @@ class DesktopWindow(QWidget):
         self.worker = None
         self.prompt_page.set_busy(False)
         worker.deleteLater()
+
+    @Slot(QUrl)
+    def open_guide_link(self, url: QUrl) -> None:
+        # 只允许四个页面入口；保持切页保护，不调用业务入口或系统浏览器。
+        from desktop.user_guide import GUIDE_ROUTES
+        target = GUIDE_ROUTES.get(url.toString())
+        if self.user_guide_page.loaded and target is not None:
+            self.switch_page(getattr(self, target))
 
     @Slot(QUrl)
     def open_report_link(self, url: QUrl) -> None:

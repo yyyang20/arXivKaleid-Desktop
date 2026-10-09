@@ -267,6 +267,64 @@ def memory_bytes():
     return values.private
 
 
+def exercise_user_guide(application, window, capture):
+    """真实鼠标、键盘和滚动检查；不运行抓取、分析或外部浏览器。"""
+    from desktop.user_guide import GUIDE_ROUTES
+    page = window.user_guide_page
+    window.switch_page(page)
+    assert page.loaded and page.browser.isReadOnly()
+    capture('23-user-guide')
+    text = page.browser.toPlainText()
+    assert '## ' not in text and '**' not in text and '60 页' in text
+    # 使用实际渲染的链接位置点击，不用信号代替鼠标命中。
+    for label, address in [('设置', 'arxivkaleid://settings'), ('提示词', 'arxivkaleid://prompts'),
+                           ('首页', 'arxivkaleid://home'), ('历史', 'arxivkaleid://history')]:
+        window.switch_page(page)
+        cursor = page.browser.document().find(label)
+        assert not cursor.isNull()
+        cursor.setPosition(cursor.selectionStart() + 1)
+        page.browser.setTextCursor(cursor)
+        page.browser.ensureCursorVisible()
+        application.processEvents()
+        point = page.browser.cursorRect(cursor).center()
+        assert page.browser.anchorAt(point) == address
+        viewport = page.browser.viewport()
+        for kind, buttons in [(QEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton),
+                              (QEvent.Type.MouseButtonRelease, Qt.MouseButton.NoButton)]:
+            event = QMouseEvent(kind, QPointF(point), QPointF(viewport.mapToGlobal(point)),
+                                Qt.MouseButton.LeftButton, buttons, Qt.KeyboardModifier.NoModifier)
+            QCoreApplication.sendEvent(viewport, event)
+        application.processEvents()
+        assert window.pages.currentWidget() is getattr(window, GUIDE_ROUTES[address])
+    window.switch_page(page)
+    page.browser.setFocus()
+    for key, modifiers in [(Qt.Key.Key_Home, Qt.KeyboardModifier.ControlModifier),
+                            (Qt.Key.Key_Tab, Qt.KeyboardModifier.NoModifier),
+                            (Qt.Key.Key_Return, Qt.KeyboardModifier.NoModifier)]:
+        QCoreApplication.sendEvent(page.browser, QKeyEvent(QEvent.Type.KeyPress, key, modifiers))
+        QCoreApplication.sendEvent(page.browser, QKeyEvent(QEvent.Type.KeyRelease, key, modifiers))
+    assert window.pages.currentWidget() is window.settings_page, 'guide_keyboard_link_failed'
+    window.switch_page(page)
+    for address in ('file:///C:/private', 'https://example.org', 'arxivkaleid://home?run=1'):
+        page.browser.anchorClicked.emit(QUrl(address))
+        assert window.pages.currentWidget() is page
+    old_font, old_size = window.font(), window.size()
+    window.setFont(QFont('Microsoft YaHei UI', 20))
+    window.resize(window.minimumWidth(), window.minimumHeight())
+    capture('24-user-guide-minimum-large-font')
+    bar = page.browser.verticalScrollBar()
+    assert bar.maximum() > 0 and page.browser.horizontalScrollBar().maximum() == 0
+    bar.setValue(bar.maximum())
+    capture('25-user-guide-scrolled')
+    assert page.browser.toPlainText() == text
+    window.setFont(old_font)
+    window.resize(old_size)
+    bar.setValue(0)
+    window.switch_page(window.home_page)
+    return dict(readonly=True, mouse_links=4, keyboard_link=True, illegal_links_rejected=True,
+                minimum_large_font=True, scrolling=True)
+
+
 def exercise_requirements(application, window, capture, output):
     """真实纯文本输入、模态对话框和保存失败；只供隔离验证副本使用。"""
     from desktop.research_requirements import RequirementsError
@@ -535,6 +593,7 @@ def exercise(application, window, root, synthetic_key):
         window.show()
         capture('01-initial')
         requirements = exercise_requirements(application, window, capture, output)
+        user_guide = exercise_user_guide(application, window, capture)
         window.switch_page(window.history_page)
         wait(lambda: window.history_worker is None)
         assert window.history_page.model.rowCount() == 0
@@ -572,6 +631,9 @@ def exercise(application, window, root, synthetic_key):
         window.prompt_page.open_round('round1')
         assert window.prompt_page.busy and not window.prompt_page.edit_button.isEnabled()
         capture('05b-prompts-locked')
+        window.switch_page(window.user_guide_page)
+        assert window.user_guide_page.loaded and window.worker is not None
+        capture('26-user-guide-during-analysis')
         window.switch_page(window.settings_page)
         capture('06-settings-locked')
         window.switch_page(window.home_page)
@@ -666,7 +728,7 @@ def exercise(application, window, root, synthetic_key):
         samples.append(memory_bytes())
     assert samples[-1] - samples[3] < 32 * 1024 * 1024, 'portable_window_memory_growth'
     assert not gc.garbage
-    return {'captures': captures, 'history': history, 'requirements': requirements, 'qt_platform': application.platformName(),
+    return {'captures': captures, 'history': history, 'requirements': requirements, 'user_guide': user_guide, 'qt_platform': application.platformName(),
             'screen': screen.name(),
             'style': application.style().objectName(), 'loaded_libraries': loaded_libraries(root),
             'autosave': True, 'save_failure': True, 'key_locked': True, 'safe_links': True, 'log_directory_action': True,

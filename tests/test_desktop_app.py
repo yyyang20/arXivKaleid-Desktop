@@ -41,7 +41,7 @@ class DesktopAppTests(IsolatedDesktopTest):
 
     def setUp(self):
         super().setUp()
-        for name in ("config.json", *json.loads((PROJECT_ROOT / "config.json").read_text(encoding="utf-8"))["paths"].values()):
+        for name in ("config.json", "docs/desktop/USER_GUIDE.md", *json.loads((PROJECT_ROOT / "config.json").read_text(encoding="utf-8"))["paths"].values()):
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((PROJECT_ROOT / name).read_bytes())
@@ -104,7 +104,7 @@ class DesktopAppTests(IsolatedDesktopTest):
 
     def test_pages_and_versions_use_the_single_source_and_history_without_key(self):
         from desktop import __version__
-        self.assertEqual(self.window.pages.count(), 4)
+        self.assertEqual(self.window.pages.count(), 5)
         self.assertIn(f"v{__version__}", self.window.windowTitle())
         self.assertIn(f"v{__version__}", self.window.version_header.text())
         self.assertEqual(self.window.settings_page.version_label.text(), f"v{__version__}")
@@ -118,6 +118,86 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.assertIs(self.window.pages.currentWidget(), self.window.home_page)
         self.assertIsNone(self.window.snapshot)
         self.assert_no_analysis()
+
+    def test_user_guide_renders_once_readonly_and_navigation_has_five_pages(self):
+        page = self.window.user_guide_page
+        self.assertTrue(page.loaded)
+        self.assertEqual([self.window.pages.widget(i).objectName() for i in range(5)],
+                         ['homePage', 'promptPage', 'historyPage', 'userGuidePage', 'settingsPage'])
+        self.assertEqual(page.title.text(), '使用说明')
+        text = page.browser.toPlainText()
+        self.assertIn('开始使用', text)
+        self.assertIn('60 页', text)
+        self.assertNotIn('## ', text)
+        self.assertNotIn('**', text)
+        self.assertNotIn('arxivkaleid://', text)
+        self.assertNotIn('了解操作流程', text)
+        self.assertTrue(page.browser.isReadOnly())
+        self.assertFalse(page.browser.openLinks())
+        self.assertFalse(page.browser.openExternalLinks())
+        cursor = page.browser.document().find('设置')
+        self.assertEqual(cursor.charFormat().foreground().color().name(), '#1677ff')
+        self.assertIn('Microsoft YaHei UI', page.browser.font().families())
+
+    def test_user_guide_internal_links_navigate_without_business_or_external_calls(self):
+        from PySide6.QtCore import QUrl
+        from desktop.user_guide import GUIDE_ROUTES
+        snapshot = self.result
+        self.window.snapshot = snapshot
+        self.window.report.setMarkdown('# Existing report')
+        with patch.object(app.QDesktopServices, 'openUrl') as external, \
+             patch.object(self.window, 'start_fetch') as fetch, \
+             patch.object(self.window, 'start_analysis') as analyze:
+            for address, attribute in GUIDE_ROUTES.items():
+                self.window.switch_page(self.window.user_guide_page)
+                self.window.user_guide_page.browser.anchorClicked.emit(QUrl(address))
+                self.assertIs(self.window.pages.currentWidget(), getattr(self.window, attribute))
+            self.window.switch_page(self.window.user_guide_page)
+            for address in ('https://arxiv.org/abs/123', 'file:///C:/private',
+                            'javascript:alert(1)', 'arxivkaleid://unknown',
+                            'arxivkaleid://home?run=1', 'arxivkaleid://home#run',
+                            'arxivkaleid://home/', 'arxivkaleid://user@home'):
+                self.window.open_guide_link(QUrl(address))
+                self.assertIs(self.window.pages.currentWidget(), self.window.user_guide_page)
+            external.assert_not_called()
+            fetch.assert_not_called()
+            analyze.assert_not_called()
+        self.assertIs(self.window.snapshot, snapshot)
+        self.assertEqual(self.window.report.toPlainText(), 'Existing report')
+
+    def test_user_guide_navigation_keeps_unsaved_protection(self):
+        from PySide6.QtCore import QUrl
+        self.window.switch_page(self.window.prompt_page)
+        with patch.object(self.window.prompt_page, 'protect_unsaved', return_value=False):
+            self.window.open_guide_link(QUrl('arxivkaleid://home'))
+            self.assertIs(self.window.pages.currentWidget(), self.window.prompt_page)
+            self.window.switch_page(self.window.user_guide_page)
+            self.assertIs(self.window.pages.currentWidget(), self.window.prompt_page)
+
+    def test_user_guide_missing_invalid_or_tampered_resource_is_local_error(self):
+        from desktop.user_guide import GUIDE_RESOURCE, UserGuidePage, load_user_guide, UserGuideError
+        import hashlib
+        target = self.root / GUIDE_RESOURCE
+        original = target.read_bytes()
+        identity = {'resource_hashes': {GUIDE_RESOURCE: hashlib.sha256(original).hexdigest()}}
+        (self.root / 'BUILD_INFO.json').write_text(json.dumps(identity), encoding='utf-8')
+        with patch('desktop.user_guide.paths.frozen', return_value=True), \
+             patch('desktop.user_guide.paths.resource_root', return_value=self.root), \
+             patch('desktop.user_guide.paths.application_root', return_value=self.root):
+            self.assertEqual(load_user_guide(self.root)[0], '使用说明')
+            for payload in (original + b'changed', b'\xff', b''):
+                target.write_bytes(payload)
+                with self.assertRaises(UserGuideError):
+                    load_user_guide(self.root)
+                page = UserGuidePage(self.root)
+                self.assertFalse(page.loaded)
+                self.assertIn('资源缺失或校验失败', page.browser.toPlainText())
+                page.deleteLater()
+            target.unlink()
+            with self.assertRaises(UserGuideError):
+                load_user_guide(self.root)
+        self.assertTrue(self.window.fetch_button.isEnabled())
+        target.write_bytes(original)
 
     def test_fetch_success_collapses_and_expands_only_real_snapshot_details(self):
         self.window.show()

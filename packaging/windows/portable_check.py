@@ -60,6 +60,10 @@ def run_recovery():
         window.show()
         application.processEvents()
         assert window.isVisible()
+        assert window.user_guide_page.loaded and window.user_guide_page.browser.isReadOnly()
+        window.switch_page(window.user_guide_page)
+        assert '两轮筛选' in window.user_guide_page.browser.toPlainText()
+        result['user_guide_restored'] = True
         if previous.get('visual_qa'):
             from desktop.research_requirements import RequirementsStore
             for stage, digest in previous['visual_qa']['requirements']['saved_sha256'].items():
@@ -249,7 +253,9 @@ def run(*, network=False, visual=False):
         window = desktop_app.DesktopWindow(diagnostics=diagnostics)
         assert window.api_key.text() == SYNTHETIC_KEY
         assert window.open_logs_button.isEnabled()
-        assert window.pages.count() == 4 and window.task_panel.isHidden()
+        assert window.pages.count() == 5 and window.task_panel.isHidden()
+        assert window.user_guide_page.loaded
+        report['user_guide_loaded'] = True
         assert window.settings_page.isAncestorOf(window.api_key)
         assert desktop_app.__version__ in window.settings_page.version_label.text()
         from PySide6.QtGui import QIcon

@@ -19,6 +19,7 @@ REQUIRED_DOCUMENTS = (
     'docs/PROJECT_STRUCTURE.md', 'docs/CHANGELOG.md',
     'docs/desktop/README.md', 'docs/desktop/DESKTOP_SPEC.md',
     'docs/desktop/DESKTOP_OPERATIONS.md', 'docs/desktop/DESKTOP_STRUCTURE.md',
+    'docs/desktop/USER_GUIDE.md',
     'docs/public_release/README.md', 'docs/public_release/EULA.txt',
     'docs/public_release/PRIVACY.md', 'docs/public_release/SECURITY.md',
     'docs/public_release/RELEASE_CHECKLIST.md',
@@ -115,6 +116,10 @@ def link_errors(documents: dict[Path, str]) -> list[str]:
         for raw in pattern.findall(prose(text)):
             target = raw.strip('<>')
             url = urlsplit(target)
+            # 仅用户指南中的四个既定内部入口取得导航资格，其他文档规则不放宽。
+            if (source == PROJECT_ROOT / 'docs/desktop/USER_GUIDE.md'
+                    and target in literal_constant('desktop/user_guide.py', 'GUIDE_ROUTES')):
+                continue
             if url.scheme in ('http', 'https', 'mailto'):
                 continue
             name = unquote(url.path)
@@ -454,6 +459,30 @@ class DesktopGovernanceTests(unittest.TestCase):
             with self.subTest(route=label):
                 self.assertIn(label, routes)
                 self.assert_fragments(routes[label], fragments)
+
+    def test_user_guide_is_part_of_existing_update_and_resource_contract(self):
+        guide = read_utf8('docs/desktop/USER_GUIDE.md')
+        self.assert_fragments(guide, ('## 开始使用', '## 两轮筛选有什么区别',
+            '## 如何设置提示词', '## 如何阅读日报', '## 资源与费用',
+            '10／5 篇额外截取', '**60 页**', 'pypdf', 'Rank 1', '不继承第一轮',
+            '不会改写已有历史内容', '分析会产生模型调用费用'))
+        self.assert_fragments(section(read_utf8('AGENTS.md'), '文档与完成要求'), (
+            '每个功能任务必须主动检查', 'docs/desktop/USER_GUIDE.md',
+            '无需用户另行提醒', '纯内部实现变化无影响', '完成报告中说明检查结果'))
+        routes = section(read_utf8('docs/README.md'), '文档更新规则')
+        self.assert_fragments(routes, ('desktop/USER_GUIDE.md', '受影响时更新',
+            '不强制改写', '不建立竞争规则', '不自动改写自然语言'))
+        self.assertIn('docs/desktop/USER_GUIDE.md',
+                      literal_constant('scripts/build_windows_portable.py', 'RESOURCES'))
+        self.assertNotIn('第二轮 5 篇上限', read_utf8('README.md'))
+        self.assertEqual(set(literal_constant('desktop/user_guide.py', 'GUIDE_ROUTES')),
+                         {f'arxivkaleid://{p}' for p in ('home', 'prompts', 'history', 'settings')})
+
+    def test_guide_routes_do_not_expand_other_document_links(self):
+        path = PROJECT_ROOT / 'docs/desktop/USER_GUIDE.md'
+        for target in ('arxivkaleid://settings?run=1', 'arxivkaleid://unknown', 'file:///C:/private'):
+            self.assertTrue(link_errors({path: f'[入口]({target})'}))
+        self.assertTrue(link_errors({PROJECT_ROOT / 'README.md': '[入口](arxivkaleid://home)'}))
 
     def test_current_identity_table_matches_config_and_source(self):
         config = json.loads(read_utf8('config.json'))

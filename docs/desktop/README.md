@@ -9,6 +9,7 @@
 | [Desktop 规范](DESKTOP_SPEC.md) | GUI、DPAPI、候选快照、一次性分析与日报行为 |
 | [Desktop 运行手册](DESKTOP_OPERATIONS.md) | 源码启动、依赖、本机构建、portable 验证与运行排错 |
 | [Desktop 结构](DESKTOP_STRUCTURE.md) | Desktop 包内文件及 runtime 数据职责 |
+| [用户指南](USER_GUIDE.md) | GUI 内置使用说明唯一正文，面向普通用户的当前操作方法 |
 
 根 [项目文档索引](../README.md) 和 [AGENTS.md](../../AGENTS.md) 继续约束本入口。核心筛选规则唯一来源为 [PROJECT_SPEC.md](../PROJECT_SPEC.md)；本目录说明 GUI、凭据、候选快照和运行行为，不复制两轮筛选、PDF 或标签规范。
 

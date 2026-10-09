@@ -1,8 +1,8 @@
 # Desktop 规范
 
-当前版本 `0.1.0-alpha.11` 使用 PySide6 与基础版 PySide6-Fluent-Widgets。主窗口采用 Windows 原生标题栏与 Fluent 导航，顺序为首页、提示词、历史、设置；版本显示统一读取 `desktop.__version__`。
+当前版本 `0.1.0-alpha.11` 使用 PySide6 与基础版 PySide6-Fluent-Widgets。主窗口采用 Windows 原生标题栏与 Fluent 导航，顺序为首页、提示词、历史、使用说明、设置；版本显示统一读取 `desktop.__version__`。
 
-四页统一使用浅灰蓝背景、略浅的同色卡片、低对比度冷灰边框、8 px 卡片圆角和一致的页面边距；不使用阴影或装饰性渐变。设置页 API Key 输入框使用接近卡片的灰蓝底色与淡边框，仅在聚焦时显示蓝色描边。
+五页统一使用浅灰蓝背景、略浅的同色卡片、低对比度冷灰边框、8 px 卡片圆角和一致的页面边距；不使用阴影或装饰性渐变。设置页 API Key 输入框使用接近卡片的灰蓝底色与淡边框，仅在聚焦时显示蓝色描边。
 
 ## 页面与任务展示
 
@@ -23,6 +23,12 @@ Windows 10/11 x64 发行形式为 PyInstaller one-folder ZIP，解压后双击 `
 路径由 `sys.frozen`、`sys.executable` 和资源目录确定，不依赖 cwd；拒绝 `..`、越界路径及 symlink/reparse point。运行目录不可写或资源缺失时，GUI 显示固定错误并禁止操作，不回退到 AppData、Documents、home 或注册表。bundled curl 缺失或哈希不符时安全失败，不搜索系统 PATH；源码模式继续使用系统 curl。
 
 portable 的 SQLite、锁、缓存、PDF、诊断日志、DPAPI 密文分别使用 `runtime/work/`、`runtime/cache/arxiv/`、`runtime/pdfs/<候选日期>/`、`runtime/logs/`、`runtime/config/secret.dat`。文档下文的 `.desktop-runtime/` 路径指源码模式，portable 对应替换为 `runtime/`。IANA `Asia/Shanghai` 数据随包提供，不更改业务时区语义。
+
+## 使用说明
+
+“使用说明”在设置上方，正文来自 [用户指南](USER_GUIDE.md)，以只读、可复制、独立滚动的 Markdown 显示。标题和简介从正文提取，不重复显示。四个蓝色内部链接 `arxivkaleid://home`、`arxivkaleid://prompts`、`arxivkaleid://history`、`arxivkaleid://settings` 仅复用受未保存保护的页面切换，不触发抓取、模型或系统浏览器。其他地址及附加参数拒绝，日报 arXiv 外链权限不扩大。分析期间仍可查看说明和导航，原控件禁改规则保持。
+
+源码读取项目内指南，portable 读取 `_internal/docs/desktop/USER_GUIDE.md` 并核对 BUILD_INFO 资源哈希；不依赖 cwd，不加载图片或其他外部资源。指南缺失、编码/结构错误或校验失败时只在本页显示固定提示，不替换正文，不影响正常分析入口。指南不进入模型请求或运行数据。
 
 ## API Key
 

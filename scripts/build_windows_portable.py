@@ -37,6 +37,7 @@ RESOURCES = (
     'prompts/relevance_round2_v18.txt',
     'prompts/research_prompt_round1_v2.txt',
     'prompts/research_prompt_round2_v2.txt',
+    'docs/desktop/USER_GUIDE.md',
 )
 PUBLIC_DOCUMENTS = ('README.md', 'EULA.txt', 'PRIVACY.md', 'SECURITY.md')
 REQUIRED_RELEASE_FILES = (

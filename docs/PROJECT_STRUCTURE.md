@@ -56,6 +56,7 @@ docs/
    ├─ DESKTOP_SPEC.md
    ├─ DESKTOP_OPERATIONS.md
    ├─ DESKTOP_STRUCTURE.md
+   ├─ USER_GUIDE.md
    └─ PROMPT_SPLIT.md
 ```
 
@@ -70,12 +71,14 @@ docs/
 | `desktop/config.py` | `desktop_config_v5` 只读契约、预算边界和四份资源文本哈希校验 |
 | `desktop/research_requirements.py` | 两轮独立保存、校验、默认读取及分析快照 |
 | `desktop/prompt_page.py` | 完整研究提示词查看/编辑、保存、取消、恢复与未保存保护 |
+| `desktop/user_guide.py` | 使用说明资源读取、冻结哈希、只读 Markdown 和内部导航入口 |
+| `docs/desktop/USER_GUIDE.md` | GUI 使用说明唯一正文维护源，用户可见功能变化时按文档路由同步 |
 | `prompts/relevance_round1_v23.txt` | Round 1 最小技术协议，无固定篇数限制 |
 | `prompts/relevance_round2_v18.txt` | Round 2 最小技术协议，无固定篇数限制，以数组顺序表达排名 |
 | `prompts/research_prompt_round1_v2.txt`、`prompts/research_prompt_round2_v2.txt` | 两轮可编辑的版本化完整默认研究提示词 |
 | 其他历史 Prompt | 原样保留，不进入运行与打包 |
 
-提示词按版本新增，不覆盖旧文件。当前运行和发行资源只包含 `config.json` 与上述四份 Prompt；不依赖独立自动化策略或 Research Profile 文件。`profile_v2` 保留为请求、SQLite 和缓存兼容标识。
+提示词按版本新增，不覆盖旧文件。研究资源包含 `config.json` 与上述四份 Prompt；发行还包含正式 ICO 和只读用户指南，均绑定 BUILD_INFO 哈希。不依赖独立自动化策略或 Research Profile 文件。`profile_v2` 保留为请求、SQLite 和缓存兼容标识。
 
 ## 测试
 

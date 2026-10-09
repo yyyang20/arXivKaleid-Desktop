@@ -41,6 +41,7 @@ Windows portable 的打包 README、用户协议、隐私和安全说明集中�
 | Codex 协作、安全、授权或完成规则 | 根目录 `AGENTS.md`；局部规则受影响时检查 `desktop/AGENTS.md` |
 | 文档职责、阅读路线或更新路由 | 本文档；下级文档入口受影响时检查 `desktop/README.md` |
 | 用户可见能力或核心说明 | 根目录 `README.md` |
+| 用户可见功能的操作入口与步骤、提示词、结果展示、资源限制、费用或数据处理 | `desktop/USER_GUIDE.md`；每个功能任务主动检查，受影响时更新；无影响时在完成报告说明，不强制改写 |
 | 候选、筛选、PDF、标签、日报、数据库或费用规则 | `PROJECT_SPEC.md` |
 | 开发、验证与公开发布流程 | `OPERATIONS.md`；公开发布检查对应 `public_release/RELEASE_CHECKLIST.md` |
 | 文件新增、删除、移动或职责改变 | `PROJECT_STRUCTURE.md` |
@@ -57,6 +58,8 @@ Windows portable 的打包 README、用户协议、隐私和安全说明集中�
 | 提示词、模板、策略或 schema 身份变化 | 规范、配置、兼容校验、发行校验和测试 |
 
 按文档职责检查所有受影响的相关文档，但只修改真正受影响的文件。禁止为了制造“已同步”的痕迹而加入重复或无意义内容。
+
+[用户指南](desktop/USER_GUIDE.md) 是 GUI“使用说明”的唯一正文维护源，描述当前使用方法；README 提供入口，CHANGELOG 记录变化。指南遵循现行业务规范与 Desktop 规范，不建立竞争规则。更新义务由根 `AGENTS.md` 规定，治理测试检查该义务、路由、链接及打包一致性，不自动改写自然语言或新增后台任务。
 
 预发布测试版的展示名称统一使用小写 `alpha`，例如 `alpha 5`、`alpha 6`；适用于根 README、docs（含 CHANGELOG）、公开发布资料维护源及其他现行说明文本。标准版本标识保持原样，例如 `0.1.0-alpha.6`、`v0.1.0-alpha.6`；不因展示文字统一修改 tag、文件名、URL、代码正式版本常量、Release asset 或 BUILD_INFO 身份。已冻结的 GitHub Release、历史 tag、资产及对应源码状态保持不变；main 上现行文档的修正及必要治理测试通过新的最小提交完成，不重建或替换已发布资产。
 
