@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QColor, QTextCharFormat, QTextCursor
+from PySide6.QtGui import QColor, QFont, QIcon, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import QTextBrowser, QVBoxLayout, QWidget
 from qfluentwidgets import TitleLabel
 
@@ -19,6 +19,7 @@ from desktop.style import ACCENT, PAGE_STYLE, TEXT_PRIMARY, SurfaceCard
 from desktop.task_panel import wrapping_label
 
 GUIDE_RESOURCE = "docs/desktop/USER_GUIDE.md"
+GUIDE_ICON_RESOURCE = "assets/user-guide.svg"
 GUIDE_ROUTES = {
     "arxivkaleid://home": "home_page",
     "arxivkaleid://prompts": "prompt_page",
@@ -31,18 +32,26 @@ class UserGuideError(RuntimeError):
     pass
 
 
-def load_user_guide(source_root: Path) -> tuple[str, str, str]:
-    """源码与冻结程序使用同一正文；冻结资源绑定构建哈希，不回退外部目录。"""
+def read_guide_resource(source_root: Path, relative: str) -> bytes:
+    """正文与导航图标绑定冻结资源哈希，不回退到外部目录。"""
     try:
         root = paths.resource_root(source_root)
-        data = paths.checked_path(root, GUIDE_RESOURCE).read_bytes()
+        data = paths.checked_path(root, relative).read_bytes()
         if paths.frozen():
             info = paths.checked_path(paths.application_root(source_root), "BUILD_INFO.json")
             identity = json.loads(info.read_text(encoding="utf-8"))
-            expected = identity["resource_hashes"][GUIDE_RESOURCE]
+            expected = identity["resource_hashes"][relative]
             if hashlib.sha256(data).hexdigest() != expected:
                 raise ValueError
-        text = data.decode("utf-8").replace("\r\n", "\n")
+        return data
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        raise UserGuideError("user_guide_unavailable") from None
+
+
+def load_user_guide(source_root: Path) -> tuple[str, str, str]:
+    """源码与冻结程序使用同一正文，并分离标题、简介和 Markdown 内容。"""
+    try:
+        text = read_guide_resource(source_root, GUIDE_RESOURCE).decode("utf-8").replace("\r\n", "\n")
         heading, _, rest = text.partition("\n")
         introduction, _, body = rest.strip().partition("\n\n")
         if not heading.startswith("# ") or not introduction or not body.startswith("## "):
@@ -79,13 +88,14 @@ class UserGuidePage(QWidget):
         content = QVBoxLayout(self.card)
         content.setContentsMargins(20, 16, 20, 16)
         self.browser = GuideBrowser()
+        # Fluent 卡片有独立默认字体；正文明确复用主窗口的中文界面字体。
+        self.browser.setFont(QFont("Microsoft YaHei UI", 10))
         self.browser.setReadOnly(True)
         self.browser.setOpenLinks(False)
         self.browser.setOpenExternalLinks(False)
         self.browser.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.browser.setStyleSheet(
-            f"QTextBrowser {{background: transparent; border: none; color: {TEXT_PRIMARY};"
-            "font-family: 'Microsoft YaHei UI';}"
+            f"QTextBrowser {{background: transparent; border: none; color: {TEXT_PRIMARY};}}"
         )
         self.browser.document().setDefaultStyleSheet(
             f"a {{color: {ACCENT}; text-decoration: underline;}}"
@@ -96,11 +106,19 @@ class UserGuidePage(QWidget):
         layout.addWidget(self.card, 1)
         self.setStyleSheet(PAGE_STYLE)
         self.loaded = False
+        self.navigation_icon = QIcon()
         try:
+            # 图标只使用经过校验的随包 SVG；缺失时沿用本页资源错误处理。
+            read_guide_resource(source_root, GUIDE_ICON_RESOURCE)
+            icon_path = paths.checked_path(paths.resource_root(source_root), GUIDE_ICON_RESOURCE)
+            self.navigation_icon = QIcon(str(icon_path))
+            if self.navigation_icon.isNull():
+                raise UserGuideError("user_guide_unavailable")
             title, introduction, body = load_user_guide(source_root)
             self.title.setText(title)
             self.introduction.setText(introduction)
             self.browser.setMarkdown(body)
+            self.browser.document().setDefaultFont(self.browser.font())
             # Qt Markdown 的链接格式不完全遵循 CSS；显式使用现有强调色。
             block = self.browser.document().begin()
             while block.isValid():

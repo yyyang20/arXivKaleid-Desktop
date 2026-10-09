@@ -111,6 +111,8 @@ class DesktopBuildTests(unittest.TestCase):
         self.assertNotIn('config/automation_policy.json', builder.RESOURCES)
         self.assertNotIn('config/local_secret.json', builder.RESOURCES)
         self.assertIn('assets/app-icon.ico', builder.RESOURCES)
+        self.assertIn('assets/user-guide.svg', builder.RESOURCES)
+        self.assertIn('_internal/assets/user-guide.svg', builder.REQUIRED_RELEASE_FILES)
         self.assertIn('_internal/assets/app-icon.ico', builder.REQUIRED_RELEASE_FILES)
         self.assertIn('_internal/PySide6/plugins/imageformats/qico.dll',
                       builder.REQUIRED_RELEASE_FILES)

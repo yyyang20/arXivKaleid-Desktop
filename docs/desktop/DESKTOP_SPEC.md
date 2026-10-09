@@ -26,6 +26,8 @@ portable 的 SQLite、锁、缓存、PDF、诊断日志、DPAPI 密文分别使�
 
 ## 使用说明
 
+导航使用 `assets/user-guide.svg` 的打开书本线框图标，与其他入口的线框风格保持一致。
+
 “使用说明”在设置上方，正文来自 [用户指南](USER_GUIDE.md)，以只读、可复制、独立滚动的 Markdown 显示。标题和简介从正文提取，不重复显示。四个蓝色内部链接 `arxivkaleid://home`、`arxivkaleid://prompts`、`arxivkaleid://history`、`arxivkaleid://settings` 仅复用受未保存保护的页面切换，不触发抓取、模型或系统浏览器。其他地址及附加参数拒绝，日报 arXiv 外链权限不扩大。分析期间仍可查看说明和导航，原控件禁改规则保持。
 
 源码读取项目内指南，portable 读取 `_internal/docs/desktop/USER_GUIDE.md` 并核对 BUILD_INFO 资源哈希；不依赖 cwd，不加载图片或其他外部资源。指南缺失、编码/结构错误或校验失败时只在本页显示固定提示，不替换正文，不影响正常分析入口。指南不进入模型请求或运行数据。

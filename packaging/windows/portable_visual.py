@@ -309,15 +309,21 @@ def exercise_user_guide(application, window, capture):
         page.browser.anchorClicked.emit(QUrl(address))
         assert window.pages.currentWidget() is page
     old_font, old_size = window.font(), window.size()
+    old_body_font = page.browser.font()
+    initial_document_height = page.browser.document().size().height()
     window.setFont(QFont('Microsoft YaHei UI', 20))
+    page.browser.setFont(QFont('Microsoft YaHei UI', 20))
     window.resize(window.minimumWidth(), window.minimumHeight())
     capture('24-user-guide-minimum-large-font')
+    assert page.browser.document().defaultFont().pointSizeF() == 20
+    assert page.browser.document().size().height() > initial_document_height
     bar = page.browser.verticalScrollBar()
     assert bar.maximum() > 0 and page.browser.horizontalScrollBar().maximum() == 0
     bar.setValue(bar.maximum())
     capture('25-user-guide-scrolled')
     assert page.browser.toPlainText() == text
     window.setFont(old_font)
+    page.browser.setFont(old_body_font)
     window.resize(old_size)
     bar.setValue(0)
     window.switch_page(window.home_page)

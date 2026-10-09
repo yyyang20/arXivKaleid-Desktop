@@ -255,6 +255,7 @@ def run(*, network=False, visual=False):
         assert window.open_logs_button.isEnabled()
         assert window.pages.count() == 5 and window.task_panel.isHidden()
         assert window.user_guide_page.loaded
+        assert not window.user_guide_page.navigation_icon.pixmap(24, 24).isNull()
         report['user_guide_loaded'] = True
         assert window.settings_page.isAncestorOf(window.api_key)
         assert desktop_app.__version__ in window.settings_page.version_label.text()

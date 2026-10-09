@@ -41,7 +41,7 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 
 ## 本机构建
 
-资源 allowlist 同时收集 `docs/desktop/USER_GUIDE.md` 到 `_internal/` 原相对路径，`BUILD_INFO.json` 绑定其原始字节哈希，源码与冻结程序的说明一致。仅修改指南文字时无需修改 GUI 代码，但仍须按现有更新义务检查、测试并重新打包；已交付 ZIP 不自动更新。
+资源 allowlist 同时收集 `docs/desktop/USER_GUIDE.md` 和 `assets/user-guide.svg` 到 `_internal/` 原相对路径，`BUILD_INFO.json` 绑定其原始字节哈希，源码与冻结程序的说明及书本图标一致。仅修改指南文字时无需修改 GUI 代码，但仍须按现有更新义务检查、测试并重新打包；已交付 ZIP 不自动更新。
 
 alpha 7 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windows 11 样式、SVG 图标插件及 ICO 图像解码插件；不带 QtNetwork、qsvg 图像插件或 offscreen 平台。Fluent 图标/QSS 由其内嵌 Qt 资源模块提供，不从网络获取图标；正式 `assets/app-icon.ico` 同时进入 `_internal/` 资源和 EXE 文件图标。应用图标可用现有项目环境运行 `python -B scripts/generate_app_icon.py` 从 SVG 母版确定性重建，不额外引入图像依赖。不额外收集整个 site-packages、full 依赖或系统字体。实际模块/PYZ、运行时 hook、DLL 和插件随冻结成品核验。
 
@@ -56,7 +56,7 @@ alpha 7 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windo
 ./scripts/build_windows_portable.ps1 -PythonExe $desktopPython -LicenseInputManifest '.desktop-build/inputs/conda-licenses/alpha9/manifest.json'
 ```
 
-构建入口按现有 spec 生成 Windows GUI one-folder；资源 allowlist 包含 `config.json`、正式 ICO、两份现行技术协议和两份默认完整研究 Prompt，不包含用户覆盖记录、历史 Prompt、领域标签模块、独立自动化策略或 Profile 文件。`BUILD_INFO.json` 的 `resource_hashes` 绑定全部允许资源，发行树检查同时复核配置内部的 Prompt 哈希。curl `8.22.0_2` 来自 curl 官方固定 x64 归档，并核验 manifest 中的 SHA-256 后才运行。时区数据来自专用环境，不依赖系统 IANA 数据。
+构建入口按现有 spec 生成 Windows GUI one-folder；资源 allowlist 包含 `config.json`、正式 ICO、使用说明 SVG 与 Markdown、两份现行技术协议和两份默认完整研究提示词，不包含用户覆盖记录、历史提示词、领域标签模块、独立自动化策略或 Profile 文件。`BUILD_INFO.json` 的 `resource_hashes` 绑定全部允许资源，发行树检查同时复核配置内部的提示词哈希。curl `8.22.0_2` 来自 curl 官方固定 x64 归档，并核验 manifest 中的 SHA-256 后才运行。时区数据来自专用环境，不依赖系统 IANA 数据。
 
 构建前必须在已授权范围内冻结干净提交；本地技术验证使用 `codex/` 开发分支，要求其是已核验 `origin/main` 基线的后代，不要求 HEAD 等于基线。产物为根 `dist/` 下带版本目录、`release/` 下同名 ZIP 和 `.zip.sha256`。`BUILD_INFO.json` 记录分支、基线、冻结提交、验证用途和环境版本。旧干净发行物移入本次 `.desktop-build/managed-artifacts/build-<ID>/preserved/previous-*` 留存并核对移动前后逐文件哈希；已有 `runtime/` 的发行目录拒绝覆盖。stage、缓存和重复构建副本在保存审计证据后收尾，最终输出和 previous-* 不自动清理。构建目录、vendor 下载和输出均被 Git 忽略。所有下载都先校验固定哈希，缓存不符即停止。
 

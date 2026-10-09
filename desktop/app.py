@@ -210,7 +210,7 @@ class DesktopWindow(QWidget):
             (self.home_page, FluentIcon.HOME, "首页"),
             (self.prompt_page, FluentIcon.DOCUMENT, "提示词"),
             (self.history_page, FluentIcon.HISTORY, "历史"),
-            (self.user_guide_page, FluentIcon.BOOK_SHELF, "使用说明"),
+            (self.user_guide_page, self.user_guide_page.navigation_icon, "使用说明"),
             (self.settings_page, FluentIcon.SETTING, "设置"),
         ):
             self.pages.addWidget(page)

@@ -23,7 +23,7 @@ sys.path.insert(0, str(root))
 from desktop import app, paths
 from desktop.diagnostics import DesktopDiagnostics
 internal = copy / '_internal'
-for name in ['config.json', 'assets/app-icon.ico',
+for name in ['config.json', 'assets/app-icon.ico', 'assets/user-guide.svg',
              'prompts/relevance_round1_v23.txt', 'prompts/relevance_round2_v18.txt',
              'prompts/research_prompt_round1_v2.txt', 'prompts/research_prompt_round2_v2.txt',
              'docs/desktop/USER_GUIDE.md']:
@@ -31,7 +31,8 @@ for name in ['config.json', 'assets/app-icon.ico',
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(root / name, target)
 (copy / 'BUILD_INFO.json').write_text(json.dumps({'resource_hashes': {
-    'docs/desktop/USER_GUIDE.md': hashlib.sha256((internal / 'docs/desktop/USER_GUIDE.md').read_bytes()).hexdigest()
+    name: hashlib.sha256((internal / name).read_bytes()).hexdigest()
+    for name in ('docs/desktop/USER_GUIDE.md', 'assets/user-guide.svg')
 }}), encoding='utf-8')
 spec = importlib.util.spec_from_file_location('portable_check', root / 'packaging/windows/portable_check.py')
 diagnostic = importlib.util.module_from_spec(spec)

@@ -33,6 +33,7 @@ SOURCE_URL = f'https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags
 RESOURCES = (
     'config.json',
     'assets/app-icon.ico',
+    'assets/user-guide.svg',
     'prompts/relevance_round1_v23.txt',
     'prompts/relevance_round2_v18.txt',
     'prompts/research_prompt_round1_v2.txt',

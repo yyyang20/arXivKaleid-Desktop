@@ -474,6 +474,8 @@ class DesktopGovernanceTests(unittest.TestCase):
             '不强制改写', '不建立竞争规则', '不自动改写自然语言'))
         self.assertIn('docs/desktop/USER_GUIDE.md',
                       literal_constant('scripts/build_windows_portable.py', 'RESOURCES'))
+        self.assertIn('assets/user-guide.svg',
+                      literal_constant('scripts/build_windows_portable.py', 'RESOURCES'))
         self.assertNotIn('第二轮 5 篇上限', read_utf8('README.md'))
         self.assertEqual(set(literal_constant('desktop/user_guide.py', 'GUIDE_ROUTES')),
                          {f'arxivkaleid://{p}' for p in ('home', 'prompts', 'history', 'settings')})

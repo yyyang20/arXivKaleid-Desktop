@@ -15,7 +15,7 @@
 | `requirements.txt` | 固定 pypdf 核心运行依赖 |
 | `requirements-desktop.txt` | 核心 PDF、PySide6、基础 Fluent 与 Windows 必要依赖固定版本，不使用 full |
 | `requirements-build.txt` | 固定 PyInstaller 及仅构建阶段依赖 |
-| `assets/` | A0 应用图标 SVG 母版与 Windows 多尺寸 ICO 正式资源 |
+| `assets/` | A0 应用图标 SVG 母版、Windows 多尺寸 ICO 与使用说明线框书本 SVG |
 | `desktop/` | GUI、候选快照、DPAPI、配置、诊断、进度、一次性分析和 Markdown 日报；详见 [Desktop 结构](desktop/DESKTOP_STRUCTURE.md) |
 | `main.py` | arXiv URL、curl 传输、Atom 解析、排序合并、Desktop 主库 schema 与筛选保存核心函数；无 CLI 启动入口 |
 | `arxiv_transport_evidence.py` | curl write-out、timing 和响应头白名单纯解析边界 |
@@ -78,7 +78,7 @@ docs/
 | `prompts/research_prompt_round1_v2.txt`、`prompts/research_prompt_round2_v2.txt` | 两轮可编辑的版本化完整默认研究提示词 |
 | 其他历史 Prompt | 原样保留，不进入运行与打包 |
 
-提示词按版本新增，不覆盖旧文件。研究资源包含 `config.json` 与上述四份 Prompt；发行还包含正式 ICO 和只读用户指南，均绑定 BUILD_INFO 哈希。不依赖独立自动化策略或 Research Profile 文件。`profile_v2` 保留为请求、SQLite 和缓存兼容标识。
+提示词按版本新增，不覆盖旧文件。研究资源包含 `config.json` 与上述四份 Prompt；发行还包含正式 ICO、使用说明 SVG 和只读用户指南，均绑定 BUILD_INFO 哈希。不依赖独立自动化策略或 Research Profile 文件。`profile_v2` 保留为请求、SQLite 和缓存兼容标识。
 
 ## 测试
 

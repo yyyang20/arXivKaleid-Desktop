@@ -40,6 +40,7 @@
 | `scripts/visual_qa_desktop.py` | 禁止网络/模型、内存假 Key、合成业务事件驱动的真实 Qt 截图；产物仅在项目忽略目录 |
 | `scripts/generate_app_icon.py` | 使用现有 PySide6 从 A0 SVG 母版确定性生成 16～256 px Windows ICO 与可选验收预览 |
 | `assets/app-icon.svg`、`assets/app-icon.ico` | 透明画布 A0 矢量母版及 Qt/EXE 共用的正式多尺寸图标 |
+| `assets/user-guide.svg` | 使用说明的线框书本图标，源码与冻结程序共用，随包绑定资源哈希 |
 | `packaging/windows/portable_visual.py` | 冻结诊断专用合成 QThread 状态、真实截图、DLL 来源和窗口生命周期验证，不进入正式业务流程 |
 | `tests/test_portable_diagnostic.py` | Windows 合成 DPAPI 的独立进程完整诊断路径、后置检查失败与已用 runtime 拒绝回归 |
 | `tests/test_desktop_portable.py` | source/frozen 路径、链接、可写性、bundled curl 与工作库边界 |

@@ -41,7 +41,7 @@ class DesktopAppTests(IsolatedDesktopTest):
 
     def setUp(self):
         super().setUp()
-        for name in ("config.json", "docs/desktop/USER_GUIDE.md", *json.loads((PROJECT_ROOT / "config.json").read_text(encoding="utf-8"))["paths"].values()):
+        for name in ("config.json", "docs/desktop/USER_GUIDE.md", "assets/user-guide.svg", *json.loads((PROJECT_ROOT / "config.json").read_text(encoding="utf-8"))["paths"].values()):
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((PROJECT_ROOT / name).read_bytes())
@@ -138,6 +138,21 @@ class DesktopAppTests(IsolatedDesktopTest):
         cursor = page.browser.document().find('设置')
         self.assertEqual(cursor.charFormat().foreground().color().name(), '#1677ff')
         self.assertIn('Microsoft YaHei UI', page.browser.font().families())
+        self.assertFalse(page.navigation_icon.pixmap(24, 24).isNull())
+
+    def test_user_guide_document_uses_ui_font_and_actual_large_text_layout(self):
+        from PySide6.QtGui import QFont
+        page = self.window.user_guide_page
+        self.window.switch_page(page)
+        self.window.show()
+        self.application.processEvents()
+        document = page.browser.document()
+        self.assertEqual(document.defaultFont().family(), 'Microsoft YaHei UI')
+        initial_height = document.size().height()
+        page.browser.setFont(QFont('Microsoft YaHei UI', 20))
+        self.application.processEvents()
+        self.assertEqual(document.defaultFont().pointSizeF(), 20)
+        self.assertGreater(document.size().height(), initial_height)
 
     def test_user_guide_internal_links_navigate_without_business_or_external_calls(self):
         from PySide6.QtCore import QUrl
@@ -179,7 +194,11 @@ class DesktopAppTests(IsolatedDesktopTest):
         import hashlib
         target = self.root / GUIDE_RESOURCE
         original = target.read_bytes()
-        identity = {'resource_hashes': {GUIDE_RESOURCE: hashlib.sha256(original).hexdigest()}}
+        from desktop.user_guide import GUIDE_ICON_RESOURCE
+        identity = {'resource_hashes': {
+            GUIDE_RESOURCE: hashlib.sha256(original).hexdigest(),
+            GUIDE_ICON_RESOURCE: hashlib.sha256((self.root / GUIDE_ICON_RESOURCE).read_bytes()).hexdigest(),
+        }}
         (self.root / 'BUILD_INFO.json').write_text(json.dumps(identity), encoding='utf-8')
         with patch('desktop.user_guide.paths.frozen', return_value=True), \
              patch('desktop.user_guide.paths.resource_root', return_value=self.root), \
@@ -198,6 +217,21 @@ class DesktopAppTests(IsolatedDesktopTest):
                 load_user_guide(self.root)
         self.assertTrue(self.window.fetch_button.isEnabled())
         target.write_bytes(original)
+        icon_path = self.root / GUIDE_ICON_RESOURCE
+        icon_data = icon_path.read_bytes()
+        with patch('desktop.user_guide.paths.frozen', return_value=True), \
+             patch('desktop.user_guide.paths.resource_root', return_value=self.root), \
+             patch('desktop.user_guide.paths.application_root', return_value=self.root):
+            icon_path.write_bytes(icon_data + b'changed')
+            page = UserGuidePage(self.root)
+            self.assertFalse(page.loaded)
+            self.assertIn('资源缺失或校验失败', page.browser.toPlainText())
+            page.deleteLater()
+            icon_path.unlink()
+            page = UserGuidePage(self.root)
+            self.assertFalse(page.loaded)
+            page.deleteLater()
+        icon_path.write_bytes(icon_data)
 
     def test_fetch_success_collapses_and_expands_only_real_snapshot_details(self):
         self.window.show()
