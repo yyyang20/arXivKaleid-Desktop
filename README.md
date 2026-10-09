@@ -4,7 +4,7 @@ arXivKaleid Desktop 是按用户两轮完整研究 Prompt 筛选 arXiv 论文的
 
 本仓库包含 Desktop 应用源码、测试、构建配置和项目文档；Windows portable 成品通过 GitHub Releases 提供。
 
-当前开发版本为 `0.1.0-alpha.11`，两轮完整研究 Prompt 可独立编辑和保存，分析引擎不再强制领域标签、理由或阅读级别，第二轮独立判断。alpha 11 第一阶段只交付绑定本地冻结 commit 的技术候选，尚未公开发布；最新公开成品仍为 [alpha 10 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.10)。
+当前公开版本为 `0.1.0-alpha.11`，两轮完整研究提示词可独立编辑和保存，研究方向、数量、评价及第二轮排序由用户定义，分析引擎不再强制领域标签、理由或阅读级别。下载 [alpha 11 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.11)；本版为预发布测试版，内置离线使用说明。
 
 ## 开发方式
 
@@ -61,7 +61,7 @@ alpha 9 的历史保存当次完整原始 Markdown，重启后无需 Key 即可�
 
 Copyright (c) 2026 yyyang20. 自有应用源码、测试、构建脚本、配置、提示词和项目文档采用 **GPL-3.0-only**，完整文本见 [LICENSE](LICENSE)，许可说明见 [EULA.txt](EULA.txt)。本软件无保证；允许使用、研究、修改和分发，包括商业使用。分发受 GPL 覆盖的衍生版本须继续按 GPLv3 提供相应源码，私人修改不要求公开。
 
-公开 alpha 10 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.10.zip)包含源码、资源、测试及构建说明；对应 [Windows portable Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.10) 的 `BUILD_INFO.json` 与 tag 均指向发行提交 `89804e2895691d88f6ae62277e219de8f98ef0f9`，用途为 `public-release`。正式成品从合并后的干净 main 重建，未使用第一阶段技术候选；匿名下载成品及源码已核验。不要用浮动 main 代替已发行版本源码；发布后的 main 可以包含文档收口提交。
+公开 alpha 11 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.11.zip)包含源码、资源、测试及构建说明；对应 [Windows portable Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.11) 的 `BUILD_INFO.json` 与 tag 均指向发行提交 `1e2285afb839e4029336b05d2eb9f359d23701ab`，用途为 `public-release`。正式成品从合并后的干净 main 重建，未使用第一阶段技术候选；匿名下载成品及源码已核验。不要用浮动 main 代替已发行版本源码；发布后的 main 可以包含文档收口提交。
 
 第三方组件保留各自许可，声明见 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)。完整许可文本及实际分发库的固定对应源码随 portable ZIP 提供，清单见 `licenses/components.json`。本版许可不改写既有历史发行资料。
 
