@@ -1,6 +1,6 @@
 # Desktop 文档入口
 
-当前版本为 `0.1.0-alpha.11`，两轮编辑窗口管理完整研究 Prompt，研究判断及排序由用户定义，第二轮不继承第一轮评价或排名。导航与现有 Fluent、灰蓝卡片、正式图标、任务进度及安全边界保持。alpha 11 当前为本地技术候选；最新公开成品仍为 [alpha 10 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.10)，运行与验证方式见运行手册。
+当前公开版本为 `0.1.0-alpha.11`，两轮编辑窗口管理完整研究提示词，研究判断、数量及第二轮排序由用户定义，第二轮不继承第一轮评价或排名。导航沿用 Fluent、灰蓝卡片和任务进度，新增内置使用说明，安全边界保持。下载 [alpha 11 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.11)，运行与验证方式见运行手册。
 
 每次启动后首次开始分析前必须显示模型数据发送、费用、DPAPI 凭据与本地运行数据告知；用户拒绝时不消费快照、不调用模型。
 

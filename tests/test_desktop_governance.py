@@ -289,7 +289,7 @@ def artifact_contract_errors(agents, operations, desktop, checklist):
 def current_version_references(text):
     # --source-archive 指定历史许可来源，不声明当前发行身份；其他旧版本仍判错。
     current = re.sub(r"--source-archive\s+'[^']+'", '--source-archive <历史构建输入>', text)
-    return (re.findall(r'当前版本(?:为)?\s*`([^`]+)`', current)
+    return (re.findall(r'当前(?:开发|公开)?版本(?:为)?\s*`([^`]+)`', current)
             + re.findall(r'arXivKaleid-([\d.]+(?:-[\w.]+)?)-windows-x64', current))
 
 
@@ -525,6 +525,8 @@ class DesktopGovernanceTests(unittest.TestCase):
         text = "--source-archive '.desktop-build/audit/arXivKaleid-0.1.0-alpha.9-windows-x64.zip'"
         self.assertEqual(current_version_references(text), [])
         self.assertEqual(current_version_references(text + '\n当前版本 `0.1.0-alpha.9`'), ['0.1.0-alpha.9'])
+        self.assertEqual(current_version_references(text + '\n当前公开版本为 `0.1.0-alpha.9`'), ['0.1.0-alpha.9'])
+        self.assertEqual(current_version_references(text + '\n当前开发版本为 `0.1.0-alpha.9`'), ['0.1.0-alpha.9'])
         self.assertEqual(current_version_references(text + '\nrelease/arXivKaleid-0.1.0-alpha.9-windows-x64.zip'), ['0.1.0-alpha.9'])
 
     def test_internal_markdown_links_resolve_within_project(self):

@@ -2,6 +2,14 @@
 
 本文件保留 Desktop 与通用功能的简短历史。代码解耦前的条目来自原项目：当时的发行来源、构建提交、兼容行为和治理测试仅表示历史事实，不代表当前仓库仍有这些入口或测试。现行行为以代码、配置、测试和 [当前业务规范](PROJECT_SPEC.md) 为准；详细历史通过 Git、PR 和 Issue 查询。
 
+## 2026-10-10：Desktop alpha 11 公开发行
+
+- 已公开 [v0.1.0-alpha.11 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.11)，不标为稳定 latest。[功能 PR #20](https://github.com/yyyang20/arXivKaleid-Desktop/pull/20) 和 [验证修正 PR #21](https://github.com/yyyang20/arXivKaleid-Desktop/pull/21) 合并后，从干净 main 提交 `1e2285afb839e4029336b05d2eb9f359d23701ab` 重建；tag、BUILD_INFO 与该提交一致，用途为 `public-release`，第一阶段候选未上传。
+- 本版汇总两轮完整提示词、自主数量、独立全文判断和模型排序、自由评价与日报适配、中文界面及内置使用说明。默认黑洞阴影和 10／5 篇均可修改；原有 PDF、Token、上下文、费用与失败边界保持。
+- 仅上传 ZIP 和 `.sha256`：ZIP 为 118,663,986 字节，SHA-256 为 `d008c8e3bf38f49e02fc4a89955d32aafba065e1d18dfe3048ac4a5cbf06463b`。匿名下载两份资产与本地逐字节一致，110 个 tag 源码文件与发行 Git blob 一致；全部既有历史 tag、Release 正文及资产身份未变。
+- 冻结 PR 与正式 main 通过 260 项完整离线测试、零跳过、57 个 Python AST、八项资源哈希及差异检查。源码 GUI 修正后通过 45 个状态；最终 portable 通过原生 DPR 1.5 与模拟 100／125／150／200% 五组、每组 47 个状态，覆盖提示词、使用说明、模型顺序、跨进程恢复、DPAPI、普通重启、12 次窗口生命周期、DLL 来源、资源反例及隐私边界。470 个发行文件逐文件核验，自动合成数据只存在验证副本。
+- 本条和当前下载入口为发布后文档收口，不重建或替换已公开资产；技术候选、未发布构建及成功／失败审计证据按原始哈希保留，`release/` 仅留正式 ZIP 和校验文件。模型调用与费用为 0，未覆盖第二台干净 Windows 或所有第三方输入法；既有 Qt 弃用和测试退出 GC 告警保留，冻结生命周期及退出检查通过。
+
 ## 2026-10-10：源码 GUI 验证合成等待修正
 
 - 为截图间受管容量核验保留有界的合成等待时间，避免历史材料扫描耗时触发验证线程自身超时；仍执行逐截图容量检查。
