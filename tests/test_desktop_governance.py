@@ -477,6 +477,10 @@ class DesktopGovernanceTests(unittest.TestCase):
         self.assertIn('assets/user-guide.svg',
                       literal_constant('scripts/build_windows_portable.py', 'RESOURCES'))
         self.assertNotIn('第二轮 5 篇上限', read_utf8('README.md'))
+        checklist = read_utf8('docs/public_release/RELEASE_CHECKLIST.md')
+        self.assert_fragments(checklist, ('五个导航页面', '使用说明正文和书本图标',
+            '四个内部链接', '缺失或篡改资源安全拒绝'))
+        self.assertNotIn('四个导航页面', checklist)
         self.assertEqual(set(literal_constant('desktop/user_guide.py', 'GUIDE_ROUTES')),
                          {f'arxivkaleid://{p}' for p in ('home', 'prompts', 'history', 'settings')})
 
