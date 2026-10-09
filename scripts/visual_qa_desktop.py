@@ -33,6 +33,10 @@ from scripts.local_artifacts import ArtifactRun, inventory, temporary_environmen
 from desktop.history import HistoryStore
 from portable_visual import synthetic_snapshot as report_snapshot, synthetic_analysis_result, exercise_history, exercise_requirements, exercise_user_guide
 
+# 截图后的受管容量核验会扫描已留存材料；合成线程需等主线程完成多张截图。
+# 该期限仅用于离线 QA 的事件闸门，不改变真实网络、模型或资源门禁。
+QA_GATE_TIMEOUT_SECONDS = 120
+
 
 class MemorySecretStore:
     """只在内存保存合成值，不创建或读取 secret.dat。"""
@@ -142,7 +146,7 @@ def visual_qa(run):
             current_date=day, category="astro-ph.HE", category_index=2,
             category_total=3, processed=67,
         ))
-        if not gate.wait(15):
+        if not gate.wait(QA_GATE_TIMEOUT_SECONDS):
             raise RuntimeError("qa_fetch_gate_timeout")
         return report_snapshot(day)
 
@@ -157,7 +161,7 @@ def visual_qa(run):
                 state="running" if stage == "fulltext" else "completed",
                 message=message, processed=count, total=total,
             ))
-        if not gate.wait(15):
+        if not gate.wait(QA_GATE_TIMEOUT_SECONDS):
             raise RuntimeError("qa_analysis_gate_timeout")
         for stage, message in (
             ("fulltext", "全文提取完成 · 已处理 9 / 9"),
