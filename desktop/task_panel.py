@@ -190,7 +190,7 @@ class TaskPanel(SurfaceCard):
                            if all(n is not None for n in counts) else "")
         self.fetch_details.setText(
             f"抓取日期（北京时间）：{snapshot.candidate_date.isoformat()}\n"
-            f"抓取完成时间：{snapshot.completed_time_text}\n"
+            f"抓取完成时间（北京时间）：{snapshot.completed_time_text.removesuffix(' 北京时间')}\n"
             f"{version_details}"
             f"分类来源：{' · '.join(snapshot.categories)}\n"
             f"原始 {snapshot.raw_count} 条 → 去重后候选 {snapshot.unique_count} 篇\n"

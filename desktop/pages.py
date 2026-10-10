@@ -39,7 +39,7 @@ class HomePage(QWidget):
         fetch_card, fetch = card("抓取信息")
         self.statistics = {}
         form = QFormLayout()
-        for name in ("抓取日期（北京时间）", "抓取完成时间"):
+        for name in ("抓取日期（北京时间）", "抓取完成时间（北京时间）"):
             label = wrapping_label("—")
             self.statistics[name] = label
             form.addRow(name, label)
