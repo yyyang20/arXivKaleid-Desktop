@@ -456,7 +456,8 @@ class ArtifactTests(ArtifactFixture):
                 calls.append(command[1:])
                 if '--portable-recovery-check' in command:
                     self.write(copy_root / 'runtime/work/recovery-check.json', json.dumps({
-                        'synthetic_dpapi_recovered': True, 'user_guide_restored': True, 'history_restored_exactly': True,
+                        'synthetic_dpapi_recovered': True, 'version_metadata_restored_exactly': True,
+                        'user_guide_restored': True, 'history_restored_exactly': True,
                         'deleted_history_stays_deleted': True, 'research_requirements_restored_exactly': True}).encode())
                     code = 0
                 elif '--visual-qa' in command:

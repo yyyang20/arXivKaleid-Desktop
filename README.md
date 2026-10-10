@@ -4,7 +4,7 @@ arXivKaleid Desktop 是按用户两轮完整研究 Prompt 筛选 arXiv 论文的
 
 本仓库包含 Desktop 应用源码、测试、构建配置和项目文档；Windows portable 成品通过 GitHub Releases 提供。
 
-当前公开版本为 `0.1.0-alpha.11`，两轮完整研究提示词可独立编辑和保存，研究方向、数量、评价及第二轮排序由用户定义，分析引擎不再强制领域标签、理由或阅读级别。下载 [alpha 11 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.11)；本版为预发布测试版，内置离线使用说明。
+当前开发版本为 `0.1.0-alpha.12`，尚未公开发布：按 GUI 选择的北京时间日期获取精确历史版本，只持久保存成功候选。两轮研究提示词、筛选与预算保持 alpha 11 规则。最新公开下载仍为 [alpha 11 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.11)，是预发布测试版。
 
 ## 开发方式
 
@@ -37,7 +37,7 @@ Get-FileHash -Algorithm SHA256 .\arXivKaleid-<version>-windows-x64.zip
 
 ## 费用与数据
 
-候选抓取不需要 API Key。首页默认“抓取今天”，旁边日历可选择今天及此前 365 天的日期；选择后点击主按钮才开始抓取，只查询所选日期，不自动回退。论文按 `published` 首次提交时间换算成北京时间归属日期，同日稍后重新抓取可能得到更多候选。Key 位于设置页，“开始两轮分析”仍是独立入口。两轮分析使用你自己的 DeepSeek API Key，可能产生费用；开始分析前应用会显示数据发送告知，只有同意后才会调用模型。
+候选抓取不需要 API Key。首页默认“抓取今天”，日历可选择今天及此前 365 天；选择后点击主按钮才联网。alpha 12 按具体版本的北京时间提交日回溯，同论文当天只使用最后版本，当天没有新版本不出现；以后出现新版不会替换历史日期版本。重复抓取联网刷新，复用已保存元数据；首次发现可能因后续分类迁移漏论文。公开 alpha 11 仍采用首次提交日规则。Key 位于设置页，开始两轮分析是独立入口，使用你自己的 DeepSeek API Key 并可能产生费用；只有同意数据发送告知后才调用模型。
 
 API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和脱敏诊断日志位于 EXE 同级 `runtime/` 目录。GUI 会显示失败阶段、稳定错误代码、影响、建议和日志关联；日志不上传，应用没有维护者服务器中转或遥测。不要转发已使用过的 portable 目录。
 

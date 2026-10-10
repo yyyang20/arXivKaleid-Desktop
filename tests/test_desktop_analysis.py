@@ -12,7 +12,7 @@ import sys
 import tempfile
 import unittest
 from contextlib import ExitStack, nullcontext
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from types import MappingProxyType
 from unittest.mock import patch
@@ -200,6 +200,19 @@ class DesktopAnalysisTests(unittest.TestCase):
         conn.row_factory = sqlite3.Row
         self.addCleanup(conn.close)
         return conn
+
+    def test_historical_v2_identity_stays_same_in_database_pdf_and_both_rounds(self):
+        historical = paper(1, version=2, day=DAY-timedelta(days=20), updated=f"{DAY}T01:00:00Z")
+        snapshot = pipeline.CandidateSnapshot(DAY, datetime.now(timezone.utc), 1, 1, (historical,))
+        result = self.run_snapshot(snapshot)
+        self.assertEqual(result.candidate_count, 1)
+        conn = self.connect()
+        self.assertEqual(tuple(conn.execute('SELECT arxiv_id,version FROM papers').fetchone()), ('2609.00001', 2))
+        first = json.loads(self.requests[0][1]['messages'][1]['content'])['candidate_papers'][0]
+        self.assertEqual((first['arxiv_id'], first['version']), ('2609.00001', 'v2'))
+        self.assertEqual(self.pdf_urls, ['https://arxiv.org/pdf/2609.00001v2'])
+        # 两轮结果事实以及独立全文输入不能变成 v1 或最新版。
+        self.assertEqual({r[0] for r in conn.execute('SELECT version FROM screening_results WHERE arxiv_id IS NOT NULL')}, {2})
 
     def test_frozen_input_order_current_run_pdf_and_report_facts(self):
         snapshot = self.snapshot(57)
@@ -577,7 +590,7 @@ class DesktopAnalysisTests(unittest.TestCase):
         self.assertEqual(self.requests, [])
 
     def test_reset_only_known_work_files_and_preserves_pdfs_and_secret(self):
-        for parts in (("config", "secret.dat"), ("cache", "keep"), ("pdfs", "keep.pdf"), ("work", "other.sqlite")):
+        for parts in (("config", "secret.dat"), ("cache", "keep"), ("pdfs", "keep.pdf"), ("work", "other.sqlite"), ("metadata", "arxiv_versions.sqlite")):
             path = pipeline.runtime_path(*parts)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b"synthetic-preserve")
@@ -585,7 +598,7 @@ class DesktopAnalysisTests(unittest.TestCase):
         self.run_snapshot()
         self.run_snapshot()  # 新快照不做跨运行历史去重。
         self.assertEqual(len(self.requests), 2)
-        for parts in (("config", "secret.dat"), ("cache", "keep"), ("pdfs", "keep.pdf"), ("work", "other.sqlite")):
+        for parts in (("config", "secret.dat"), ("cache", "keep"), ("pdfs", "keep.pdf"), ("work", "other.sqlite"), ("metadata", "arxiv_versions.sqlite")):
             self.assertEqual(pipeline.runtime_path(*parts).read_bytes(), b"synthetic-preserve")
 
     def test_new_exception_inside_paper_boundary_remains_paper_scope(self):

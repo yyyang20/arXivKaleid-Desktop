@@ -185,10 +185,14 @@ class TaskPanel(SurfaceCard):
         self.analysis_details.setText("\n".join(lines))
 
     def show_snapshot(self, snapshot, categories):
+        counts = (snapshot.page_count, snapshot.network_count, snapshot.reused_count)
+        version_details = (f"历史分页 {snapshot.page_count} 页 · 网络候选 {snapshot.network_count} 篇 · 本地复用 {snapshot.reused_count} 篇\n"
+                           if all(n is not None for n in counts) else "")
         self.fetch_details.setText(
             f"抓取日期（北京时间）：{snapshot.candidate_date.isoformat()}\n"
             f"抓取完成时间：{snapshot.completed_time_text}\n"
-            f"分类来源：{' · '.join(categories)}\n"
+            f"{version_details}"
+            f"分类来源：{' · '.join(snapshot.categories)}\n"
             f"原始 {snapshot.raw_count} 条 → 去重后候选 {snapshot.unique_count} 篇\n"
             "去重后候选将全部进入 Round 1；尚未分析。"
         )

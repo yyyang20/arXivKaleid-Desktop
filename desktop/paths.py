@@ -66,7 +66,7 @@ def runtime_path(source_root: Path, *parts: str) -> Path:
 
 def prepare_runtime(source_root: Path) -> None:
     """启动即核验可写目录；失败不回退到用户目录，探针只在 runtime 中。"""
-    for name in ("config", "work", "cache/arxiv", "pdfs", "logs"):
+    for name in ("config", "work", "cache/arxiv", "pdfs", "logs", "metadata"):
         runtime_path(source_root, name).mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryFile(dir=runtime_path(source_root, "work")) as stream:
         stream.write(b"portable-write-check")

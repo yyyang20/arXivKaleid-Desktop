@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import re
 import socket
@@ -188,6 +189,13 @@ def fetch_pdf_bytes(
                     http_status=int(status),
                     transient=(status == 429 or 500 <= int(status) <= 599),
                 )
+            # 显式版本 URL 必须在重定向后仍指向同一版本；无版本 URL 不可信。
+            from desktop.arxiv_versions import version_url
+            try:
+                if version_url(response.geturl(), "pdf") != version_url(url, "pdf"):
+                    raise ValueError
+            except (AttributeError, ValueError):
+                raise PdfDownloadError("pdf_version_identity_mismatch") from None
             content = response.read(MAX_PDF_SIZE_BYTES + 1)
     except urllib.error.HTTPError as exc:
         raise PdfDownloadError(
@@ -219,7 +227,21 @@ def download_or_reuse_pdf(
     """复用有效文件，否则执行一次网络下载并做非解析式校验。"""
     online_url = build_online_pdf_url(paper)
     local_relative_path = relative_project_path(project_root, destination)
-    if is_valid_pdf_file(destination):
+    evidence = destination.with_suffix(".provenance.json")
+    from desktop.paths import checked_path
+    checked_path(project_root, destination.absolute().relative_to(project_root.resolve()).as_posix())
+    checked_path(project_root, evidence.absolute().relative_to(project_root.resolve()).as_posix())
+    identity = {"schema": "pdf_version_evidence_v1", "arxiv_id": paper.arxiv_id,
+                "version": paper.version, "url": online_url}
+
+    def verified_existing():
+        try:
+            record = json.loads(evidence.read_text(encoding="utf-8"))
+            return is_valid_pdf_file(destination) and record == dict(identity, sha256=pdf_file_sha256(destination))
+        except (OSError, ValueError, TypeError):
+            return False
+
+    if verified_existing():
         return PdfDownloadResult(
             paper=paper,
             online_pdf_url=online_url,
@@ -236,7 +258,7 @@ def download_or_reuse_pdf(
             status="failed",
             size_bytes=destination.stat().st_size,
             network_attempted=False,
-            error_type="existing_invalid_pdf",
+            error_type="existing_pdf_evidence_invalid",
         )
 
     http_status = None
@@ -253,6 +275,9 @@ def download_or_reuse_pdf(
             file.write(content)
         if not is_valid_pdf_file(destination):
             raise PdfDownloadError("saved_pdf_validation_failed")
+        # 证据必须在 PDF 完整落盘后成功写入；没有证据的旧文件保持原样且不复用。
+        with evidence.open("x", encoding="utf-8") as stream:
+            json.dump(dict(identity, sha256=pdf_file_sha256(destination)), stream, sort_keys=True)
         return PdfDownloadResult(
             paper=paper,
             online_pdf_url=online_url,
@@ -262,7 +287,7 @@ def download_or_reuse_pdf(
             network_attempted=True,
         )
     except FileExistsError:
-        if is_valid_pdf_file(destination):
+        if verified_existing():
             return PdfDownloadResult(
                 paper=paper,
                 online_pdf_url=online_url,
@@ -271,7 +296,7 @@ def download_or_reuse_pdf(
                 size_bytes=destination.stat().st_size,
                 network_attempted=False,
             )
-        error_type = "existing_invalid_pdf"
+        error_type = "existing_pdf_evidence_invalid"
     except PdfDownloadError as exc:
         error_type = exc.error_type
         http_status = exc.http_status

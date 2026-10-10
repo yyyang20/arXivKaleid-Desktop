@@ -2,6 +2,13 @@
 
 本文件保留 Desktop 与通用功能的简短历史。代码解耦前的条目来自原项目：当时的发行来源、构建提交、兼容行为和治理测试仅表示历史事实，不代表当前仓库仍有这些入口或测试。现行行为以代码、配置、测试和 [当前业务规范](PROJECT_SPEC.md) 为准；详细历史通过 Git、PR 和 Issue 查询。
 
+## 2026-10-11：Desktop alpha 12 精确历史版本与轻量候选库
+
+- GUI 所选北京时间提交日决定具体版本，同论文当天只取最后一版；完整遍历三个分类 OAI 版本历史，再获取并校验精确版本 Atom，拒绝最新版本替代。接受后续分类迁移可能漏掉首次发现的论文，已存合格历史联网核对后继续保留。
+- 新增独立版本元数据库 schema v1，只事务保存成功候选及查询记录；元数据、不可变快照、分析工作库、PDF、全文与缓存持续绑定 `(arxiv_id, version)`。新 PDF 证据命名空间验证最终 URL、来源记录与 SHA-256；保留旧 PDF 和日报历史。
+- 配置升级为 `desktop_config_v6`，增加 `beijing_version_day_v1`；两轮 Prompt、筛选策略、预算和模型调用规则保持不变。同步用户指南、隐私、业务与运行文档，新增历史回溯、分页、边界、事务及 PDF 错版回归，冻结诊断增加元数据库重启与历史日期参数。
+- 第一阶段仅准备本地技术候选；尚未公开发布，不执行 GitHub 远程写入，公开下载仍为 alpha 11。验证和产物身份以本次受管证据及冻结提交为准，不覆盖历史发行。
+
 ## 2026-10-10：Desktop alpha 11 公开发行
 
 - 已公开 [v0.1.0-alpha.11 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.11)，不标为稳定 latest。[功能 PR #20](https://github.com/yyyang20/arXivKaleid-Desktop/pull/20) 和 [验证修正 PR #21](https://github.com/yyyang20/arXivKaleid-Desktop/pull/21) 合并后，从干净 main 提交 `1e2285afb839e4029336b05d2eb9f359d23701ab` 重建；tag、BUILD_INFO 与该提交一致，用途为 `public-release`，第一阶段候选未上传。

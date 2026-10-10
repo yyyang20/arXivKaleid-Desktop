@@ -22,11 +22,12 @@ from desktop.errors import (
     outcome,
 )
 from desktop.progress import ProgressCallback, ProgressEvent, emit_progress
+from desktop.version_metadata import FETCH_POLICY, MetadataError, VersionStore
+from desktop import arxiv_versions
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CATEGORIES = ("gr-qc", "astro-ph.HE", "astro-ph.GA")
-PAGE_SIZE = 1000
 
 
 class CandidateError(DesktopOperationError):
@@ -47,7 +48,17 @@ class CandidateSnapshot:
     papers: tuple[Mapping[str, str | int], ...]
     snapshot_id: str = field(default_factory=new_id)
     fetch_operation_id: str = ""
+    categories: tuple[str, ...] = CATEGORIES
+    fetch_policy: str = FETCH_POLICY
+    page_count: int | None = None
+    network_count: int | None = None
+    reused_count: int | None = None
     _analysis_claim: LockType = field(default_factory=Lock, init=False, repr=False, compare=False)
+
+    def __post_init__(self):
+        # 所有入口（包括诊断夹具）均复制元数据，不能留下调用者的可变字典。
+        object.__setattr__(self, "papers", tuple(MappingProxyType(dict(p)) for p in self.papers))
+        object.__setattr__(self, "categories", tuple(self.categories))
 
     @property
     def analysis_attempted(self) -> bool:
@@ -87,6 +98,12 @@ def _fetch_issue(exc: BaseException, transport: Mapping[str, object] | None = No
     code = str(exc).split(":", 1)[0]
     transport = dict(transport or {})
     curl_exit = transport.get("curl_exit_code")
+    if isinstance(exc, MetadataError):
+        return make_issue("AKD-FETCH-METADATA_FAILED")
+    if code.startswith("arxiv_oai_"):
+        return make_issue("AKD-FETCH-HISTORY_INVALID")
+    if code.startswith("arxiv_version_"):
+        return make_issue("AKD-FETCH-VERSION_INVALID")
     if code == "arxiv_curl_unavailable":
         return make_issue("AKD-FETCH-CURL_UNAVAILABLE")
     if code == "arxiv_api_timeout":
@@ -129,8 +146,9 @@ def fetch_candidates_for_date(
     *,
     diagnostics: DesktopDiagnostics | None = None,
     operation_id: str | None = None,
+    categories: tuple[str, ...] | None = None,
 ) -> CandidateFetchResult:
-    """只获取指定北京时间首次提交日，完整分页后冻结全部有效候选。"""
+    """完整读取分类版本历史，精确匹配北京时间提交日并持久保存候选。"""
     import main
 
     # 独立且不向根 logger 传播；Desktop 不创建日志文件。
@@ -140,11 +158,15 @@ def fetch_candidates_for_date(
     operation_id = operation_id or (diagnostics.operation_id() if diagnostics else new_id())
     timer = StageTimer()
     current_day = target_date
-    categories = tuple(CATEGORIES)
+    categories = tuple(categories if categories is not None else CATEGORIES)
     category_positions = {category: index for index, category in enumerate(categories, start=1)}
-    current_day_count = 0
     last_transport_failure: dict[str, object] = {}
+    store = VersionStore(PROJECT_ROOT)
     try:
+        if type(target_date) is not date or not categories or len(set(categories)) != len(categories):
+            raise ValueError("arxiv_version_query_invalid")
+        # 在联网前核验已有库，损坏或未知身份不自动覆盖。
+        store.previous(target_date, categories)
         if diagnostics:
             diagnostics.event(
                 operation_id=operation_id, operation_type="fetch", stage="fetch",
@@ -161,7 +183,7 @@ def fetch_candidates_for_date(
         cache = runtime_path("cache", "arxiv")
         cache.mkdir(parents=True, exist_ok=True)
 
-        def fetch_page(category: str, day: date, start: int, size: int):
+        def request(url: str):
             # 每次写请求间隔文件前检查其最终路径，沿用已有 curl 传输。
             runtime_path("cache", "arxiv", "last_request_time.txt")
             def observe(kind: str, payload: Mapping[str, object]) -> None:
@@ -183,7 +205,7 @@ def fetch_candidates_for_date(
                     )
 
             xml = main.fetch_arxiv_metadata(
-                url=main.build_arxiv_query_url(category, day, size, start=start),
+                url=url,
                 timeout_seconds=90,
                 cache_dir=cache,
                 interval_seconds=5,
@@ -194,42 +216,26 @@ def fetch_candidates_for_date(
                 diagnostic_observer=observe,
                 emit_success_transport_diagnostic=True,
             )
-            return main.ArxivFeedPage(xml, logger)
+            return xml
 
-        def fetch_category(category: str, day: date):
-            nonlocal current_day, current_day_count
+        def on_page(category: str, page: int, records: int):
             category_index = category_positions[category]
             emit_progress(progress, ProgressEvent(
                 task_type="fetch", stage="category", state="running",
-                message=(f"候选抓取中 · 北京时间 {day.isoformat()} · "
+                message=(f"版本历史读取中 · 北京时间 {target_date.isoformat()} · "
                          f"分类 {category_index} / {len(categories)}：{category} · "
-                         f"当前日期已获取 {current_day_count} 篇"),
-                current_date=day, category=category,
+                         f"第 {page} 页 · 本页 {records} 条历史"),
+                current_date=target_date, category=category,
                 category_index=category_index, category_total=len(categories),
-                processed=current_day_count,
+                processed=records,
             ))
-            category_papers = main.fetch_category_submission_pages(
-                category=category,
-                submission_date=day,
-                page_size=PAGE_SIZE,
-                fetch_page=fetch_page,
-                logger=logger,
-            )
-            current_day_count += len(category_papers)
-            emit_progress(progress, ProgressEvent(
-                task_type="fetch", stage="category", state="running",
-                message=(f"候选抓取中 · 北京时间 {day.isoformat()} · "
-                         f"分类 {category_index} / {len(categories)}：{category} · "
-                         f"当前日期已获取 {current_day_count} 篇"),
-                current_date=day, category=category,
-                category_index=category_index, category_total=len(categories),
-                processed=current_day_count,
-            ))
-            return category_papers
 
         day = target_date
-        groups = [fetch_category(category, day) for category in categories]
-        papers, duplicates = main.merge_papers_by_identity(groups)
+        papers, raw_count, page_count, network_count, reused_count = arxiv_versions.collect(
+            day, categories, request, store, on_page,
+        )
+        # 候选和查询成员同一事务；落库失败不能把未保存候选交给分析。
+        store.save(operation_id, day, categories, papers, raw_count)
         completed_at = datetime.now(timezone.utc).astimezone(beijing)
         if not papers:
             normal = outcome(
@@ -253,10 +259,12 @@ def fetch_candidates_for_date(
         snapshot = CandidateSnapshot(
             candidate_date=day,
             completed_at=completed_at,
-            raw_count=len(papers) + duplicates,
+            raw_count=raw_count,
             unique_count=len(papers),
             papers=frozen,
             fetch_operation_id=operation_id,
+            categories=categories, fetch_policy=FETCH_POLICY, page_count=page_count,
+            network_count=network_count, reused_count=reused_count,
         )
         emit_progress(progress, ProgressEvent(
             task_type="fetch", stage="complete", state="completed",
@@ -280,6 +288,12 @@ def fetch_candidates_for_date(
             exc.issue if isinstance(exc, DesktopOperationError)
             else _fetch_issue(exc, last_transport_failure)
         )
+        # 失败记录不包含部分候选。库本身失败时保留原库，不再尝试写入。
+        if not isinstance(exc, MetadataError):
+            try:
+                store.save(operation_id, target_date, categories, [], 0, error_code=issue.code)
+            except MetadataError:
+                issue = make_issue("AKD-FETCH-METADATA_FAILED")
         if diagnostics:
             diagnostics.event(
                 operation_id=operation_id, operation_type="fetch", stage=issue.stage,

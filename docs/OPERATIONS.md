@@ -10,7 +10,7 @@
 
 ## Desktop 候选传输与安全诊断
 
-候选抓取由 `desktop/pipeline.py` 调用 `main.fetch_arxiv_metadata()`；查询、分页、超时、间隔与快照失效规则见 [Desktop 规范](desktop/DESKTOP_SPEC.md#候选抓取)。本节维护同次请求的安全诊断边界。
+候选抓取由 `desktop/pipeline.py`、`desktop/arxiv_versions.py` 复用 `main.fetch_arxiv_metadata()` 的单次传输，读取分类 OAI 历史与精确版本 Atom；查询、分页、超时、间隔与快照失效规则见 [Desktop 规范](desktop/DESKTOP_SPEC.md#候选抓取)。本节维护同次请求的安全诊断边界。
 
 抓取入口将同次请求的结构化证据交给 Desktop 诊断记录器：可解析的非 200 响应记录安全正文特征，200 与非 200 都可记录 transport 证据。它们进入源码 `.desktop-runtime/logs/` 或 portable `runtime/logs/` 下的会话 JSONL，不新增网络请求，不保存响应原文。
 
