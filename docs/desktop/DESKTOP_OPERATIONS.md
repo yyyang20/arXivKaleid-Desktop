@@ -1,6 +1,6 @@
 # Desktop 运行与验证
 
-当前开发版本为 `0.1.0-alpha.12`，尚未公开发布；最新公开成品仍为 alpha 11 Windows x64 portable，下载与运行方式见下文。
+当前公开版本为 `0.1.0-alpha.12`，最新成品为 alpha 12 Windows x64 portable 预发布测试版，下载与运行方式见下文。
 
 本文档维护源码启动、依赖、本机构建、portable 验证及运行排错细节。开发与公开发布流程见根 [运行手册](../OPERATIONS.md)，安全、授权和完成要求以根 [AGENTS.md](../../AGENTS.md) 为准，阅读与更新路由见 [文档索引](../README.md)。
 
@@ -33,7 +33,7 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 
 ## Portable 用户
 
-解压 `arXivKaleid-<version>-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。当前公开成品为 [alpha 11](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.11)，从合并后的干净 main 重建，tag 与 `BUILD_INFO.json` 的发行提交一致，已完成零模型 portable 验证及匿名成品、源码核验。具体发行身份与验证记录见 [CHANGELOG](../CHANGELOG.md)。在设置页输入自己的 DeepSeek API Key，按“使用说明”设置并保存两轮提示词，首页先获取候选，再执行分析。
+解压 `arXivKaleid-<version>-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。当前公开成品为 [alpha 12](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.12)，从合并后的干净 main 重建，tag 与 `BUILD_INFO.json` 的发行提交一致，已完成零模型 portable 验证及匿名成品、源码核验。具体发行身份与验证记录见 [CHANGELOG](../CHANGELOG.md)。在设置页输入自己的 DeepSeek API Key，按“使用说明”设置并保存两轮提示词，首页先获取候选，再执行分析。
 
 所有用户数据都在 EXE 同级 `runtime/`，诊断日志位于 `runtime/logs/`。删除整个 portable 目录相当于卸载并删除运行数据；当前版本不自动轮换或删除旧日志。不要把包含个人 `runtime/` 的已使用目录重新发给其他人，应发送构建生成的干净 ZIP。DPAPI 绑定 Windows 用户与电脑，复制文件夹给另一个用户/电脑后，旧 `secret.dat` 通常无法解密，需要重新输入 Key。
 
@@ -106,7 +106,7 @@ Qt `QDomDocument.setContent` 弃用提示暂为非阻塞已知问题，以冻结
 
 ## 运行目录与凭据
 
-完整研究 Prompt 在本目录 `config/round1_research_prompt.json` 与 `round2_research_prompt.json` 中以 UTF-8 明文保存，格式为 `research_prompt_v1`。重启生效；损坏或未知格式会阻止分析，不自动覆盖。通过 GUI 确认恢复对应轮默认可修复覆盖记录，内置资源损坏则重新解压。alpha 11 解压到新目录使用新版默认，不读取或迁移 alpha 10 `runtime/`。
+完整研究 Prompt 在本目录 `config/round1_research_prompt.json` 与 `round2_research_prompt.json` 中以 UTF-8 明文保存，格式为 `research_prompt_v1`。重启生效；损坏或未知格式会阻止分析，不自动覆盖。通过 GUI 确认恢复对应轮默认可修复覆盖记录，内置资源损坏则重新解压。新版本解压到新目录使用其默认提示词，不自动读取或迁移旧目录 `runtime/`。
 
 完整研究提示词变更须先通过源码离线测试、实际 GUI、请求哈希/缓存/预算与隐私边界验证，再冻结本地中文 commit。还须验证跨领域结果、可选自由评价、无固定阅读级别，以及改变第一轮研究顺序和评价不影响第二轮请求、缓存身份或 Token 并列裁决；两轮超过默认篇数仍接受全部合法结果，第二轮在冻结校验器、真实日报和历史中保持模型顺序。构建前核验已有 vendor 固定哈希，缺失或异常时停止，不安装依赖或下载替代材料。自动合成数据只写验证副本；分别验收五页、两轮查看/编辑、保存失败、恢复确认、离开保护、分析禁改、原生 DPI 与模拟 100/125/150/200%，并检查输入法提交中文、滚动及较大字体。提示词入口还须核对实际历史卡片外框、间隔与图标，执行整卡各区域点击及回车/空格进入，检查悬停/聚焦、最小窗口下实际放大文字的换行和裁切及中文“提示词”文案。此处输入法事件检查不等于所有第三方 IME 的实机兼容覆盖。
 

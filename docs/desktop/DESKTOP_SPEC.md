@@ -1,6 +1,6 @@
 # Desktop 规范
 
-当前开发版本 `0.1.0-alpha.12` 使用 PySide6 与基础版 PySide6-Fluent-Widgets，尚未公开发布。主窗口采用 Windows 原生标题栏与 Fluent 导航，顺序为首页、提示词、历史、使用说明、设置；版本显示统一读取 `desktop.__version__`。
+当前公开版本 `0.1.0-alpha.12` 使用 PySide6 与基础版 PySide6-Fluent-Widgets，为预发布测试版。主窗口采用 Windows 原生标题栏与 Fluent 导航，顺序为首页、提示词、历史、使用说明、设置；版本显示统一读取 `desktop.__version__`。
 
 五页统一使用浅灰蓝背景、略浅的同色卡片、低对比度冷灰边框、8 px 卡片圆角和一致的页面边距；不使用阴影或装饰性渐变。设置页 API Key 输入框使用接近卡片的灰蓝底色与淡边框，仅在聚焦时显示蓝色描边。
 

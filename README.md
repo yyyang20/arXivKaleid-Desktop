@@ -4,7 +4,7 @@ arXivKaleid Desktop 是按用户两轮完整研究 Prompt 筛选 arXiv 论文的
 
 本仓库包含 Desktop 应用源码、测试、构建配置和项目文档；Windows portable 成品通过 GitHub Releases 提供。
 
-当前开发版本为 `0.1.0-alpha.12`，尚未公开发布：按首次／当前最新版的北京时间提交日发现论文，利用已存日期关联补查，统一读取当前最新版，只持久保存成功候选。两轮研究提示词、筛选与预算保持 alpha 11 规则。最新公开下载仍为 [alpha 11 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.11)，是预发布测试版。
+当前公开版本为 `0.1.0-alpha.12`：按首次／当前最新版的北京时间提交日发现论文，利用已存日期关联补查，统一读取当前最新版，只持久保存成功候选。两轮研究提示词、筛选与预算保持 alpha 11 规则。最新下载为 [alpha 12 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.12)，是预发布测试版。
 
 ## 开发方式
 
@@ -37,7 +37,7 @@ Get-FileHash -Algorithm SHA256 .\arXivKaleid-<version>-windows-x64.zip
 
 ## 费用与数据
 
-候选抓取不需要 API Key。首页默认“抓取今天”，日历可选择今天及此前 365 天；选择后点击主按钮才联网。alpha 12 合并首次提交日、当前最新版提交日和本地已保存的该日期候选关联，联网取得最新版后冻结版本；不执行 OAI 历史回溯。未保存的中间更新日、分类迁移和索引延迟可能导致漏项；已有版本记录、快照和日报不被改写。公开 alpha 11 仍采用首次提交日规则。Key 位于设置页，开始两轮分析是独立入口，使用你自己的 DeepSeek API Key 并可能产生费用；只有同意数据发送告知后才调用模型。
+候选抓取不需要 API Key。首页默认“抓取今天”，日历可选择今天及此前 365 天；选择后点击主按钮才联网。alpha 12 合并首次提交日、当前最新版提交日和本地已保存的该日期候选关联，联网取得最新版后冻结版本；不执行 OAI 历史回溯。未保存的中间更新日、分类迁移和索引延迟可能导致漏项；已有版本记录、快照和日报不被改写。Key 位于设置页，开始两轮分析是独立入口，使用你自己的 DeepSeek API Key 并可能产生费用；只有同意数据发送告知后才调用模型。
 
 API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和脱敏诊断日志位于 EXE 同级 `runtime/` 目录。GUI 会显示失败阶段、稳定错误代码、影响、建议和日志关联；日志不上传，应用没有维护者服务器中转或遥测。不要转发已使用过的 portable 目录。
 
@@ -51,7 +51,7 @@ alpha 9 的历史保存当次完整原始 Markdown，重启后无需 Key 即可�
 
 正文支持 Markdown 风格纯文本，不能为空、含 NUL 或超过 10,000 字符。第一轮默认用黑洞阴影、最多 10 篇及简短入选说明作示例，用户可修改方向、数量和评价要求；程序不设两轮篇数上限，不要求第一轮研究排序，日报以“论文 N”编号。所有研究建议和公式格式提醒均在可编辑默认正文中；身份识别、JSON 结构、PDF 60 页、Token、费用及安全保护继续保留。评价可省略或自由表达，不强制标签、中文理由或阅读级别。第一轮只提供标题、摘要和身份；第二轮增加合格提取全文，不接收第一轮评价或排名。
 
-内容以明文保存在当前目录的 `runtime/config/round1_research_prompt.json` 和 `round2_research_prompt.json`，分析时随请求发送给 DeepSeek；不要填写凭据或不宜外发的私人内容。损坏配置会阻止分析并保留文件，可确认恢复本轮默认。alpha 11 解压到新目录使用新版默认，不读取或迁移 alpha 10 用户数据。
+内容以明文保存在当前目录的 `runtime/config/round1_research_prompt.json` 和 `round2_research_prompt.json`，分析时随请求发送给 DeepSeek；不要填写凭据或不宜外发的私人内容。损坏配置会阻止分析并保留文件，可确认恢复本轮默认。新版本解压到新目录使用其默认提示词，不自动读取或迁移旧目录用户数据。
 
 ## 卸载
 
@@ -61,7 +61,7 @@ alpha 9 的历史保存当次完整原始 Markdown，重启后无需 Key 即可�
 
 Copyright (c) 2026 yyyang20. 自有应用源码、测试、构建脚本、配置、提示词和项目文档采用 **GPL-3.0-only**，完整文本见 [LICENSE](LICENSE)，许可说明见 [EULA.txt](EULA.txt)。本软件无保证；允许使用、研究、修改和分发，包括商业使用。分发受 GPL 覆盖的衍生版本须继续按 GPLv3 提供相应源码，私人修改不要求公开。
 
-公开 alpha 11 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.11.zip)包含源码、资源、测试及构建说明；对应 [Windows portable Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.11) 的 `BUILD_INFO.json` 与 tag 均指向发行提交 `1e2285afb839e4029336b05d2eb9f359d23701ab`，用途为 `public-release`。正式成品从合并后的干净 main 重建，未使用第一阶段技术候选；匿名下载成品及源码已核验。不要用浮动 main 代替已发行版本源码；发布后的 main 可以包含文档收口提交。
+公开 alpha 12 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.12.zip)包含源码、资源、测试及构建说明；对应 [Windows portable Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.12) 的 `BUILD_INFO.json` 与 tag 均指向发行提交 `e8887a7e4b58da671b51503fa62950f3f8a85205`，用途为 `public-release`。正式成品从合并后的干净 main 重建，未使用第一阶段技术候选；匿名下载成品及源码已核验。不要用浮动 main 代替已发行版本源码；发布后的 main 可以包含文档收口提交。
 
 第三方组件保留各自许可，声明见 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)。完整许可文本及实际分发库的固定对应源码随 portable ZIP 提供，清单见 `licenses/components.json`。本版许可不改写既有历史发行资料。
 
