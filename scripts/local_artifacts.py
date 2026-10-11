@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import uuid
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -30,6 +31,8 @@ STATES = (*OPEN_STATES, 'failed', 'awaiting_review', 'succeeded', 'released')
 REGISTRY = '.desktop-build/managed-artifacts'
 TEST_ROOT = '.codex-validation/managed-artifacts'
 ORDINARY_FAILURES = ('unittest_failure', 'pyinstaller_failure')
+CANDIDATE_POLICY = 'verified_candidate_copy_v1'
+TECHNICAL_PURPOSE = 'local-portable-technical-validation'
 
 
 def file_hash(path):
@@ -164,6 +167,312 @@ def save_record(root, record):
     temporary.replace(target)
 
 
+def manifest_digest(files):
+    return hashlib.sha256(json.dumps(files, sort_keys=True).encode('utf-8')).hexdigest()
+
+
+def candidate_files(root, directory, expected=None):
+    """先检查路径和敏感文件存在性，再读取干净发行文件；不读取运行数据。"""
+    directory = checked_path(root, directory.relative_to(root).as_posix())
+    paths = list(directory.rglob('*'))
+    for item in paths:
+        checked_path(root, item.relative_to(root).as_posix())
+        parts = [p.lower() for p in item.relative_to(directory).parts]
+        if ('runtime' in parts or item.name.lower().startswith(('secret.', '.env', 'api-key', 'credentials'))
+                or item.name.lower() in ('local_secret.json', 'round1_research_prompt.json', 'round2_research_prompt.json')
+                or re.search(r'\.(sqlite\d*|db|pdf|jsonl)(?:-wal|-shm|-journal)?$', item.name, re.I)):
+            raise RuntimeError('candidate_contains_user_data')
+    names = {p.relative_to(directory).as_posix() for p in paths if p.is_file()}
+    if expected is not None and names != set(expected):
+        raise RuntimeError('candidate_manifest_changed')
+    files = {p.relative_to(directory).as_posix(): file_hash(p) for p in paths if p.is_file()}
+    allowed = {directory}
+    for p in paths:
+        if p.is_file():
+            allowed.update(parent for parent in p.parents if parent.is_relative_to(directory))
+    if any(p.is_dir() and p not in allowed for p in paths):
+        raise RuntimeError('candidate_unknown_directory')
+    return files
+
+
+def verify_candidate_archive(root, directory, archive, checksum, expected):
+    """只读校验整个 ZIP 与明确发行目录的文件集；不解压，不接受额外成员。"""
+    for p in (directory, archive, checksum):
+        checked_path(root, p.relative_to(root).as_posix())
+    if not directory.is_dir() or not archive.is_file() or not checksum.is_file():
+        raise RuntimeError('candidate_archive_missing')
+    files = candidate_files(root, directory, expected)
+    if files != expected:
+        raise RuntimeError('candidate_manifest_changed')
+    digest = file_hash(archive)
+    declared = checksum.read_text(encoding='ascii').split()
+    if len(declared) != 2 or declared[0] != digest:
+        raise RuntimeError('candidate_checksum_mismatch')
+    # 归档移动后文件名为 previous-release.zip；校验文件仍保存移动前原名。
+    prefix = declared[1].removesuffix('.zip') + '/'
+    if not re.fullmatch(r'arXivKaleid-[\w.-]+-windows-x64/', prefix):
+        raise RuntimeError('candidate_archive_name_invalid')
+    with zipfile.ZipFile(archive) as source:
+        entries = source.infolist()
+        wanted = {prefix + name for name in files}
+        if len(entries) != len(wanted) or {e.filename for e in entries} != wanted:
+            raise RuntimeError('candidate_zip_manifest_changed')
+        for entry in entries:
+            if entry.is_dir() or (entry.external_attr >> 16) & 0o170000 == 0o120000:
+                raise RuntimeError('candidate_zip_link')
+            with source.open(entry) as stream:
+                if hashlib.file_digest(stream, 'sha256').hexdigest() != files[entry.filename[len(prefix):]]:
+                    raise RuntimeError('candidate_zip_hash_changed')
+    return digest
+
+
+def register_candidate_copy(run):
+    """仅新构建显式登记技术副本；历史记录和正式发行不推断清理资格。"""
+    directory = run.preserved / 'previous-dist'
+    info = checked_path(run.root, REGISTRY, run.record['id'], 'preserved', 'previous-dist', 'BUILD_INFO.json')
+    if not info.is_file():
+        return
+    identity = json.loads(info.read_text(encoding='utf-8'))
+    if identity.get('purpose') != TECHNICAL_PURPOSE:
+        return
+    if not re.fullmatch('[0-9a-f]{40}', identity.get('commit', '')) or identity.get('working_tree_clean') is not True:
+        raise RuntimeError('candidate_identity_invalid')
+    archive, checksum = run.preserved / 'previous-release.zip', run.preserved / 'previous-release.sha256'
+    if not archive.is_file() or not checksum.is_file():
+        run.record['candidate_retention_reason'] = 'matching_archive_missing'
+        run.save()
+        return
+    files = candidate_files(run.root, directory)
+    digest = verify_candidate_archive(run.root, directory, archive, checksum, files)
+    run.record['candidate_copy'] = dict(policy=CANDIDATE_POLICY, status='pending',
+        directory=directory.relative_to(run.root).as_posix(), files=files,
+        bytes=sum(inventory(run.root, directory).values()), archive_sha256=digest,
+        old_identity=identity)
+    run.save()
+
+
+def output_paths(root, output):
+    """输出位置由发行布局确定，不信任运行记录提供的任意路径。"""
+    relative = output.get('dist', '')
+    if not re.fullmatch(r'dist/arXivKaleid-[\w.-]+-windows-x64', relative):
+        raise RuntimeError('candidate_output_scope_invalid')
+    name = relative.split('/')[1]
+    if output.get('zip') != f'release/{name}.zip' or output.get('checksum') != f'release/{name}.zip.sha256':
+        raise RuntimeError('candidate_output_scope_invalid')
+    return tuple(checked_path(root, output[k]) for k in ('dist', 'zip', 'checksum'))
+
+
+def bind_portable_build(root, source, files):
+    """用 ZIP 和完整文件清单匹配本次构建，不能只凭 commit 或文件名匹配。"""
+    source = checked_path(root, source.relative_to(root).as_posix())
+    info = checked_path(root, source.relative_to(root).as_posix(), 'BUILD_INFO.json')
+    identity = json.loads(info.read_text(encoding='utf-8'))
+    matches = []
+    for _, record in records(root):
+        output = record.get('outputs', {})
+        if (record['kind'] == 'build' and record['state'] in ('succeeded', 'released')
+                and identity.get('build_run_id', record['id']) == record['id']
+                and record.get('outcome') == 'succeeded' and output.get('dist') == source.relative_to(root).as_posix()
+                and output.get('inventory') == files):
+            directory, archive, checksum = output_paths(root, output)
+            digest = verify_candidate_archive(root, directory, archive, checksum, files)
+            if digest == output['sha256']:
+                matches.append(dict(build_id=record['id'], commit=record['commit'],
+                                    zip_sha256=digest, manifest_sha256=manifest_digest(files)))
+    if len(matches) > 1:
+        raise RuntimeError('portable_build_binding_ambiguous')
+    return matches[0] if matches else None  # 旧构建仍可验证，但不能解锁新清理策略。
+
+
+def validated_review(root, record):
+    """验证资格来自完整入口及未变动证据，不依赖人工发布确认。"""
+    binding = record.get('portable_build')
+    report = checked_path(root, REGISTRY, record['id'], 'evidence', 'validation.json')
+    if (record['kind'] != 'portable' or not binding or not record.get('portable_complete')
+            or record.get('failure_type') or record.get('cleanup_error')
+            or checked_path(root, record['work']).exists()
+            or record.get('outcome') != 'awaiting_review'
+            or not report.is_file() or file_hash(report) != record.get('portable_report_sha256')
+            or not review_evidence_matches(root, record)):
+        raise RuntimeError('portable_review_not_eligible')
+    summary = json.loads(report.read_text(encoding='utf-8'))
+    checks = ('missing_resource_rejected', 'tampered_requirements_rejected', 'missing_user_guide_rejected',
+              'tampered_user_guide_rejected', 'used_runtime_rejected', 'clean_distribution_preserved')
+    runs = summary.get('runs', [])
+    modes = {(r.get('dpi_mode'), r.get('requested_dpr')) for r in runs}
+    if (summary.get('portable_build') != binding or summary.get('complete') is not True
+            or not all(summary.get(k) is True for k in checks)
+            or not {('native', None), ('simulated', 1), ('simulated', 1.25),
+                    ('simulated', 1.5), ('simulated', 2)}.issubset(modes)
+            or not all(r.get('ok') is True and r.get('restart_cycles') == 3
+                       and r.get('synthetic_dpapi_restart') is True and r.get('python_on_path') is False for r in runs)):
+        raise RuntimeError('portable_review_binding_changed')
+    _, build = read_record(root, binding['build_id'])
+    output = build.get('outputs', {})
+    expected = dict(build_id=build['id'], commit=build['commit'],
+                    zip_sha256=output.get('sha256'), manifest_sha256=manifest_digest(output.get('inventory', {})))
+    if (binding != expected or summary.get('commit') != build['commit']
+            or build['state'] not in ('succeeded', 'released') or build.get('outcome') != 'succeeded'):
+        raise RuntimeError('portable_review_binding_changed')
+    return build
+
+
+def review_evidence_matches(root, record):
+    """先比较证据文件集，避免误读人工放入的额外文件或凭据。"""
+    evidence = checked_path(root, REGISTRY, record['id'], 'evidence')
+    expected = record.get('evidence_hashes')
+    if not isinstance(expected, dict) or set(inventory(root, evidence)) != set(expected):
+        return False
+    for relative, digest in expected.items():
+        item = checked_path(root, relative)
+        if (not item.is_relative_to(evidence) or item.name.lower().startswith(('secret.', '.env', 'api-key', 'credentials'))
+                or item.suffix.lower() not in ('.json', '.png', '.log', '.jsonl', '.txt')):
+            return False
+        if file_hash(item) != digest:
+            return False
+    return True
+
+
+def candidate_in_use(root, directory, entries):
+    """有效受管引用阻止清理；只查询程序路径，不读取进程命令行或凭据。"""
+    for _, record in entries:
+        if (record['state'] in OPEN_STATES or record.get('review_pending')
+                or record['state'] == 'failed' and record.get('evidence_class') == 'protected'):
+            for relative in record.get('protected_inputs', []):
+                reference = checked_path(root, relative)
+                if reference == directory or reference.is_relative_to(directory) or directory.is_relative_to(reference):
+                    return True
+    return candidate_process_active(directory)
+
+
+def candidate_process_active(directory):
+    if os.name == 'nt':
+        # 只取 arXivKaleid 进程的可执行路径；状态不可确认时停止，不能强制结束用户程序。
+        command = "[Console]::OutputEncoding=[Text.UTF8Encoding]::new(); @(Get-CimInstance Win32_Process -ErrorAction Stop -Filter \"Name = 'arXivKaleid.exe'\" | Select-Object ExecutablePath) | ConvertTo-Json -Compress"
+        result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', command],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15, check=True)
+        paths = json.loads(result.stdout.decode('utf-8-sig') or '[]')
+        paths = [paths] if isinstance(paths, dict) else paths
+        for item in paths or []:
+            value = item.get('ExecutablePath')
+            if not value:
+                raise RuntimeError('candidate_process_status_unknown')
+            if Path(value).is_relative_to(directory):
+                return True
+    return False
+
+
+def accept_portable_validation(root, record):
+    """调用者持有锁；验证收尾后自动登记替代资格，人工验收只管发布。"""
+    build = validated_review(root, record)
+    output = build['outputs']
+    directory, archive, checksum = output_paths(root, output)
+    digest = verify_candidate_archive(root, directory, archive, checksum, output['inventory'])
+    if digest != output['sha256']:
+        raise RuntimeError('portable_review_current_zip_changed')
+    if any(process_alive(pid) for pid in record['children']) or candidate_process_active(directory):
+        raise RuntimeError('artifact_resources_still_active')
+    build['candidate_validation'] = dict(run_id=record['id'], binding=record['portable_build'],
+        report_sha256=record['portable_report_sha256'], completed_utc=record['completed_utc'])
+    save_record(root, build)
+    record['automatic_validation'] = build['candidate_validation']
+    save_record(root, record)
+    sweep_candidate_copies(root, finishing_id=record['id'])
+
+
+def automatic_validation_accepted(root, record):
+    """已完整验证的待发布材料保留证据，但不要求人工结案才能再验证。"""
+    if record['kind'] != 'portable' or not record.get('portable_complete') or not record.get('portable_build'):
+        return False
+    build = validated_review(root, record)
+    proof = record.get('automatic_validation', {})
+    return (proof.get('run_id') == record['id'] and proof.get('binding') == record['portable_build']
+            and proof.get('report_sha256') == record['portable_report_sha256']
+            and proof.get('completed_utc') == record['completed_utc'])
+
+
+def sweep_candidate_copies(root, *, finishing_id=None):
+    """调用者持有锁；完整自动验证通过即清理合格旧副本，保留证明和归档。"""
+    entries = records(root)
+    for path, build in entries:
+        copy = build.get('candidate_copy', {})
+        if (build['schema'] != SCHEMA or build['kind'] != 'build'
+                or copy.get('policy') != CANDIDATE_POLICY or copy.get('status') != 'pending'):
+            continue
+        approval = build.get('candidate_validation')
+        if not approval or build['state'] not in ('succeeded', 'released'):
+            continue
+        try:
+            _, review = read_record(root, approval['run_id'])
+            allowed_states = ('awaiting_review', 'released')
+            if review['state'] not in allowed_states and not (review['state'] == 'finishing' and review['id'] == finishing_id):
+                continue
+            verified = validated_review(root, review)
+            if (verified['id'] != build['id'] or approval['binding'] != review['portable_build']
+                    or approval['report_sha256'] != review['portable_report_sha256']
+                    or approval['completed_utc'] != review['completed_utc']):
+                raise RuntimeError('candidate_review_binding_changed')
+            if any(process_alive(pid) for pid in review['children']):
+                raise RuntimeError('artifact_resources_still_active')
+            directory = checked_path(root, REGISTRY, build['id'], 'preserved', 'previous-dist')
+            if copy.get('directory') != directory.relative_to(root).as_posix():
+                raise RuntimeError('candidate_delete_scope_invalid')
+            if candidate_in_use(root, directory, entries):
+                copy['retention_reason'] = 'active_reference_or_process'
+                save_record(root, build)
+                continue
+            archive, checksum = path / 'preserved/previous-release.zip', path / 'preserved/previous-release.sha256'
+            digest = verify_candidate_archive(root, directory, archive, checksum, copy['files'])
+            identity = json.loads((directory / 'BUILD_INFO.json').read_text(encoding='utf-8'))
+            if digest != copy['archive_sha256'] or identity != copy['old_identity'] or identity.get('purpose') != TECHNICAL_PURPOSE:
+                raise RuntimeError('candidate_identity_changed')
+            if sum(inventory(root, directory).values()) != copy['bytes']:
+                raise RuntimeError('candidate_size_changed')
+            previous_state = build['state']
+            build['state'] = 'rotating'
+            copy['status'] = 'deleting'
+            save_record(root, build)
+            expected = {directory.relative_to(root).as_posix() + '/' + k: v for k, v in copy['files'].items()}
+            remove_exact(root, directory, expected=expected)
+            if file_hash(archive) != digest:
+                raise RuntimeError('candidate_retained_archive_changed')
+            copy.update(status='deleted', deleted_utc=datetime.now(timezone.utc).isoformat(),
+                        deleted_files=len(expected), released_bytes=copy['bytes'], validation_run=review['id'])
+            copy.pop('retention_reason', None)
+            build['state'] = previous_state
+            save_record(root, build)
+            print('旧技术候选副本已清理：' + copy['directory'], file=sys.stderr)
+        except Exception as error:
+            build.update(state='cleanup_failed', cleanup_error=type(error).__name__,
+                         evidence_class='protected', protection_reason='candidate_cleanup_failed')
+            save_record(root, build)
+            raise
+
+
+def close_review(root, run_id):
+    """仅记录第二阶段发布的人工确认，保留证据，不作为副本清理门槛。"""
+    with operation_lock(root):
+        entries = records(root)
+        if any(r['state'] in OPEN_STATES for _, r in entries):
+            raise RuntimeError('unfinished_artifact_run')
+        _, record = read_record(root, run_id)
+        if record['state'] != 'awaiting_review' or record.get('review_pending') is not True:
+            raise RuntimeError('portable_review_not_pending')
+        build = validated_review(root, record)
+        output = build['outputs']
+        directory, archive, checksum = output_paths(root, output)
+        digest = verify_candidate_archive(root, directory, archive, checksum, output['inventory'])
+        if digest != output['sha256']:
+            raise RuntimeError('portable_review_current_zip_changed')
+        if any(process_alive(pid) for pid in record['children']) or candidate_process_active(checked_path(root, output['dist'])):
+            raise RuntimeError('artifact_resources_still_active')
+        now = datetime.now(timezone.utc).isoformat()
+        record.update(state='released', review_pending=False, review_closed_utc=now,
+                      release_review_approved=True, evidence_class='protected',
+                      protection_reason='reviewed_portable_validation')
+        save_record(root, record)
+
+
 def ordinary_completion(root, path, record):
     """仅已正常收尾且完整性可核验的治理记录取得轮换资格；v1 失败不推断。"""
     legacy = record['schema'] == LEGACY_SCHEMA
@@ -271,10 +580,19 @@ class ArtifactRun:
                 print(json.dumps([cleanup_plan(self.root, r['id']) for _, r in existing
                                   if r['state'] in OPEN_STATES], ensure_ascii=False, indent=2), file=sys.stderr)
                 raise RuntimeError('unfinished_artifact_run; run local_artifacts.py plan')
+            sweep_candidate_copies(self.root)
+            existing = records(self.root)
             same = [r for _, r in existing if r['kind'] == self.kind]
-            if any(r['state'] == 'awaiting_review' or r.get('review_pending') and r['state'] != 'released'
-                   or r['state'] == 'failed' and ordinary_completion(self.root, p, r) is None
-                   for p, r in existing if r['kind'] == self.kind):
+            blocked = False
+            for p, r in existing:
+                if r['kind'] != self.kind:
+                    continue
+                pending = r['state'] == 'awaiting_review' or r.get('review_pending') and r['state'] != 'released'
+                if pending and r['state'] == 'awaiting_review' and automatic_validation_accepted(self.root, r):
+                    continue
+                if pending or r['state'] == 'failed' and ordinary_completion(self.root, p, r) is None:
+                    blocked = True
+            if blocked:
                 print(json.dumps([cleanup_plan(self.root, r['id']) for r in same],
                                  ensure_ascii=False, indent=2), file=sys.stderr)
                 raise RuntimeError('artifact_retention_limit; review local_artifacts.py plan')
@@ -331,6 +649,8 @@ class ArtifactRun:
         if (len(parts) < 2 or parts[0] not in ('dist', 'release')
                 or source.is_dir() and (source / 'runtime').exists()):
             raise RuntimeError('old_distribution_source_invalid')
+        if source.is_dir():
+            candidate_files(self.root, source)  # 移动前先排除运行数据，禁止对凭据做哈希。
         target = checked_path(self.root, REGISTRY, self.record['id'], 'preserved', name)
         if target.exists():
             raise RuntimeError('preserved_destination_exists')
@@ -399,6 +719,8 @@ class ArtifactRun:
             self.record['completed_utc'] = datetime.now(timezone.utc).isoformat()
             self.record['state'] = 'finishing'
             self.save()
+            if exc_type is None and self.kind == 'portable' and self.record.get('portable_build') and self.record.get('portable_complete'):
+                accept_portable_validation(self.root, self.record)
             rotate_evidence(self.root, self.kind, finishing_id=self.record['id'])
             self.checkpoint()
             self.record['state'] = outcome
@@ -496,16 +818,22 @@ def cleanup_plan(root, run_id, *, review_complete=False):
         targets = [checked_path(root, record['work']), path / 'evidence']
     if (record.get('review_pending') or record['state'] == 'awaiting_review') and not review_complete:
         targets = [checked_path(root, record['work'])]
+    if record.get('portable_complete') and record.get('portable_build'):
+        targets = [checked_path(root, record['work'])]  # 自动清理审计依赖此证明，不受人工结案影响。
     values = {p.relative_to(root).as_posix(): inventory(root, p, hashes=True) for p in targets if p.exists()}
     digest = hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
     return dict(id=run_id, state=record['state'], targets=values, plan_sha256=digest,
-                protected=record['protected_inputs'] + [f'{REGISTRY}/{run_id}/preserved'])
+                candidate_copy=record.get('candidate_copy'),
+                protected=record['protected_inputs'] + [f'{REGISTRY}/{run_id}/preserved']
+                    + ([f'{REGISTRY}/{run_id}/evidence'] if record.get('portable_complete') and record.get('portable_build') else []))
 
 
 def apply_plan(root, run_id, digest, *, review_complete=False, stopped=False):
     """仅显式指定运行与当前计划摘要的执行入口；文档规定当次删除授权。"""
     with operation_lock(root):
         path, record = read_record(root, run_id)
+        if record.get('portable_build') and record.get('review_pending') and review_complete:
+            raise RuntimeError('portable_use_close_review_to_preserve_evidence')
         if record['state'] in OPEN_STATES and not stopped:
             raise RuntimeError('explicit_stopped_confirmation_required')
         if record['state'] in OPEN_STATES and any(process_alive(pid) for pid in [record['pid'], *record['children']]):
@@ -550,7 +878,7 @@ def test_scratch(root):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', nargs='?', default='plan', choices=('plan', 'apply'))
+    parser.add_argument('action', nargs='?', default='plan', choices=('plan', 'apply', 'close-review'))
     parser.add_argument('--run-id')
     parser.add_argument('--plan-sha256')
     parser.add_argument('--review-complete', action='store_true')
@@ -559,6 +887,10 @@ def main():
     if args.action == 'plan':
         ids = [args.run_id] if args.run_id else [r['id'] for _, r in records(ROOT)]
         print(json.dumps([cleanup_plan(ROOT, i, review_complete=args.review_complete) for i in ids], ensure_ascii=False, indent=2))
+    elif args.action == 'close-review':
+        if not args.run_id or args.plan_sha256 or args.review_complete or args.processes_stopped:
+            parser.error('close-review 仅需 --run-id；须先由用户明确确认该候选人工验收合格')
+        close_review(ROOT, args.run_id)
     else:
         if not args.run_id or not args.plan_sha256:
             parser.error('apply 必须明确运行 ID 和当前计划 SHA-256；执行前须获得对应删除授权')

@@ -58,7 +58,7 @@ alpha 7 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windo
 
 构建入口按现有 spec 生成 Windows GUI one-folder；资源 allowlist 包含 `config.json`、正式 ICO、使用说明 SVG 与 Markdown、两份现行技术协议和两份默认完整研究提示词，不包含用户覆盖记录、历史提示词、领域标签模块、独立自动化策略或 Profile 文件。`BUILD_INFO.json` 的 `resource_hashes` 绑定全部允许资源，发行树检查同时复核配置内部的提示词哈希。curl `8.22.0_2` 来自 curl 官方固定 x64 归档，并核验 manifest 中的 SHA-256 后才运行。时区数据来自专用环境，不依赖系统 IANA 数据。
 
-构建前必须在已授权范围内冻结干净提交；本地技术验证使用 `codex/` 开发分支，要求其是已核验 `origin/main` 基线的后代，不要求 HEAD 等于基线。产物为根 `dist/` 下带版本目录、`release/` 下同名 ZIP 和 `.zip.sha256`。`BUILD_INFO.json` 记录分支、基线、冻结提交、验证用途和环境版本。旧干净发行物移入本次 `.desktop-build/managed-artifacts/build-<ID>/preserved/previous-*` 留存并核对移动前后逐文件哈希；已有 `runtime/` 的发行目录拒绝覆盖。stage、缓存和重复构建副本在保存审计证据后收尾，最终输出和 previous-* 不自动清理。构建目录、vendor 下载和输出均被 Git 忽略。所有下载都先校验固定哈希，缓存不符即停止。
+构建前必须在已授权范围内冻结干净提交；本地技术验证使用 `codex/` 开发分支，要求其是已核验 `origin/main` 基线的后代，不要求 HEAD 等于基线。产物为根 `dist/` 下带版本目录、`release/` 下同名 ZIP 和 `.zip.sha256`。`BUILD_INFO.json` 记录分支、基线、冻结提交、验证用途和环境版本。旧干净发行物移入本次 `.desktop-build/managed-artifacts/build-<ID>/preserved/previous-*` 留存并核对移动前后逐文件哈希；已有 `runtime/` 的发行目录拒绝覆盖。stage、缓存和重复构建副本在保存审计证据后收尾，最终输出和未取得技术副本清理资格的 previous-* 不自动清理。今后明确登记的旧技术副本仅在替代新包 ZIP 完整性、逐文件哈希校验和完整 portable 验证全部通过后按根运行手册自动清理，ZIP、SHA-256 和审计继续保留。构建目录、vendor 下载和输出均被 Git 忽略。所有下载都先校验固定哈希，缓存不符即停止。
 
 当前环境原包缓存位置可能已失效，构建入口支持显式许可输入 manifest，Python 入口对应 `--license-input-manifest`。准备输入只读 Conda 元数据并复制必要许可，不修改环境或原归档。首次在现有历史来源哈希已经核验且复制范围获准后执行以下命令；目标目录存在时拒绝覆盖：
 
@@ -93,6 +93,14 @@ manifest 记录组件 name/version/build/包归档 SHA-256、来源发行归档 
 `validate_arxiv_history.py` 在独立受管 runtime 检查当天、近期及数月前日期的冷查询，记录各来源分页、请求数和完整抓取耗时，单次验收不得超过 120 秒，失败不自动重跑。固定多版本论文用于最新版与 PDF 校验；历史关联夹具来自真实指定旧版 Atom，明确标注为合成关联，不冒充过去实际抓取。补查必须取得联网最新版并保留原记录、快照；验收全程禁止 OAI 和模型。Advanced Search 页面变化、服务及网络延迟可导致验收失败，不能截断结果满足性能门槛。
 
 五组 DPI、恢复、普通重启和反例全部完成，所属进程退出且合成数据隐私检查通过后，将报告、必要截图及脱敏会话 JSONL 复制到本次 `evidence/` 并核对哈希，再释放九份程序副本和合成运行数据。失败保存已有安全证据；证据收集失败则保留 work 并停止后续运行。原始干净发行目录始终受保护，人工验收截图保留到明确结案，规则见根运行手册的 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期)。
+
+今后 `BUILD_INFO.json` 增加 `build_run_id`，portable 验证绑定具体构建运行 ID、冻结 commit、ZIP SHA-256 和完整文件清单摘要。新包全部自动校验通过且验证正常收尾后，自动清理符合条件的旧技术候选解压副本，无需人工确认，验证仍保留待人工验收状态及截图。人工验收仅决定是否进入第二阶段发布流程；用户检查界面与操作、确认合格并关闭程序后，执行以下仅记录发布人工验收结案的命令，它不推送 Git、不发布、不删除截图，也不解锁副本清理：
+
+```powershell
+& $desktopPython -X utf8 -B scripts/local_artifacts.py close-review --run-id '<portable-ID>'
+```
+
+验证失败、五组 DPI／恢复／反例未完成、证据不符、包已变动或进程未退出均拒绝结案。旧技术副本必须有新策略登记，与保留 ZIP 完整一致，且无用户数据、链接或有效使用引用；正式旧包、未标记历史记录及其他 previous-* 不自动删除。有效引用消失后，在下一次受管入口的容量检查前复核清理，不启动后台任务。ZIP 和审计仍占空间；删除异常停止入口，须人工处理。旧构建无新绑定仍可验证，但不会自动解锁技术副本清理。
 
 默认离线验证在真实 Windows 平台抓取七个主要状态、详情、失败、设置禁改与最小窗口截图，使用真实 QThread 与合成计算，不分发 unittest/mock 或开发 QA 脚本。Python 网络及非本地版本检查的子进程传输被硬禁止。新建副本写入合成 DPAPI 后，只有匹配验证器随机诊断令牌的新进程才检查恢复；普通 GUI 额外重复启动/关闭三次。图像和诊断只在副本 `runtime/work/`，绝不回流发行包。
 
@@ -154,7 +162,7 @@ git diff --check
 git status --short
 ```
 
-完整发现包含 Desktop 子集；只检查 Desktop 时可使用 `python -X utf8 -B scripts/run_local_checks.py --pattern 'test_desktop*.py'`，两种发现均包含治理测试。日志及测试返回码保存在运行记录的 evidence；普通证据自动保留每类最近两次成功和最近一次普通失败诊断，不因第三次运行要求人工清理。普通失败允许修复后明确再次启动；未结案故障、待审材料、中断或清理失败仍按根手册停止入口，不绕过保护和容量门槛。
+完整发现包含 Desktop 子集；只检查 Desktop 时可使用 `python -X utf8 -B scripts/run_local_checks.py --pattern 'test_desktop*.py'`，两种发现均包含治理测试。日志及测试返回码保存在运行记录的 evidence；普通证据自动保留每类最近两次成功和最近一次普通失败诊断，不因第三次运行要求人工清理。普通失败允许修复后明确再次启动；未结案故障、待审材料、中断或清理失败仍按根手册停止入口，仅完整自动验证通过的 portable 待发布人工验收记录不阻止后续技术验证，证据保护和容量门槛不变。
 
 新增测试使用 `.codex-validation/` 下的隔离目录，不接触实际 Desktop Secret。治理测试只读文档、JSON 配置及源码 AST；检查文档与发行资料契约，不启动应用或读取运行数据。GUI 测试自动使用 Qt offscreen；有 PySide6 与 qfluentwidgets 时必须实际执行，缺少 GUI 依赖时安全跳过 GUI 部分；pipeline 和 Secret 文件边界测试不依赖 Qt。Windows 额外运行真实 DPAPI 往返测试，仅使用合成假值；非 Windows 跳过该项。所有跳过须报告原因和未覆盖范围，涉及 GUI、DPAPI 或 Windows 发行的任务不能以跳过代替对应验收。
 

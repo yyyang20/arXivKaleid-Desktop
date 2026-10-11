@@ -35,10 +35,10 @@
 | `docs/public_release/` | portable 打包 README、应用 EULA、隐私与安全说明的维护源及发布检查清单；不保存 ZIP |
 | `scripts/build_windows_portable.py` | 资源与公开文档 allowlist、vendor 校验、构建、发行扫描、ZIP 和 SHA-256 |
 | `scripts/portable_licenses.py` | 从实际分发组件及固定 gzip/xz 源码收集原许可，保留八项源码归档与哈希 |
-| `scripts/local_artifacts.py` | 构建/验证工作区、证据、受保护输入与 previous-* 的生命周期及精确计划 |
+| `scripts/local_artifacts.py` | 构建/验证工作区、证据、受保护输入与 previous-* 的生命周期、精确计划，以及新登记技术副本的自动安全清理和独立的发布人工验收结案 |
 | `scripts/run_local_checks.py` | 受管离线测试入口，子进程使用独立项目内临时根 |
 | `scripts/verify_public_release.py` | 匿名只读发行核验及本次下载副本收尾 |
-| `scripts/validate_windows_portable.py` | 全新副本的脱离开发环境验证和重启 |
+| `scripts/validate_windows_portable.py` | 全新副本的脱离开发环境验证和重启，绑定构建运行、ZIP 和完整文件清单的成功证据 |
 | `scripts/visual_qa_desktop.py` | 禁止网络/模型、内存假 Key、合成业务事件驱动的真实 Qt 截图；产物仅在项目忽略目录 |
 | `scripts/generate_app_icon.py` | 使用现有 PySide6 从 A0 SVG 母版确定性生成 16～256 px Windows ICO 与可选验收预览 |
 | `assets/app-icon.svg`、`assets/app-icon.ico` | 透明画布 A0 矢量母版及 Qt/EXE 共用的正式多尺寸图标 |

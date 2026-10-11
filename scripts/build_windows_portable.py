@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 from desktop import __version__
 from desktop.paths import checked_path
 from desktop.config import load_config
-from scripts.local_artifacts import ArtifactRun
+from scripts.local_artifacts import ArtifactRun, register_candidate_copy
 
 NAME = f'arXivKaleid-{__version__}-windows-x64'
 SOURCE_URL = f'https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v{__version__}.zip'
@@ -399,7 +399,7 @@ def build_portable(frozen, run, license_manifest=None):
     run.checkpoint()
     if frozen_identity() != frozen:
         raise RuntimeError('frozen_identity_changed_during_build')
-    identity = {'version': __version__, **frozen,
+    identity = {'version': __version__, **frozen, 'build_run_id': run.record['id'],
                 'python': platform.python_version(), 'architecture': 'x64',
                 'dependencies': {n: importlib.metadata.version(n) for n in
                                  (*pinned_requirements('requirements-desktop.txt'), 'PyInstaller',
@@ -452,8 +452,11 @@ def build_portable(frozen, run, license_manifest=None):
     zip_path = old_zip
     checksum.write_text(f'{digest}  {zip_path.name}\n', encoding='ascii')
     run.record['outputs'] = {'zip': zip_path.relative_to(ROOT).as_posix(), 'sha256': digest,
-                             'bytes': zip_path.stat().st_size, 'files': len(inventory)}
+                              'bytes': zip_path.stat().st_size, 'files': len(inventory),
+                              'dist': dist.relative_to(ROOT).as_posix(),
+                              'checksum': checksum.relative_to(ROOT).as_posix(), 'inventory': inventory}
     run.save()
+    register_candidate_copy(run)
     print(json.dumps({'zip': str(zip_path), 'sha256': digest, 'bytes': zip_path.stat().st_size, 'files': len(inventory)}, ensure_ascii=False))
 
 

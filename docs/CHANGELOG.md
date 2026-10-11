@@ -2,6 +2,12 @@
 
 本文件保留 Desktop 与通用功能的简短历史。代码解耦前的条目来自原项目：当时的发行来源、构建提交、兼容行为和治理测试仅表示历史事实，不代表当前仓库仍有这些入口或测试。现行行为以代码、配置、测试和 [当前业务规范](PROJECT_SPEC.md) 为准；详细历史通过 Git、PR 和 Issue 查询。
 
+## 2026-10-11：旧技术候选解压副本生命周期
+
+- 今后构建显式登记旧技术候选副本，完整 portable 验证绑定构建运行、冻结 commit、具体 ZIP 与文件清单；ZIP 完整性、逐文件哈希校验和 portable 验证全部通过即自动清理与保留归档完全一致的旧解压副本，保留证据；`close-review` 人工验收仅决定第二阶段发布。
+- 有效使用引用或运行程序延后清理；身份、归档、路径或删除异常停止入口。保留 ZIP、SHA-256 与必要审计，不自动迁移历史记录，不清理正式包、用户数据或其他保护材料；容量门槛不变，无后台任务。
+- 仅调整本地构建治理、文档和离线合成测试；检查用户指南，应用操作及业务未变，不改正文，不重建或替换已发布 alpha 12。
+
 ## 2026-10-11：Desktop alpha 12 公开发行
 
 - 已公开 [v0.1.0-alpha.12 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.12)，不标为稳定 latest。[功能 PR #23](https://github.com/yyyang20/arXivKaleid-Desktop/pull/23) 合并后，从干净 main 提交 `e8887a7e4b58da671b51503fa62950f3f8a85205` 重新构建；tag 与 BUILD_INFO 均绑定该提交，用途为 `public-release`，第一阶段候选未上传。
