@@ -186,7 +186,7 @@ class TaskPanel(SurfaceCard):
 
     def show_snapshot(self, snapshot, categories):
         counts = (snapshot.page_count, snapshot.network_count, snapshot.reused_count)
-        version_details = (f"历史分页 {snapshot.page_count} 页 · 网络候选 {snapshot.network_count} 篇 · 本地复用 {snapshot.reused_count} 篇\n"
+        version_details = (f"发现分页 {snapshot.page_count} 页 · 网络发现 {snapshot.network_count} 篇 · 历史补查 {snapshot.reused_count} 篇\n"
                            if all(n is not None for n in counts) else "")
         self.fetch_details.setText(
             f"抓取日期（北京时间）：{snapshot.candidate_date.isoformat()}\n"

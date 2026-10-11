@@ -12,6 +12,7 @@ from types import MappingProxyType
 from _thread import LockType
 from threading import Lock
 from typing import Mapping
+from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 from desktop import paths
 from desktop.diagnostics import DesktopDiagnostics, StageTimer, new_id
@@ -28,6 +29,8 @@ from desktop import arxiv_versions
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CATEGORIES = ("gr-qc", "astro-ph.HE", "astro-ph.GA")
+ATOM_TIMEOUT_SECONDS = 90
+SUBPROCESS_TIMEOUT_MARGIN_SECONDS = 15
 
 
 class CandidateError(DesktopOperationError):
@@ -100,7 +103,7 @@ def _fetch_issue(exc: BaseException, transport: Mapping[str, object] | None = No
     curl_exit = transport.get("curl_exit_code")
     if isinstance(exc, MetadataError):
         return make_issue("AKD-FETCH-METADATA_FAILED")
-    if code.startswith("arxiv_oai_"):
+    if code.startswith("arxiv_search_"):
         return make_issue("AKD-FETCH-HISTORY_INVALID")
     if code.startswith("arxiv_version_"):
         return make_issue("AKD-FETCH-VERSION_INVALID")
@@ -148,7 +151,7 @@ def fetch_candidates_for_date(
     operation_id: str | None = None,
     categories: tuple[str, ...] | None = None,
 ) -> CandidateFetchResult:
-    """完整读取分类版本历史，精确匹配北京时间提交日并持久保存候选。"""
+    """首次／最新提交日发现及历史关联补查，联网固定最新版并保存候选。"""
     import main
 
     # 独立且不向根 logger 传播；Desktop 不创建日志文件。
@@ -182,8 +185,25 @@ def fetch_candidates_for_date(
         curl = paths.curl_executable(PROJECT_ROOT)
         cache = runtime_path("cache", "arxiv")
         cache.mkdir(parents=True, exist_ok=True)
+        request_index = 0
 
         def request(url: str):
+            nonlocal request_index
+            request_index += 1
+            is_search = urlsplit(url)[:3] == urlsplit(arxiv_versions.SEARCH_URL)[:3]
+            params = parse_qs(urlsplit(url).query)
+            timeout_seconds = ATOM_TIMEOUT_SECONDS
+            context = {"request_index": request_index, "request_kind":
+                       "AdvancedSearch" if is_search else ("LatestMetadata" if "id_list" in params else
+                       "LatestUpdates" if params.get("sortBy") == ["lastUpdatedDate"] else "FirstSubmissions"),
+                       "candidate_date": target_date.isoformat(),
+                       "resumption_token_present": "resumptionToken" in params,
+                       "timeout_seconds": timeout_seconds,
+                       "process_timeout_seconds": timeout_seconds + SUBPROCESS_TIMEOUT_MARGIN_SECONDS}
+            request_timer = StageTimer()
+            if diagnostics:
+                diagnostics.event(operation_id=operation_id, operation_type="fetch",
+                                  stage="http", state="start", details=context)
             # 每次写请求间隔文件前检查其最终路径，沿用已有 curl 传输。
             runtime_path("cache", "arxiv", "last_request_time.txt")
             def observe(kind: str, payload: Mapping[str, object]) -> None:
@@ -191,12 +211,15 @@ def fetch_candidates_for_date(
                     last_transport_failure.clear()
                     last_transport_failure.update(payload)
                 if diagnostics is not None:
+                    complete = kind != "curl_failure" and payload.get("http_status") == 200
+                    code = ("AKD-FETCH-TIMEOUT" if payload.get("error_type") == "arxiv_api_timeout"
+                            else "AKD-FETCH-HTTP_RESPONSE_ERROR")
                     diagnostics.event(
                         operation_id=operation_id, operation_type="fetch",
-                        stage="http", state="complete" if payload.get("http_status") == 200 else "fail",
-                        code=(None if payload.get("http_status") == 200 else "AKD-FETCH-HTTP_RESPONSE_ERROR"),
-                        scope=(None if payload.get("http_status") == 200 else "system"),
-                        details=payload,
+                        stage="http", state="complete" if complete else "fail",
+                        code=None if complete else code,
+                        scope=None if complete else "system", elapsed_ms=request_timer.elapsed_ms,
+                        details={**context, **payload},
                         transient=(payload.get("http_status") == 429 or (
                             isinstance(payload.get("http_status"), int)
                             and 500 <= int(payload["http_status"]) <= 599
@@ -206,7 +229,7 @@ def fetch_candidates_for_date(
 
             xml = main.fetch_arxiv_metadata(
                 url=url,
-                timeout_seconds=90,
+                timeout_seconds=timeout_seconds,
                 cache_dir=cache,
                 interval_seconds=5,
                 logger=logger,
@@ -215,16 +238,21 @@ def fetch_candidates_for_date(
                 subprocess_creationflags=0x08000000 if paths.frozen() else 0,
                 diagnostic_observer=observe,
                 emit_success_transport_diagnostic=True,
+                subprocess_timeout_margin_seconds=SUBPROCESS_TIMEOUT_MARGIN_SECONDS,
             )
             return xml
 
-        def on_page(category: str, page: int, records: int):
+        def on_page(category: str, page: int, records: int, source: str):
             category_index = category_positions[category]
+            if diagnostics:
+                diagnostics.event(operation_id=operation_id, operation_type="fetch", stage="category",
+                                  state="complete", counts={"records": records},
+                                  details={"category": category, "page_count": page, "request_kind": source})
             emit_progress(progress, ProgressEvent(
                 task_type="fetch", stage="category", state="running",
-                message=(f"版本历史读取中 · 北京时间 {target_date.isoformat()} · "
+                message=(f"候选发现中 · 北京时间 {target_date.isoformat()} · "
                          f"分类 {category_index} / {len(categories)}：{category} · "
-                         f"第 {page} 页 · 本页 {records} 条历史"),
+                         f"第 {page} 页 · 本页 {records} 条 · {source}"),
                 current_date=target_date, category=category,
                 category_index=category_index, category_total=len(categories),
                 processed=records,

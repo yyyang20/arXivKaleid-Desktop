@@ -6,7 +6,7 @@ arXivKaleid Desktop 是在用户 Windows 电脑上运行的 portable 工具。�
 
 ## 网络请求
 
-- 应用从 arXiv 读取公开论文元数据和用户选择分析的 PDF。
+- 应用通过 arXiv API 和日期限定的 Advanced Search 读取公开论文元数据，以及用户选择分析的 PDF；历史补查会将本地已保存关联中的论文 ID 发给 arXiv 查询最新版，不发送模型凭据或研究 Prompt。
 - 用户同意开始分析后，论文身份、标题、摘要、最小技术协议、已保存生效的默认或自定义完整研究 Prompt，以及第二轮通过门控后的 PDF 提取全文会发送给 DeepSeek API；作者、分类和第一轮评价或排名不进入第二轮研究输入，未保存草稿不会发送，应用不会另行发送 Research Profile 文件内容。
 - DeepSeek API Key 仅用于用户自己的 API 请求，不会发送给维护者。DeepSeek 对请求数据的处理受其当前服务条款和隐私政策约束。
 

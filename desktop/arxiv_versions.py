@@ -1,25 +1,22 @@
 # Copyright (c) 2026 yyyang20
 # SPDX-License-Identifier: GPL-3.0-only
-"""分类级 OAI 历史发现 + 指定版本 Atom 校验；不维护全站账本。"""
+"""按首次／最新提交日发现候选，历史关联补查后固定当前版本。"""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from email.utils import parsedate_to_datetime
-import hashlib
+from datetime import datetime, timedelta
+from html.parser import HTMLParser
 import logging
 import re
 import urllib.parse
-import xml.etree.ElementTree as ET
+from zoneinfo import ZoneInfo
 
 import main
 from desktop.version_metadata import VersionStore
 
-OAI_URL = "https://oaipmh.arxiv.org/oai"
-OAI = "{http://www.openarchives.org/OAI/2.0/}"
-RAW = "{http://arxiv.org/OAI/arXivRaw/}"
-SETS = {"gr-qc": "physics:gr-qc", "astro-ph.HE": "physics:astro-ph:HE",
-        "astro-ph.GA": "physics:astro-ph:GA"}
+SEARCH_URL = "https://arxiv.org/search/advanced"
 BATCH_SIZE = 100
+PAGE_SIZE = 100
+SEARCH_PAGE_SIZE = 200
 ID_PATTERN = r"(?:\d{4}\.\d{4,5}|[a-zA-Z][a-zA-Z.-]*/\d{7})"
 
 
@@ -44,157 +41,210 @@ def timestamp(value):
     return result
 
 
-def oai_page(xml, verb):
-    try:
-        root = ET.fromstring(xml)
-    except ET.ParseError:
-        raise ValueError("arxiv_oai_xml_invalid") from None
-    if root.tag != OAI + "OAI-PMH":
-        raise ValueError("arxiv_oai_xml_invalid")
-    errors = root.findall(OAI + "error")
-    if errors:
-        if verb == "ListRecords" and len(errors) == 1 and errors[0].get("code") == "noRecordsMatch":
-            return {}, ""
-        raise ValueError("arxiv_oai_protocol_error")
-    body = root.find(OAI + verb)
-    if body is None:
-        raise ValueError("arxiv_oai_body_missing")
-    histories = {}
-    for record in body.findall(OAI + "record"):
-        header = record.find(OAI + "header")
-        if header is None:
-            raise ValueError("arxiv_oai_header_missing")
-        if header.get("status") == "deleted":
-            continue
-        raw = record.find(OAI + "metadata/" + RAW + "arXivRaw")
-        if raw is None:
-            raise ValueError("arxiv_oai_history_missing")
-        identity = valid_id(raw.findtext(RAW + "id", ""))
-        if header.findtext(OAI + "identifier") != "oai:arXiv.org:" + identity:
-            raise ValueError("arxiv_oai_identity_conflict")
-        versions = {}
-        for item in raw.findall(RAW + "version"):
-            label = item.get("version", "")
-            if not re.fullmatch(r"v[1-9]\d*", label):
-                raise ValueError("arxiv_oai_version_invalid")
-            try:
-                value = parsedate_to_datetime(item.findtext(RAW + "date", ""))
-            except (ValueError, TypeError):
-                raise ValueError("arxiv_oai_time_invalid") from None
-            if value.tzinfo is None:
-                raise ValueError("arxiv_oai_time_invalid")
-            number = int(label[1:])
-            if number in versions:
-                raise ValueError("arxiv_oai_version_duplicate")
-            versions[number] = value.astimezone(timezone.utc)
-        if not versions or sorted(versions) != list(range(1, max(versions) + 1)) or any(
-                versions[n] < versions[n-1] for n in range(2, max(versions)+1)):
-            raise ValueError("arxiv_oai_history_incomplete")
-        if identity in histories:
-            raise ValueError("arxiv_oai_record_duplicate")
-        histories[identity] = versions
-    tokens = body.findall(OAI + "resumptionToken")
-    if len(tokens) > 1:
-        raise ValueError("arxiv_oai_token_invalid")
-    token = (tokens[0].text or "").strip() if tokens else ""
-    if token and not histories:
-        raise ValueError("arxiv_oai_empty_page")
-    return histories, token
-
-
-def discover(category, day, request, on_page):
-    if category not in SETS:
-        raise ValueError("arxiv_oai_set_unknown")
-    lower, _ = main.beijing_submission_bounds(day)
-    params = {"verb": "ListRecords", "metadataPrefix": "arXivRaw", "set": SETS[category],
-              "from": lower.date().isoformat()}
-    merged, tokens, pages = {}, set(), set()
-    page = 0
-    while True:
-        xml = request(OAI_URL + "?" + urllib.parse.urlencode(params))
-        digest = hashlib.sha256(xml).hexdigest()
-        histories, token = oai_page(xml, "ListRecords")
-        if digest in pages or any(identity in merged for identity in histories):
-            raise ValueError("arxiv_oai_page_repeated")
-        pages.add(digest)
-        merged.update(histories)
-        page += 1
-        on_page(page, len(histories))
-        if not token:
-            return merged, page
-        if token in tokens:
-            raise ValueError("arxiv_oai_token_repeated")
-        tokens.add(token)
-        params = {"verb": "ListRecords", "resumptionToken": token}
-
-
-def exact_metadata(xml, expected):
+def normalized_papers(xml):
     page = main.ArxivFeedPage(xml, logging.getLogger("arxivkaleid.version"))
-    if page.raw_count != len(expected) or len(page.papers) != len(expected):
+    if page.raw_count != len(page.papers):
         raise ValueError("arxiv_version_response_missing")
-    papers = {}
+    seen = set()
     for paper in page.papers:
         key = version_url(paper["id"], "abs")
-        if key != (valid_id(paper["arxiv_id"]), paper["version"]) or key not in expected or key in papers:
+        if key != (valid_id(paper["arxiv_id"]), paper["version"]) or key[0] in seen:
             raise ValueError("arxiv_version_response_mismatch")
+        seen.add(key[0])
         if version_url(paper["abs_url"], "abs") != key or version_url(paper["pdf_url"], "pdf") != key:
             raise ValueError("arxiv_version_response_mismatch")
         published, updated = timestamp(paper["published"]), timestamp(paper["updated"])
-        if updated != expected[key] or published > updated or not paper["summary"] or not paper["categories"]:
+        if (published > updated or (paper["version"] == 1 and published != updated)
+                or not paper["summary"] or not paper["categories"]):
             raise ValueError("arxiv_version_metadata_conflict")
-        # 规范传输差异，URL 一律钉死版本；时区文本归一化后才计算持久哈希。
+        # 发现时读取最新版；交给数据库、PDF 与模型前将 URL 和时间规范化并固定版本。
         for field, kind in (("id", "abs"), ("abs_url", "abs"), ("pdf_url", "pdf")):
             paper[field] = f"https://arxiv.org/{kind}/{key[0]}v{key[1]}"
-        paper["published"] = published.isoformat()
-        paper["updated"] = updated.isoformat()
-        papers[key] = paper
+        paper["published"], paper["updated"] = published.isoformat(), updated.isoformat()
+    return page
+
+
+def latest_metadata(xml, identities):
+    page = normalized_papers(xml)
+    papers = {p["arxiv_id"]: p for p in page.papers}
+    if set(papers) != set(identities):
+        raise ValueError("arxiv_version_response_missing")
     return papers
 
 
-def collect(day, categories, request, store: VersionStore, on_page):
+class SearchPage(HTMLParser):
+    """只解析官方搜索结果身份与分页；网页结构不符合契约时整批失败。"""
+
+    def __init__(self, data, start):
+        super().__init__(convert_charrefs=True)
+        self.identities, self.text, self.links = [], [], []
+        self.result_depth = 0
+        try:
+            self.feed(data.decode("utf-8"))
+            self.close()
+        except (UnicodeError, ValueError):
+            raise ValueError("arxiv_search_page_invalid") from None
+        if self.result_depth:
+            raise ValueError("arxiv_search_page_incomplete")
+        text = " ".join(" ".join(self.text).split())
+        matches = re.findall(r"Showing\s+([\d,]+)\s*[–-]\s*([\d,]+)\s+of\s+([\d,]+)\s+results", text)
+        if not matches:
+            if start == 0 and not self.identities and "Sorry, your query returned no results" in text:
+                self.total = 0
+                return
+            raise ValueError("arxiv_search_paging_missing")
+        if len(matches) != 1:
+            raise ValueError("arxiv_search_paging_invalid")
+        first, last, self.total = (int(n.replace(",", "")) for n in matches[0])
+        if (first != start + 1 or last != min(start + SEARCH_PAGE_SIZE, self.total)
+                or last < first or len(self.identities) != last - first + 1
+                or len(set(self.identities)) != len(self.identities)):
+            raise ValueError("arxiv_search_paging_invalid")
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "li":
+            if "arxiv-result" in attrs.get("class", "").split():
+                if self.result_depth:
+                    raise ValueError("arxiv_search_result_nested")
+                self.result_depth, self.links = 1, []
+            elif self.result_depth:
+                self.result_depth += 1
+        if tag == "a" and self.result_depth:
+            parsed = urllib.parse.urlsplit(attrs.get("href", ""))
+            match = re.fullmatch("/abs/(" + ID_PATTERN + r")(?:v[1-9]\d*)?", parsed.path)
+            if match and parsed.scheme in {"http", "https"} and parsed.hostname == "arxiv.org" and not parsed.query and not parsed.fragment:
+                self.links.append(valid_id(match[1]))
+
+    def handle_endtag(self, tag):
+        if tag == "li" and self.result_depth:
+            self.result_depth -= 1
+            if not self.result_depth:
+                if len(self.links) != 1:
+                    raise ValueError("arxiv_search_result_identity_invalid")
+                self.identities.append(self.links[0])
+
+    def handle_data(self, data):
+        self.text.append(data)
+
+
+def search_update_ids(category, day, request, on_page):
+    # 日期网页只有自然日精度；扩大一天后通过当前 Atom 的 UTC 时间精确过滤。
+    params = {"advanced": "", "terms-0-operator": "AND", "terms-0-term": category,
+              "terms-0-field": "all", "classification-include_cross_list": "include",
+              "date-filter_by": "date_range", "date-from_date": (day-timedelta(days=1)).isoformat(),
+              "date-to_date": (day+timedelta(days=1)).isoformat(), "date-date_type": "submitted_date",
+              "abstracts": "hide", "size": SEARCH_PAGE_SIZE, "order": "-submitted_date"}
+    identities, total, page_number = set(), None, 0
+    while True:
+        params["start"] = len(identities)
+        page = SearchPage(request(SEARCH_URL + "?" + urllib.parse.urlencode(params)), len(identities))
+        if (total is not None and page.total != total) or identities & set(page.identities):
+            raise ValueError("arxiv_search_paging_conflict")
+        total = page.total
+        identities.update(page.identities)
+        page_number += 1
+        on_page(page_number, len(page.identities), "AdvancedSearch")
+        if len(identities) == total:
+            return identities, page_number
+
+
+def today_update_papers(category, day, request, on_page):
     lower, upper = main.beijing_submission_bounds(day)
-    histories, pages = {}, 0
+    result, seen, total, previous_time, pages = {}, set(), None, None, 0
+    start = 0
+    while True:
+        params = {"search_query": f"cat:{category}", "sortBy": "lastUpdatedDate",
+                  "sortOrder": "descending", "start": start, "max_results": PAGE_SIZE}
+        page = normalized_papers(request(main.ARXIV_API_URL + "?" + urllib.parse.urlencode(params)))
+        if page.start != start or page.total is None or page.page_size is None or page.raw_count > PAGE_SIZE:
+            raise ValueError("arxiv_atom_paging_invalid")
+        if (total is not None and total != page.total) or start + page.raw_count > page.total:
+            raise ValueError("arxiv_atom_paging_conflict")
+        total = page.total
+        if not page.raw_count and start < total:
+            raise ValueError("arxiv_atom_paging_empty_before_end")
+        before_day = False
+        for paper in page.papers:
+            identity, submitted = paper["arxiv_id"], timestamp(paper["updated"])
+            if identity in seen or (previous_time is not None and submitted > previous_time):
+                raise ValueError("arxiv_atom_paging_order_invalid")
+            seen.add(identity)
+            previous_time = submitted
+            if submitted < lower:
+                before_day = True
+            elif submitted < upper:
+                result[identity] = paper
+        pages += 1
+        on_page(pages, page.raw_count, "LatestUpdates")
+        start += page.raw_count
+        if before_day or start == total:
+            return result, pages
+        # 官方 API 有结果窗口限制；不能把窗口耗尽误报成完整成功。
+        if start >= 30000:
+            raise ValueError("arxiv_atom_result_window_exceeded")
+
+
+def collect(day, categories, request, store: VersionStore, on_page, *, today=None):
+    lower, upper = main.beijing_submission_bounds(day)
+    today = today or datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    evidence, network_ids, pages = {}, set(), 0
+
+    def remember(paper):
+        old = evidence.get(paper["arxiv_id"])
+        if old and old != paper:
+            raise ValueError("arxiv_version_discovery_conflict")
+        evidence[paper["arxiv_id"]] = paper
+
     for category in categories:
-        found, count = discover(category, day, request, lambda p, n: on_page(category, p, n))
-        pages += count
-        for identity, history in found.items():
-            if identity in histories and histories[identity] != history:
-                raise ValueError("arxiv_oai_history_conflict")
-            histories[identity] = history
+        category_pages = 0
+
+        def page_event(page, count, source):
+            nonlocal category_pages
+            category_pages += 1
+            on_page(category, category_pages, count, source)
+
+        if day == today:
+            found, _ = today_update_papers(category, day, request, page_event)
+            for paper in found.values():
+                remember(paper)
+            network_ids.update(found)
+        else:
+            # 复用首次提交日的分页规则；历史更新只查限定日期网页，不向前扫描数月。
+            def first_page(cat, selected_day, start, size):
+                page = normalized_papers(request(main.build_arxiv_query_url(cat, selected_day, size, start=start)))
+                page_event(0, page.raw_count, "FirstSubmissions")
+                return page
+
+            first = main.fetch_category_submission_pages(category=category, submission_date=day,
+                page_size=PAGE_SIZE, fetch_page=first_page, logger=logging.getLogger("arxivkaleid.version"))
+            for paper in first:
+                remember(paper)
+                network_ids.add(paper["arxiv_id"])
+            found, _ = search_update_ids(category, day, request, page_event)
+            network_ids.update(found)
+        pages += category_pages
+
     previous = store.previous(day, categories)
-    # 曾经发现的历史论文不因移出分类消失；仍联网核对同日最后版本。
-    for identity in sorted({p["arxiv_id"] for p in previous} - histories.keys()):
-        url = OAI_URL + "?" + urllib.parse.urlencode({"verb": "GetRecord", "metadataPrefix": "arXivRaw", "identifier": "oai:arXiv.org:" + identity})
-        found, token = oai_page(request(url), "GetRecord")
-        if token or set(found) != {identity}:
-            raise ValueError("arxiv_oai_known_history_missing")
-        histories.update(found)
-    expected = {}
-    for identity, history in histories.items():
-        eligible = [v for v, time in history.items() if lower <= time < upper]
-        if eligible:
-            v = max(eligible)
-            expected[(identity, v)] = history[v]
-    papers = {}
-    for key, submitted in expected.items():
-        cached = store.get(key)
-        if cached:
-            # 校验缓存身份与联网历史；缓存不能为另一版或另一日提供替代。
-            verified = (version_url(cached["id"], "abs"), timestamp(cached["updated"]))
-            if verified != (key, submitted) or version_url(cached["pdf_url"], "pdf") != key:
-                raise ValueError("arxiv_version_cache_conflict")
-            papers[key] = cached
-    missing = sorted(expected.keys() - papers.keys())
-    for start in range(0, len(missing), BATCH_SIZE):
-        keys = missing[start:start+BATCH_SIZE]
-        url = main.ARXIV_API_URL + "?" + urllib.parse.urlencode({"id_list": ",".join(f"{i}v{v}" for i, v in keys), "max_results": len(keys)})
-        papers.update(exact_metadata(request(url), {k: expected[k] for k in keys}))
-    groups = {c: {} for c in categories}
-    for key, paper in papers.items():
-        if timestamp(paper["published"]) != histories[key[0]][1]:
-            raise ValueError("arxiv_version_published_conflict")
-        for category in set(paper["categories"].split(", ")) & set(categories):
-            groups[category][key] = paper
-    result = {key: p for group in groups.values() for key, p in group.items()}
+    historical_ids = {p["arxiv_id"] for p in previous}
+    # 历史关联只提供 ID 和日期证据；所有候选重新联网，不能信任本地最高版本。
+    ids = sorted(network_ids | historical_ids)
+    current = {}
+    for start in range(0, len(ids), BATCH_SIZE):
+        batch = ids[start:start+BATCH_SIZE]
+        url = main.ARXIV_API_URL + "?" + urllib.parse.urlencode({"id_list": ",".join(batch), "max_results": len(batch)})
+        current.update(latest_metadata(request(url), batch))
+    result = {}
+    for identity, paper in current.items():
+        observed = evidence.get(identity)
+        if observed and (paper["version"] < observed["version"] or paper["published"] != observed["published"]
+                         or (paper["version"] == observed["version"] and paper != observed)):
+            raise ValueError("arxiv_version_latest_conflict")
+        qualifies = (identity in historical_ids or identity in evidence
+                     or lower <= timestamp(paper["published"]) < upper
+                     or lower <= timestamp(paper["updated"]) < upper)
+        if qualifies and set(paper["categories"].split(", ")) & set(categories):
+            result[identity] = paper
     ordered = sorted(result.values(), key=lambda p: (timestamp(p["updated"]), p["arxiv_id"], p["version"]), reverse=True)
-    return ordered, sum(len(g) for g in groups.values()), pages, len(result.keys() & set(missing)), len(result.keys() - set(missing))
+    raw_count = sum(len(set(p["categories"].split(", ")) & set(categories)) for p in ordered)
+    return ordered, raw_count, pages, len(result.keys() & network_ids), len(result.keys() - network_ids)

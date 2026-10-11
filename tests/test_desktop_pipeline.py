@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import ast
 from contextlib import ExitStack, closing
-from datetime import date, timedelta
-from email.utils import format_datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+import re
 import sqlite3
 import tempfile
 import unittest
@@ -47,15 +47,13 @@ def feed(papers, *, start=None, total=None, size=None):
             + paging + ''.join(entries) + '</feed>').encode()
 
 
-def oai(histories, token='', verb='ListRecords'):
-    records = []
-    for identity, versions in histories.items():
-        items = ''.join(f"<r:version version='v{v}'><r:date>{format_datetime(arxiv_versions.timestamp(t), usegmt=True)}</r:date></r:version>"
-                        for v, t in versions.items())
-        records.append(f"<record><header><identifier>oai:arXiv.org:{identity}</identifier></header>"
-                       f"<metadata><r:arXivRaw><r:id>{identity}</r:id>{items}</r:arXivRaw></metadata></record>")
-    return (f"<OAI-PMH xmlns='http://www.openarchives.org/OAI/2.0/' xmlns:r='http://arxiv.org/OAI/arXivRaw/'>"
-            f"<{verb}>" + ''.join(records) + f"<resumptionToken>{escape(token)}</resumptionToken></{verb}></OAI-PMH>").encode()
+def search_page(ids, start=0, total=None):
+    total = len(ids) if total is None else total
+    heading = (f"Showing {start+1}&ndash;{start+len(ids)} of {total} results" if total else
+               "Sorry, your query returned no results")
+    return ("<html><h1>" + heading + "</h1><ol>" + ''.join(
+        f'<li class="arxiv-result"><a href="https://arxiv.org/abs/{i}">arXiv:{i}</a></li>' for i in ids)
+        + "</ol></html>").encode()
 
 
 class IsolatedDesktopTest(unittest.TestCase):
@@ -75,136 +73,164 @@ class IsolatedDesktopTest(unittest.TestCase):
 
 
 class DesktopPipelineTests(IsolatedDesktopTest):
-    def install(self, histories, metadata, *, selected=None, pages=None):
+    def install(self, metadata, *, overrides=None):
         self.calls = []
+        self.metadata = metadata
+        self.overrides = overrides or {}
         def request(**kwargs):
             self.assertEqual(kwargs['timeout_seconds'], 90)
+            self.assertEqual(kwargs['subprocess_timeout_margin_seconds'], 15)
+            self.assertEqual(kwargs.get('max_attempts', 1), 1)
             self.assertEqual(kwargs['interval_seconds'], 5)
             self.assertEqual(kwargs['cache_dir'], self.root / '.desktop-runtime/cache/arxiv')
             kwargs['diagnostic_observer']('transport', {'http_status': 200, 'attempt': 1,
                 'max_attempts': 1, 'remote_ip': '151.101.3.42', 'timings_seconds': {'time_total': 0.25}})
-            params = parse_qs(urlparse(kwargs['url']).query)
+            parsed = urlparse(kwargs['url'])
+            self.assertNotIn('oai', parsed.hostname)
+            params = parse_qs(parsed.query)
+            self.assertNotIn('verb', params)
             self.calls.append(params)
-            if params.get('verb') == ['ListRecords']:
-                if 'resumptionToken' in params:
-                    return pages[params['resumptionToken'][0]]
-                category = next(c for c, s in arxiv_versions.SETS.items() if [s] == params['set'])
-                self.assertNotIn('until', params)
-                return oai({k: histories[k] for k in (selected.get(category, []) if selected is not None else histories)},
-                           token='next' if pages and category == 'gr-qc' else '')
-            if params.get('verb') == ['GetRecord']:
-                identity = params['identifier'][0].removeprefix('oai:arXiv.org:')
-                return oai({identity: histories[identity]}, verb='GetRecord')
-            ids = params['id_list'][0].split(',')
-            self.assertLessEqual(len(ids), 100)
-            self.assertNotIn('search_query', params)
-            return feed([metadata[i] for i in ids])
+            if 'id_list' in params:
+                ids = params['id_list'][0].split(',')
+                self.assertLessEqual(len(ids), 100)
+                self.assertTrue(all(not re.search(r'v\d+$', i) for i in ids))
+                return self.overrides.get(('LatestMetadata', '', 0), feed([metadata[i] for i in ids]))
+            start = int(params.get('start', ['0'])[0])
+            if parsed.path == '/search/advanced':
+                category = params['terms-0-term'][0]
+                self.assertNotIn('include_older_versions', params)
+                lower = date.fromisoformat(params['date-from_date'][0])
+                upper = date.fromisoformat(params['date-to_date'][0])
+                ids = sorted(i for i, p in metadata.items() if category in p['categories'].split(', ')
+                             and lower <= arxiv_versions.timestamp(p['updated']).date() <= upper)
+                page_ids = ids[start:start+arxiv_versions.SEARCH_PAGE_SIZE]
+                return self.overrides.get(('AdvancedSearch', category, start), search_page(page_ids, start, len(ids)))
+            category = re.search(r'cat:([^ ]+)', params['search_query'][0])[1]
+            papers = [p for p in metadata.values() if category in p['categories'].split(', ')]
+            source = 'LatestUpdates' if params['sortBy'] == ['lastUpdatedDate'] else 'FirstSubmissions'
+            if source == 'FirstSubmissions':
+                bounds = re.findall(r'\d{12}', params['search_query'][0])
+                lower, upper = [datetime.strptime(t, '%Y%m%d%H%M').replace(tzinfo=timezone.utc) for t in bounds]
+                papers = [p for p in papers if lower <= arxiv_versions.timestamp(p['published']) <= upper]
+                papers.sort(key=lambda p: p['published'], reverse=True)
+            else:
+                self.assertNotIn('submittedDate:', params['search_query'][0])
+                papers.sort(key=lambda p: arxiv_versions.timestamp(p['updated']), reverse=True)
+            size = int(params['max_results'][0])
+            return self.overrides.get((source, category, start), feed(papers[start:start+size], start=start, total=len(papers), size=size))
         self.stack.enter_context(patch('main.fetch_arxiv_metadata', side_effect=request))
 
-    def single(self, versions=None, categories='gr-qc'):
-        history = versions or {1: f'{DAY}T01:00:00Z'}
-        identity = '2609.00001'
-        metadata = {f'{identity}v{v}': dict(paper(version=v, updated=t), published=history[1],
-                    categories=categories, primary_category=categories.split(', ')[0]) for v, t in history.items()}
-        self.install({identity: history}, metadata)
-        return metadata
+    def single(self, version=1, published=None, updated=None, categories='gr-qc'):
+        p = dict(paper(version=version, updated=updated), categories=categories, primary_category=categories.split(', ')[0])
+        if published:
+            p['published'] = published
+        self.install({p['arxiv_id']: p})
+        return p
 
-    def test_historical_v1_v5_execute_later_unchanged_and_no_new_version(self):
-        dates = [date(2026, m, 1) for m in range(1, 6)]
-        self.single({v: f'{d}T01:00:00Z' for v, d in enumerate(dates, 1)})
-        for v, day in enumerate(dates, 1):
-            self.assertEqual(pipeline.fetch_candidates_for_date(day).papers[0]['version'], v)
-        result = pipeline.fetch_candidates_for_date(dates[1])
-        self.assertEqual(result.papers[0]['version'], 2)
-        self.assertEqual(result.reused_count, 1)
-        self.assertIsNone(pipeline.fetch_candidates_for_date(date(2026, 2, 2)).snapshot)
+    def test_first_latest_and_saved_history_refresh_to_new_version(self):
+        first, update, next_update = date(2026, 1, 1), date(2026, 4, 1), date(2026, 5, 1)
+        p = self.single(4, f'{first}T01:00:00Z', f'{update}T01:00:00Z')
+        self.assertEqual(pipeline.fetch_candidates_for_date(first).papers[0]['version'], 4)
+        self.assertIsNone(pipeline.fetch_candidates_for_date(date(2026, 2, 1)).snapshot)
+        old = pipeline.fetch_candidates_for_date(update).snapshot
+        self.assertEqual(old.papers[0]['version'], 4)
+        self.metadata[p['arxiv_id']] = dict(paper(version=5, updated=f'{next_update}T01:00:00Z'), published=p['published'])
+        self.assertEqual(pipeline.fetch_candidates_for_date(next_update).papers[0]['version'], 5)
+        recovered = pipeline.fetch_candidates_for_date(update)
+        self.assertEqual(recovered.papers[0]['version'], 5)
+        self.assertEqual(recovered.reused_count, 1)
+        self.assertEqual(old.papers[0]['version'], 4)
+        self.assertIsNotNone(VersionStore(self.root).get((p['arxiv_id'], 4)))
+        self.assertEqual(pipeline.fetch_candidates_for_date(first).papers[0]['version'], 5)
         self.assert_no_analysis()
 
-    def test_last_version_cross_category_dedupe_and_immutable(self):
-        self.single({1: f'{DAY}T01:00:00Z', 2: f'{DAY}T02:00:00Z'}, 'gr-qc, astro-ph.HE')
+    def test_other_date_record_cannot_fill_missing_middle_date(self):
+        p = self.single(5, '2026-01-01T01:00:00Z', '2026-05-01T01:00:00Z')
+        pipeline.fetch_candidates_for_date(date(2026, 5, 1))
+        self.assertIsNone(pipeline.fetch_candidates_for_date(date(2026, 4, 1)).snapshot)
+
+    def test_today_updates_old_paper_and_stops_before_day(self):
+        p = self.single(4, '2026-01-01T01:00:00Z', f'{DAY}T01:00:00Z')
+        self.metadata['2609.00002'] = dict(paper(2), updated='2026-09-23T01:00:00Z', published='2026-09-23T01:00:00Z')
+        with patch.object(arxiv_versions, 'datetime') as clock:
+            clock.now.return_value.date.return_value = DAY
+            result = pipeline.fetch_candidates_for_date(DAY)
+        self.assertEqual(result.unique_count, 1)
+        self.assertEqual(result.papers[0]['version'], 4)
+        self.assertEqual(result.page_count, 3)
+        self.assertFalse(any('submittedDate:' in c.get('search_query', [''])[0] for c in self.calls))
+        self.assertFalse(any('terms-0-term' in c for c in self.calls))
+
+    def test_cross_category_dedupe_and_immutable(self):
+        self.single(categories='gr-qc, astro-ph.HE')
         result = pipeline.fetch_candidates_for_date(DAY)
         self.assertEqual((result.raw_count, result.unique_count), (2, 1))
-        self.assertEqual(result.papers[0]['version'], 2)
-        self.assertEqual(result.categories, pipeline.CATEGORIES)
         with self.assertRaises(TypeError):
             result.papers[0]['title'] = 'changed'
 
     def test_beijing_boundaries_and_old_id(self):
         times = ['2026-09-24T15:59:59Z', '2026-09-24T16:00:00Z',
                  '2026-09-25T15:59:59Z', '2026-09-25T16:00:00Z']
-        histories = {f'2609.{i:05d}': {1: t} for i, t in enumerate(times)}
-        metadata = {f'{i}v1': dict(paper(n, updated=t), published=t) for n, (i, h) in enumerate(histories.items()) for t in h.values()}
+        metadata = {p['arxiv_id']: p for n, t in enumerate(times) for p in [paper(n, updated=t)]}
         identity = 'gr-qc/9901001'
-        histories[identity] = {1: '2026-09-25T00:00:00+08:00'}
-        metadata[identity+'v1'] = dict(paper(), arxiv_id=identity, id=f'https://arxiv.org/abs/{identity}v1',
+        metadata[identity] = dict(paper(), arxiv_id=identity, id=f'https://arxiv.org/abs/{identity}v1',
             abs_url=f'https://arxiv.org/abs/{identity}v1', pdf_url=f'https://arxiv.org/pdf/{identity}v1',
             published='2026-09-25T00:00:00+08:00', updated='2026-09-25T00:00:00+08:00')
-        self.install(histories, metadata)
+        self.install(metadata)
         result = pipeline.fetch_candidates_for_date(DAY)
         self.assertEqual({p['arxiv_id'] for p in result.papers}, {'2609.00001', '2609.00002', identity})
-        self.assertEqual(self.calls[0]['from'], ['2026-09-24'])
 
-    def test_all_pages_and_over_100_exact_ids(self):
-        histories = {f'2609.{i:05d}': {1: f'{DAY}T01:00:00Z'} for i in range(105)}
-        metadata = {f'{i}v1': paper(n) for n, i in enumerate(histories)}
-        first, rest = dict(list(histories.items())[:100]), dict(list(histories.items())[100:])
-        self.install(first, metadata, selected={'gr-qc': list(first)}, pages={'next': oai(rest)})
+    def test_all_pages_and_more_than_100_latest_ids(self):
+        metadata = {p['arxiv_id']: p for n in range(205) for p in [paper(n)]}
+        self.install(metadata)
         result = pipeline.fetch_candidates_for_date(DAY)
-        self.assertEqual(result.unique_count, 105)
-        self.assertEqual(result.page_count, 4)
-        self.assertEqual(set(next(c for c in self.calls if 'resumptionToken' in c)), {'verb', 'resumptionToken'})
-        self.assertEqual([len(c['id_list'][0].split(',')) for c in self.calls if 'id_list' in c], [100, 5])
+        self.assertEqual(result.unique_count, 205)
+        self.assertEqual([len(c['id_list'][0].split(',')) for c in self.calls if 'id_list' in c], [100, 100, 5])
+        self.assertTrue(any(c.get('start') == ['200'] and 'terms-0-term' in c for c in self.calls))
 
-    def test_migration_may_miss_new_discovery_but_preserves_saved_history(self):
-        histories = {'2609.00001': {1: f'{DAY}T01:00:00Z', 2: '2026-10-01T01:00:00Z'}}
-        selected = {'gr-qc': []}
-        self.install(histories, {'2609.00001v1': paper()}, selected=selected)
+    def test_saved_history_does_not_override_current_category(self):
+        p = self.single()
+        pipeline.fetch_candidates_for_date(DAY)
+        self.metadata[p['arxiv_id']] = dict(paper(version=2, updated='2026-10-01T01:00:00Z'), categories='hep-th')
         self.assertIsNone(pipeline.fetch_candidates_for_date(DAY).snapshot)
-        selected['gr-qc'] = ['2609.00001']
-        first = pipeline.fetch_candidates_for_date(DAY)
-        selected['gr-qc'] = []
-        later = pipeline.fetch_candidates_for_date(DAY)
-        self.assertEqual(dict(first.papers[0]), dict(later.papers[0]))
-        self.assertTrue(any(c.get('verb') == ['GetRecord'] for c in self.calls))
+        self.assertEqual(VersionStore(self.root).previous(DAY, ('gr-qc',))[0]['version'], 1)
 
-    def test_cached_same_day_v1_is_replaced_by_v2(self):
-        history = {1: f'{DAY}T01:00:00Z'}
-        metadata = self.single(history)
-        self.assertEqual(pipeline.fetch_candidates_for_date(DAY).papers[0]['version'], 1)
-        history[2] = f'{DAY}T02:00:00Z'
-        metadata['2609.00001v2'] = paper(version=2, updated=history[2])
-        self.assertEqual(pipeline.fetch_candidates_for_date(DAY).papers[0]['version'], 2)
-
-    def test_latest_day_version_category_checked_without_fallback(self):
-        metadata = self.single({1: f'{DAY}T01:00:00Z', 2: f'{DAY}T02:00:00Z'})
-        metadata['2609.00001v2']['categories'] = 'hep-th'
-        self.assertIsNone(pipeline.fetch_candidates_for_date(DAY).snapshot)
-
-    def test_wrong_version_missing_metadata_and_conflict_no_partial_save(self):
-        for mutation in ('version', 'time', 'missing', 'summary'):
+    def test_latest_response_missing_identity_wrong_version_or_summary_fails(self):
+        for mutation in ('version', 'id', 'missing', 'summary', 'regression'):
             with self.subTest(mutation=mutation):
-                metadata = self.single()
-                p = metadata['2609.00001v1']
+                p = self.single(2, '2026-01-01T01:00:00Z', f'{DAY}T01:00:00Z')
+                bad = dict(p)
                 if mutation == 'version':
-                    p['id'] = 'https://arxiv.org/abs/2609.00001v5'
-                elif mutation == 'time':
-                    p['updated'] = '2026-09-26T01:00:00Z'
-                elif mutation == 'missing':
-                    p['title'] = ''
-                else:
-                    p['summary'] = ''
+                    bad['version'] = 3
+                    bad['pdf_url'] = bad['pdf_url'].replace('v2', 'v3')
+                elif mutation == 'id':
+                    bad['id'] = 'https://arxiv.org/abs/2609.00099v2'
+                elif mutation == 'summary':
+                    bad['summary'] = ''
+                elif mutation == 'regression':
+                    bad = dict(paper(), published=p['published'])
+                self.overrides[('LatestMetadata', '', 0)] = feed([] if mutation == 'missing' else [bad])
                 with self.assertRaises(pipeline.CandidateError):
                     pipeline.fetch_candidates_for_date(DAY)
         self.assertEqual(VersionStore(self.root).previous(DAY, pipeline.CATEGORIES), [])
 
-    def test_token_errors_repeat_page_xml_and_missing_history(self):
-        identity = '2609.00001'
-        histories = {identity: {1: f'{DAY}T01:00:00Z'}}
-        for xml in (oai(histories, 'next'), b'broken',
-                    b"<OAI-PMH xmlns='http://www.openarchives.org/OAI/2.0/'><error code='badResumptionToken'/></OAI-PMH>",
-                    oai({identity: {2: f'{DAY}T01:00:00Z'}})):
-            with self.subTest(xml=xml[:60]):
-                self.install(histories, {identity+'v1': paper()}, selected={'gr-qc': [identity]}, pages={'next': xml})
+    def test_search_structure_pagination_and_duplicate_fail_closed(self):
+        p = self.single()
+        cases = [b'blocked', b'<html>Sorry, your query returned no results<li class="arxiv-result"></html>',
+                 search_page([p['arxiv_id'], p['arxiv_id']]), search_page([p['arxiv_id']], start=1)]
+        for html in cases:
+            with self.subTest(html=html[:35]):
+                self.overrides[('AdvancedSearch', 'gr-qc', 0)] = html
+                with self.assertRaises(pipeline.CandidateError):
+                    pipeline.fetch_candidates_for_date(DAY)
+
+    def test_today_sort_and_empty_page_fail_closed(self):
+        self.single()
+        with patch.object(arxiv_versions, 'datetime') as clock:
+            clock.now.return_value.date.return_value = DAY
+            for data in [feed([], start=0, total=1, size=100),
+                         feed([paper(1, updated='2026-09-24T01:00:00Z'), paper(2)], start=0, total=2, size=100)]:
+                self.overrides[('LatestUpdates', 'gr-qc', 0)] = data
                 with self.assertRaises(pipeline.CandidateError):
                     pipeline.fetch_candidates_for_date(DAY)
 
@@ -217,12 +243,9 @@ class DesktopPipelineTests(IsolatedDesktopTest):
             self.assertEqual(c.execute('SELECT status,unique_count FROM queries').fetchone(), ('failed', 0))
 
     def test_zero_then_available_refreshes_and_progress_is_real(self):
-        histories, metadata, selected = {}, {}, {'gr-qc': []}
-        self.install(histories, metadata, selected=selected)
+        self.install({})
         self.assertIsNone(pipeline.fetch_candidates_for_date(DAY).snapshot)
-        histories['2609.00001'] = {1: f'{DAY}T01:00:00Z'}
-        metadata['2609.00001v1'] = paper()
-        selected['gr-qc'] = ['2609.00001']
+        self.metadata['2609.00001'] = paper()
         events = []
         result = pipeline.fetch_candidates_for_date(DAY, events.append, categories=('gr-qc',))
         self.assertEqual(result.unique_count, 1)
@@ -238,13 +261,13 @@ class DesktopPipelineTests(IsolatedDesktopTest):
         self.single()
         diagnostics = DesktopDiagnostics(self.root)
         try:
-            result = pipeline.fetch_candidates_for_date(DAY, diagnostics=diagnostics)
-            self.assertIsNotNone(result.snapshot)
+            pipeline.fetch_candidates_for_date(DAY, diagnostics=diagnostics)
         finally:
             diagnostics.close()
         log = next(diagnostics.log_directory.glob('*.jsonl')).read_text(encoding='utf-8')
         self.assertIn('"remote_ip":"151.101.3.42"', log)
         self.assertIn('"time_total":0.25', log)
+        self.assertIn('AdvancedSearch', log)
         self.assertNotIn('Synthetic abstract', log)
 
     def test_snapshot_does_not_change_after_caller_or_database_update(self):
@@ -254,8 +277,7 @@ class DesktopPipelineTests(IsolatedDesktopTest):
         self.assertEqual(snapshot.papers[0]['title'], 'Synthetic paper')
         self.single()
         first = pipeline.fetch_candidates_for_date(DAY)
-        store = VersionStore(self.root)
-        store.save('other-date', DAY+timedelta(days=1), ('gr-qc',), [paper(2)], 1)
+        VersionStore(self.root).save('other-date', DAY+timedelta(days=1), ('gr-qc',), [paper(2)], 1)
         self.assertEqual(first.papers[0]['title'], 'Synthetic paper')
 
     def test_desktop_has_no_online_automation_dependencies(self):
@@ -264,6 +286,7 @@ class DesktopPipelineTests(IsolatedDesktopTest):
             modules = {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)}
             modules.update(a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names)
             self.assertFalse(any(m and ('automation' in m or 'cloud_metadata' in m) for m in modules))
+
 
 
 class MetadataStoreTests(IsolatedDesktopTest):
@@ -309,10 +332,23 @@ class MetadataStoreTests(IsolatedDesktopTest):
 
     def test_save_failure_blocks_snapshot(self):
         with patch.object(VersionStore, 'save', side_effect=MetadataError('metadata_storage_failed')):
-            with patch('main.fetch_arxiv_metadata', return_value=oai({})):
+            with patch.object(arxiv_versions, 'collect', return_value=([], 0, 0, 0, 0)):
                 with self.assertRaises(pipeline.CandidateError) as caught:
                     pipeline.fetch_candidates_for_date(DAY)
         self.assertEqual(caught.exception.issue.code, 'AKD-FETCH-METADATA_FAILED')
+
+    def test_legacy_policy_and_query_category_are_checked(self):
+        cross = dict(paper(), categories='gr-qc, astro-ph.HE')
+        self.store.save('legacy', DAY, ('gr-qc',), [cross], 1)
+        with closing(sqlite3.connect(self.store.database)) as c:
+            c.execute("UPDATE queries SET policy='beijing_version_day_v1' WHERE query_id='legacy'")
+            c.commit()
+        self.assertEqual(self.store.previous(DAY, ('gr-qc',)), [cross])
+        self.assertEqual(self.store.previous(DAY, ('astro-ph.HE',)), [])
+        with closing(sqlite3.connect(self.store.database)) as c:
+            c.execute("UPDATE queries SET policy='unknown-policy'")
+            c.commit()
+        self.assertEqual(self.store.previous(DAY, ('gr-qc',)), [])
 
 
 if __name__ == '__main__':

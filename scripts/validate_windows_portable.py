@@ -80,7 +80,8 @@ def collect_validation_evidence(run):
     for path in run.work.rglob('*'):
         if path.is_file() and (path.suffix.lower() == '.png' or path.name in
                 ('portable-check.json', 'recovery-check.json', 'external-library-name.txt')
-                or path.parent == run.work and path.suffix == '.log'):
+                or path.parent == run.work and path.suffix == '.log'
+                or path.suffix == '.jsonl' and path.parent.name == 'logs'):
             run.capture(path, path.relative_to(run.work).as_posix())
 
 

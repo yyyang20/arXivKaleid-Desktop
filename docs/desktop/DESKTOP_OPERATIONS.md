@@ -84,11 +84,15 @@ manifest 记录组件 name/version/build/包归档 SHA-256、来源发行归档 
 & $desktopPython -X utf8 -B scripts/validate_windows_portable.py --arxiv
 # 历史日期须在 GUI 365 天范围内；诊断仍硬禁止模型，额外核验精确版本 PDF。
 & $desktopPython -X utf8 -B scripts/validate_windows_portable.py --arxiv --arxiv-date '2026-08-03'
+# 冻结前：真实 GUI/QThread 验证首次／最新提交日、历史补查及每次 120 秒性能门槛。
+& $desktopPython -X utf8 -B scripts/validate_arxiv_history.py
 ```
 
-验证器先检查干净发行树，再复制到本次 `.desktop-build/managed-artifacts/portable-<ID>/work/`，使用非源码 cwd 和仅包含 Windows System32 的 PATH 启动 EXE。诊断窗口创建前仅对当前诊断线程调用 [ImmDisableIME](https://learn.microsoft.com/en-us/windows/win32/api/imm/nf-imm-immdisableime)，避免第三方输入法 DLL 干扰严格来源检查；不改变系统输入法、正式 GUI 或普通重启入口，不覆盖真实输入法交互。检查资源、Qt GUI/Markdown、进度控件、首次告知默认拒绝、DPAPI 假值、SQLite、pypdf、时区、bundled curl 与重启；独立版本元数据库用合成记录验证跨进程内容哈希恢复。`--arxiv` 通过实际 GUI/QThread 完整抓取所查分类，不点击分析；`--arxiv-date` 可选择范围内历史日期，并检验真实更新版元数据与指定版本 PDF 最终 URL 和 SHA-256。历史日期验收须包含更新版本，零结果不能替代成功验证。诊断进程硬禁用模型，所有结果只写新副本 runtime 和受管摘要，不接触真实 Key，已有 runtime 拒绝诊断。
+验证器先检查干净发行树，再复制到本次 `.desktop-build/managed-artifacts/portable-<ID>/work/`，使用非源码 cwd 和仅包含 Windows System32 的 PATH 启动 EXE。诊断窗口创建前仅对当前诊断线程调用 [ImmDisableIME](https://learn.microsoft.com/en-us/windows/win32/api/imm/nf-imm-immdisableime)，避免第三方输入法 DLL 干扰严格来源检查；不改变系统输入法、正式 GUI 或普通重启入口，不覆盖真实输入法交互。检查资源、Qt GUI/Markdown、进度控件、首次告知默认拒绝、DPAPI 假值、SQLite、pypdf、时区、bundled curl 与重启；独立版本元数据库用合成记录验证跨进程内容哈希恢复。`--arxiv` 通过实际 GUI/QThread 完整抓取所查分类，不点击分析；`--arxiv-date` 可选择范围内历史日期，并检验当前版本元数据与明确版本 PDF 最终 URL 和 SHA-256。历史日期验收须包含更新版本，零结果不能替代成功验证。诊断进程硬禁用模型，所有结果只写新副本 runtime 和受管摘要，不接触真实 Key，已有 runtime 拒绝诊断。
 
-五组 DPI、恢复、普通重启和反例全部完成，所属进程退出且合成数据隐私检查通过后，将报告与必要截图复制到本次 `evidence/` 并核对哈希，再释放九份程序副本和合成运行数据。失败保存已有安全证据；证据收集失败则保留 work 并停止后续运行。原始干净发行目录始终受保护，人工验收截图保留到明确结案，规则见根运行手册的 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期)。
+`validate_arxiv_history.py` 在独立受管 runtime 检查当天、近期及数月前日期的冷查询，记录各来源分页、请求数和完整抓取耗时，单次验收不得超过 120 秒，失败不自动重跑。固定多版本论文用于最新版与 PDF 校验；历史关联夹具来自真实指定旧版 Atom，明确标注为合成关联，不冒充过去实际抓取。补查必须取得联网最新版并保留原记录、快照；验收全程禁止 OAI 和模型。Advanced Search 页面变化、服务及网络延迟可导致验收失败，不能截断结果满足性能门槛。
+
+五组 DPI、恢复、普通重启和反例全部完成，所属进程退出且合成数据隐私检查通过后，将报告、必要截图及脱敏会话 JSONL 复制到本次 `evidence/` 并核对哈希，再释放九份程序副本和合成运行数据。失败保存已有安全证据；证据收集失败则保留 work 并停止后续运行。原始干净发行目录始终受保护，人工验收截图保留到明确结案，规则见根运行手册的 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期)。
 
 默认离线验证在真实 Windows 平台抓取七个主要状态、详情、失败、设置禁改与最小窗口截图，使用真实 QThread 与合成计算，不分发 unittest/mock 或开发 QA 脚本。Python 网络及非本地版本检查的子进程传输被硬禁止。新建副本写入合成 DPAPI 后，只有匹配验证器随机诊断令牌的新进程才检查恢复；普通 GUI 额外重复启动/关闭三次。图像和诊断只在副本 `runtime/work/`，绝不回流发行包。
 

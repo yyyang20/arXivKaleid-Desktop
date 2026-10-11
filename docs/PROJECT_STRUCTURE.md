@@ -32,6 +32,7 @@
 | `scripts/` | 本地 Windows portable 构建、许可证收集、零模型验证及隔离离线 GUI 视觉 QA 入口 |
 | `scripts/local_artifacts.py` | 项目内生命周期、进程锁、容量和留存门槛、准确处置计划；不自动淘汰历史材料 |
 | `scripts/run_local_checks.py` | 独立 TEMP/TMP 与测试根目录的离线 unittest 薄入口 |
+| `scripts/validate_arxiv_history.py` | 获准后在独立 runtime 通过真实 GUI/QThread 验收多版本论文、无更新日、旧日回抓、快照和指定版本 PDF；硬禁止模型 |
 | `scripts/verify_public_release.py` | 匿名只读核验发行资产、冻结源码与历史基线；不执行远端写入 |
 
 根目录保留核心函数模块供 Desktop 调用；应用启动入口为 `python -B -m desktop.app`。当前仓库没有 Online 自动化、云端状态、恢复、错误样本或 Issue 日报发布模块，也没有 GitHub workflow。
@@ -69,7 +70,7 @@ docs/
 | 路径 | 职责 |
 |---|---|
 | `desktop/config.py` | `desktop_config_v6` 只读契约、抓取策略、预算边界和四份资源文本哈希校验 |
-| `desktop/arxiv_versions.py` | 分类 OAI 历史分页、日内最后版本选择与指定版本 Atom 严格校验 |
+| `desktop/arxiv_versions.py` | 首次／最新提交日发现、Advanced Search 分页、历史 ID 补查与最新版 Atom 校验 |
 | `desktop/version_metadata.py` | 独立版本元数据库 schema v1、元数据哈希和查询成员原子保存 |
 | `desktop/research_requirements.py` | 两轮独立保存、校验、默认读取及分析快照 |
 | `desktop/prompt_page.py` | 完整研究提示词查看/编辑、保存、取消、恢复与未保存保护 |
@@ -90,7 +91,8 @@ docs/
 |---|---|
 | `test_desktop_config.py` | 当前配置、预算、模型协议、Prompt 路径及哈希，拒绝旧 Online 配置字段 |
 | `test_desktop_decoupling.py` | 合成场景技术门禁基线、主库 schema v1、缓存、预算、导入边界和隔离源码运行 |
-| `test_desktop_pipeline.py` | 假 OAI/Atom、历史版本、日期边界、分页、分类迁移、计数、快照及元数据库事务 |
+| `test_desktop_pipeline.py` | 假 HTML/Atom、最新版与历史关联补查、日期边界、分页、分类迁移、快照及元数据库事务 |
+| `test_arxiv_transport.py` | 网络期限与外层等待、单次尝试、超时部分证据、响应头隐私及性能验收用例 |
 | `test_desktop_analysis.py` | mock HTTP 两轮集成、可选自由评价、门控、预算、单次 attempt、工作数据隔离和日报事实 |
 | `test_research_prompt_protocol.py` | 最小身份协议、跨领域自由评价、第二轮交接独立性、Token 并列裁决、缓存及安全日报 |
 | `test_desktop_secrets.py` | 密文落盘、错误、路径和 Windows DPAPI 假值往返 |

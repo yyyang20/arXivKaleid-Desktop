@@ -344,20 +344,35 @@ def run(*, network=False, visual=False, target_date=None):
                 today = datetime.now(ZoneInfo('Asia/Shanghai')).date()
                 assert today - timedelta(days=365) <= target_date <= today
                 window.select_date(target_date)
+            fetch_started = None
+
+            def start_network_fetch():
+                nonlocal fetch_started
+                fetch_started = time.monotonic()
+                window.start_fetch()
+
             def done():
                 if window.worker is not None:
                     QTimer.singleShot(100, done)
                     return
+                elapsed = time.monotonic() - fetch_started
+                report['fetch_elapsed_seconds'] = round(elapsed, 3)
+                report['fetch_limit_seconds'] = 120
+                report['fetch_within_limit'] = elapsed <= 120
                 report['arxiv'] = window.snapshot is not None
                 if window.snapshot:
                     report['candidate_date'] = window.snapshot.candidate_date.isoformat()
                     report['candidate_count'] = window.snapshot.unique_count
-                    report['oai_pages'] = window.snapshot.page_count
+                    report['discovery_pages'] = window.snapshot.page_count
+                    report['network_count'] = window.snapshot.network_count
+                    report['history_count'] = window.snapshot.reused_count
                     try:
+                        assert elapsed <= 120, 'fetch_performance_limit_exceeded'
                         from desktop.arxiv_versions import timestamp
                         from pdf_processing import SelectedPaper, fetch_pdf_bytes, build_online_pdf_url
                         lower, upper = main.beijing_submission_bounds(window.snapshot.candidate_date)
-                        assert all(lower <= timestamp(p['updated']) < upper for p in window.snapshot.papers)
+                        assert all(lower <= timestamp(p['updated']) < upper or
+                                   lower <= timestamp(p['published']) < upper for p in window.snapshot.papers)
                         chosen = max(window.snapshot.papers, key=lambda p: p['version'])
                         pdf_url = build_online_pdf_url(SelectedPaper(chosen['arxiv_id'], chosen['version'], chosen['title']))
                         assert pdf_url == chosen['pdf_url']
@@ -376,7 +391,7 @@ def run(*, network=False, visual=False, target_date=None):
                     report['network_failure_code'] = 'fetch_failed'
                 window.close()
                 application.quit()
-            QTimer.singleShot(100, window.start_fetch)
+            QTimer.singleShot(100, start_network_fetch)
             QTimer.singleShot(200, done)
         else:
             report['ok'] = True
@@ -389,6 +404,16 @@ def run(*, network=False, visual=False, target_date=None):
         diagnostics.close()
         log_files = tuple((root / 'runtime/logs').glob('desktop-*.jsonl'))
         assert len(log_files) == 1 and 'portable_check' in log_files[0].read_text(encoding='utf-8')
+        if network:
+            events = [json.loads(line) for line in log_files[0].read_text(encoding='utf-8').splitlines()]
+            requests = [e['details'] for e in events if e.get('stage') == 'http' and e.get('state') == 'start']
+            kinds = {'FirstSubmissions', 'LatestUpdates', 'AdvancedSearch', 'LatestMetadata'}
+            assert requests and all(r.get('request_kind') in kinds and
+                                    not r.get('resumption_token_present') for r in requests)
+            report['fetch_request_count'] = len(requests)
+            report['fetch_requests_by_source'] = {kind: sum(r['request_kind'] == kind for r in requests)
+                                                  for kind in sorted(kinds)}
+            report['oai_requests'] = 0
         report.update(diagnostics_jsonl=True, diagnostics_runtime_only=True)
         token = os.environ.get('ARXIVKALEID_DIAGNOSTIC_TOKEN', '')
         report['diagnostic_token_sha256'] = hashlib.sha256(token.encode()).hexdigest()

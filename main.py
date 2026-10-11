@@ -680,6 +680,28 @@ def _build_arxiv_transport_diagnostic(
     return message
 
 
+def _arxiv_incomplete_transfer_diagnostic(
+    stdout: bytes | None, header_path: Path | None, *, timeout_seconds: float,
+    attempt_no: int, max_attempts: int, error_code: str, curl_exit_code: int | None,
+    timeout_source: str | None,
+) -> dict[str, Any]:
+    """失败时只提取同次请求已收到的长度、固定 write-out 和安全响应头。"""
+    output = stdout or b""
+    body, marker, suffix = output.rpartition(b"\n__ARXIV_KALEID_CURL_STATUS__:")
+    if not marker:
+        body = output
+    _, transport_marker, payload = suffix.partition(b"\n__ARXIV_KALEID_CURL_TRANSPORT__:")
+    network = arxiv_transport_evidence.parse_write_out(payload, timeout_seconds=timeout_seconds) if transport_marker else None
+    diagnostic = _arxiv_transport_diagnostic(
+        transport_payload=payload if transport_marker else None, header_path=header_path,
+        status=network["http_status"] if network else 0, attempt_no=attempt_no,
+        max_attempts=max_attempts, timeout_seconds=timeout_seconds,
+    )
+    diagnostic.update(error_type=error_code, curl_exit_code=curl_exit_code,
+                      timeout_source=timeout_source, body_bytes=len(body), body_complete=False)
+    return diagnostic
+
+
 def fetch_arxiv_metadata(
     url: str,
     timeout_seconds: float,
@@ -694,8 +716,9 @@ def fetch_arxiv_metadata(
     subprocess_creationflags: int = 0,
     emit_success_transport_diagnostic: bool = False,
     diagnostic_observer: Callable[[str, dict[str, Any]], None] | None = None,
+    subprocess_timeout_margin_seconds: float = 0,
 ) -> bytes:
-    """通过官方 API 获取 Atom XML；仅对明确的瞬态失败有界重试。"""
+    """读取官方 arXiv 响应；默认单次传输，显式请求时才有界重试。"""
     if (
         isinstance(max_attempts, bool)
         or not isinstance(max_attempts, int)
@@ -709,6 +732,10 @@ def fetch_arxiv_metadata(
         or (max_attempts == 2 and retry_backoff_seconds < 3)
     ):
         raise RuntimeError("arxiv_metadata_retry_backoff_invalid")
+    if (isinstance(subprocess_timeout_margin_seconds, bool)
+            or not isinstance(subprocess_timeout_margin_seconds, (int, float))
+            or not 0 <= subprocess_timeout_margin_seconds <= 60):
+        raise RuntimeError("arxiv_metadata_subprocess_margin_invalid")
     curl_status_marker = b"\n__ARXIV_KALEID_CURL_STATUS__:"
     curl_transport_marker = b"\n__ARXIV_KALEID_CURL_TRANSPORT__:"
     for attempt_no in range(1, max_attempts + 1):
@@ -754,7 +781,8 @@ def fetch_arxiv_metadata(
                 ],
                 check=False,
                 capture_output=True,
-                timeout=timeout_seconds,
+                # 留给 curl 自己退出并写入取证数据的余量，不是额外网络重试。
+                timeout=timeout_seconds + subprocess_timeout_margin_seconds,
                 creationflags=subprocess_creationflags,
             )
             if completed.returncode == 28:
@@ -765,12 +793,11 @@ def fetch_arxiv_metadata(
                     try:
                         diagnostic_observer(
                             "curl_failure",
-                            {
-                                "attempt": attempt_no,
-                                "max_attempts": max_attempts,
-                                "curl_exit_code": completed.returncode,
-                                "error_type": error_code,
-                            },
+                            _arxiv_incomplete_transfer_diagnostic(
+                                completed.stdout, header_path, timeout_seconds=timeout_seconds,
+                                attempt_no=attempt_no, max_attempts=max_attempts, error_code=error_code,
+                                curl_exit_code=completed.returncode, timeout_source="curl",
+                            ),
                         )
                     except Exception:
                         pass
@@ -782,12 +809,11 @@ def fetch_arxiv_metadata(
                         try:
                             diagnostic_observer(
                                 "curl_failure",
-                                {
-                                    "attempt": attempt_no,
-                                    "max_attempts": max_attempts,
-                                    "curl_exit_code": completed.returncode,
-                                    "error_type": error_code,
-                                },
+                                _arxiv_incomplete_transfer_diagnostic(
+                                    completed.stdout, header_path, timeout_seconds=timeout_seconds,
+                                    attempt_no=attempt_no, max_attempts=max_attempts, error_code=error_code,
+                                    curl_exit_code=completed.returncode, timeout_source=None,
+                                ),
                             )
                         except Exception:
                             pass
@@ -871,6 +897,15 @@ def fetch_arxiv_metadata(
             error_code = "arxiv_api_timeout"
             retryable = True
             cause = exc
+            if diagnostic_observer is not None:
+                try:
+                    diagnostic_observer("curl_failure", _arxiv_incomplete_transfer_diagnostic(
+                        exc.stdout, header_path, timeout_seconds=timeout_seconds,
+                        attempt_no=attempt_no, max_attempts=max_attempts, error_code=error_code,
+                        curl_exit_code=None, timeout_source="python_subprocess",
+                    ))
+                except Exception:
+                    pass
         except OSError as exc:
             error_code = "arxiv_api_connection_failed"
             cause = exc

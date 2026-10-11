@@ -25,7 +25,7 @@
 | `desktop/progress.py` | 抓取与分析共用的不可变结构化进度事件及不影响业务流程的安全派发 |
 | `desktop/report.py` | 当前 run 的 SQLite 事实与 Desktop Markdown 外壳，复用 Round 2 推荐区块 |
 | `desktop/pipeline.py` | 分类级版本抓取编排、原子保存、真实日期/分页/复用进度和只读内存快照 |
-| `desktop/arxiv_versions.py` | OAI arXivRaw 历史发现、指定日最后版本与精确 Atom 校验 |
+| `desktop/arxiv_versions.py` | 首次／最新提交日发现、HTML 分页、历史 ID 补查与当前版本校验 |
 | `desktop/version_metadata.py` | 轻量持久版本元数据、查询记录和成员关联 schema v1 |
 | `desktop/secrets.py` | ctypes DPAPI、密文原子保存与恢复，独立于 Qt |
 | `requirements-desktop.txt` | 固定 PySide6、基础 Fluent、frameless、darkdetect 和 Windows pywin32 依赖 |

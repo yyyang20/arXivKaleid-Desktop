@@ -13,7 +13,8 @@ import sqlite3
 from desktop import paths
 
 SCHEMA_VERSION = 1
-FETCH_POLICY = "beijing_version_day_v1"
+FETCH_POLICY = "beijing_first_latest_history_v1"
+HISTORY_POLICIES = (FETCH_POLICY, "beijing_version_day_v1")
 FIELDS = {"id", "arxiv_id", "version", "title", "authors", "summary", "categories",
           "primary_category", "published", "updated", "abs_url", "pdf_url"}
 
@@ -113,15 +114,22 @@ class VersionStore:
             return self.decode(row) if row else None
 
     def previous(self, day: date, categories):
-        # 按已查询分类保留历史成员；失败和其他策略记录不构成缓存命中。
+        # 只读取可信策略的成功日期关联；旧精确版本记录可提供历史 ID，不能替代最新版。
         with self.connection() as conn:
             if conn is None:
                 return []
-            rows = conn.execute("""SELECT DISTINCT v.* FROM versions v JOIN query_versions m
+            rows = conn.execute("""SELECT DISTINCT v.*,q.categories FROM versions v JOIN query_versions m
                 USING(arxiv_id,version) JOIN queries q USING(query_id)
-                WHERE q.day=? AND q.policy=? AND q.status='success'""", (day.isoformat(), FETCH_POLICY)).fetchall()
-            papers = [self.decode(row) for row in rows]
-            return [p for p in papers if set(categories) & set(p["categories"].split(", "))]
+                WHERE q.day=? AND q.policy IN (?,?) AND q.status='success'""", (day.isoformat(), *HISTORY_POLICIES)).fetchall()
+            papers = []
+            for row in rows:
+                queried = json.loads(row[4])
+                if not isinstance(queried, list) or not all(isinstance(c, str) for c in queried):
+                    raise MetadataError("metadata_query_invalid")
+                paper = self.decode(row[:4])
+                if set(categories) & set(queried) & set(paper["categories"].split(", ")):
+                    papers.append(paper)
+            return papers
 
     def save(self, query_id, day, categories, papers, raw_count, *, error_code=""):
         if type(day) is not date or raw_count < len(papers) or (error_code and papers):
