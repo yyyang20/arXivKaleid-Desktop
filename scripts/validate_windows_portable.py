@@ -16,7 +16,7 @@ import time
 import uuid
 
 from build_windows_portable import ROOT, NAME, checked_path, verify_tree, frozen_identity, inspect_python_archive
-from scripts.local_artifacts import ArtifactRun, inventory
+from scripts.local_artifacts import ArtifactRun, inventory, bind_portable_build, file_hash
 
 
 def verify_capture_display(visual, *, native_screen=None, target_dpr=None):
@@ -61,12 +61,14 @@ def main():
     if args.arxiv_date and not args.arxiv:
         parser.error('--arxiv-date requires --arxiv')
     source = checked_path(ROOT, 'dist', NAME)
-    verify_tree(source)
+    files = verify_tree(source)
     identity = json.loads((source / 'BUILD_INFO.json').read_text(encoding='utf-8'))
     assert identity['commit'] == frozen_identity()['commit'] and identity['working_tree_clean']
     inspect_python_archive(source / 'arXivKaleid.exe')
     with ArtifactRun('portable', root=ROOT, review=True) as run:
         run.record['commit'] = identity['commit']
+        run.record['portable_build'] = bind_portable_build(ROOT, source, files)
+        run.save()
         run.protect(source)
         try:
             validate_portable(run, source, identity, args)
@@ -226,8 +228,12 @@ def validate_portable(run, source, identity, args):
     summary = {'commit': identity['commit'], 'runs': results, 'missing_resource_rejected': True,
                'tampered_requirements_rejected': True,
                'missing_user_guide_rejected': True, 'tampered_user_guide_rejected': True,
-               'used_runtime_rejected': True, 'clean_distribution_preserved': True}
+                'used_runtime_rejected': True, 'clean_distribution_preserved': True,
+                'complete': True, 'portable_build': run.record.get('portable_build')}
     (run.evidence / 'validation.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+    run.record.update(portable_complete=True,
+                      portable_report_sha256=file_hash(run.evidence / 'validation.json'))
+    run.save()
     print('Validation audit:', run.evidence.relative_to(ROOT).as_posix())
 
 

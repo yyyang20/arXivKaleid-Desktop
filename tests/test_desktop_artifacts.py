@@ -683,6 +683,422 @@ class ArtifactTests(ArtifactFixture):
         self.assertEqual(self.read(run)['outputs']['sha256'], artifacts.file_hash(zip_old))
         with zipfile.ZipFile(zip_old) as archive:
             self.assertEqual(archive.read(build.NAME + '/arXivKaleid.exe'), b'new-exe')
+            self.assertEqual(json.loads(archive.read(build.NAME + '/BUILD_INFO.json'))['build_run_id'], run.record['id'])
+
+
+class CandidateCopyTests(ArtifactFixture):
+    """真实 ZIP／文件删除仅在合成根内；完整链路不构建 EXE、不联网。"""
+    def setUp(self):
+        super().setUp()
+        self.process_guard = patch.object(artifacts, 'candidate_process_active', return_value=False)
+        self.process_guard.start()
+        self.addCleanup(self.process_guard.stop)
+
+    def distribution(self, payload, commit, purpose=artifacts.TECHNICAL_PURPOSE, build_id=None):
+        directory = self.root / 'dist' / build.NAME
+        self.write(directory / 'arXivKaleid.exe', payload)
+        identity = dict(commit=commit, purpose=purpose, working_tree_clean=True)
+        if build_id is not None:
+            identity['build_run_id'] = build_id
+        self.write(directory / 'BUILD_INFO.json', json.dumps(identity).encode())
+        archive = self.root / 'release' / (build.NAME + '.zip')
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(archive, 'w') as stream:
+            for p in directory.rglob('*'):
+                if p.is_file():
+                    stream.write(p, build.NAME + '/' + p.relative_to(directory).as_posix())
+        checksum = self.write(archive.with_suffix('.zip.sha256'),
+            (artifacts.file_hash(archive) + '  ' + archive.name + '\n').encode())
+        return directory, archive, checksum
+
+    def pair(self, purpose=artifacts.TECHNICAL_PURPOSE):
+        old, old_zip, old_sha = self.distribution(b'old' * 8192, '1' * 40, purpose)
+        with artifacts.ArtifactRun('build', root=self.root) as run:
+            run.record['commit'] = '2' * 40
+            run.preserve_move(old, 'previous-dist')
+            run.preserve_move(old_zip, 'previous-release.zip')
+            run.preserve_move(old_sha, 'previous-release.sha256')
+            current, archive, checksum = self.distribution(b'new', '2' * 40, build_id=run.record['id'])
+            files = artifacts.candidate_files(self.root, current)
+            run.record['outputs'] = dict(zip=archive.relative_to(self.root).as_posix(),
+                checksum=checksum.relative_to(self.root).as_posix(), dist=current.relative_to(self.root).as_posix(),
+                sha256=artifacts.file_hash(archive), inventory=files)
+            run.save()
+            artifacts.register_candidate_copy(run)
+        return run
+
+    def validate(self, build_run, *, automatic=False):
+        # 反例夹具可暂停自动收尾，在提交验证证明前注入篡改；生产入口始终自动执行。
+        with patch.object(artifacts, 'accept_portable_validation',
+                          wraps=artifacts.accept_portable_validation if automatic else lambda *args: None):
+            return self.validation_record(build_run)
+
+    def validation_record(self, build_run):
+        output = self.read(build_run)['outputs']
+        current = self.root / output['dist']
+        with artifacts.ArtifactRun('portable', root=self.root, review=True) as run:
+            binding = artifacts.bind_portable_build(self.root, current, output['inventory'])
+            run.record.update(commit='2' * 40, portable_build=binding, portable_complete=True)
+            summary = dict(commit='2' * 40, complete=True, portable_build=binding,
+                missing_resource_rejected=True, tampered_requirements_rejected=True,
+                missing_user_guide_rejected=True, tampered_user_guide_rejected=True,
+                used_runtime_rejected=True, clean_distribution_preserved=True,
+                runs=[dict(ok=True, dpi_mode='native' if d is None else 'simulated', requested_dpr=d,
+                           restart_cycles=3, synthetic_dpapi_restart=True, python_on_path=False)
+                      for d in (None, 1, 1.25, 1.5, 2)])
+            report = self.write(run.evidence / 'validation.json', json.dumps(summary).encode())
+            self.write(run.evidence / 'screen.png')
+            run.record['portable_report_sha256'] = artifacts.file_hash(report)
+            run.save()
+        return run
+
+    def approve(self, run):
+        # 完成夹具暂停的自动验证收尾，再单独检查发布人工确认入口。
+        with artifacts.operation_lock(self.root):
+            artifacts.accept_portable_validation(self.root, self.read(run))
+        artifacts.close_review(self.root, run.record['id'])
+
+    def test_automatic_cleanup_does_not_wait_for_human_release_review(self):
+        build_run = self.pair()
+        old = build_run.preserved / 'previous-dist'
+        archive = build_run.preserved / 'previous-release.zip'
+        checksum = build_run.preserved / 'previous-release.sha256'
+        hashes = {p: artifacts.file_hash(p) for p in (archive, checksum)}
+        review = self.validate(build_run, automatic=True)
+        self.assertFalse(old.exists())
+        self.assertEqual({p: artifacts.file_hash(p) for p in hashes}, hashes)
+        self.assertEqual(self.read(build_run)['candidate_copy']['status'], 'deleted')
+        record = self.read(review)
+        self.assertEqual(record['state'], 'awaiting_review')
+        self.assertTrue(record['review_pending'])
+        self.assertNotIn('release_review_approved', record)
+        self.assertTrue((review.evidence / 'validation.json').exists())
+        self.assertFalse(artifacts.cleanup_plan(self.root, review.record['id'], review_complete=True)['targets'])
+        # 保留待发布人工验收材料，仍允许下一份候选进行技术验证。
+        with artifacts.ArtifactRun('portable', root=self.root, review=True):
+            pass
+        artifacts.close_review(self.root, review.record['id'])
+        self.assertTrue(self.read(review)['release_review_approved'])
+
+    def test_automatic_validation_rechecks_current_zip_before_cleanup(self):
+        build_run = self.pair()
+        real_accept = artifacts.accept_portable_validation
+        def changed(root, record):
+            self.distribution(b'changed-at-same-commit', '2' * 40)
+            real_accept(root, record)
+        with patch.object(artifacts, 'accept_portable_validation', side_effect=changed):
+            with self.assertRaisesRegex(RuntimeError, 'artifact_cleanup_failed'):
+                self.validation_record(build_run)
+        self.assertTrue((build_run.preserved / 'previous-dist').exists())
+        self.assertNotIn('candidate_validation', self.read(build_run))
+
+    def test_automatic_validation_failure_preserves_copy_and_stops_entry(self):
+        build_run = self.pair()
+        (build_run.preserved / 'previous-release.sha256').unlink()
+        with self.assertRaisesRegex(RuntimeError, 'artifact_cleanup_failed'):
+            self.validate(build_run, automatic=True)
+        self.assertTrue((build_run.preserved / 'previous-dist').exists())
+        self.assertEqual(self.read(build_run)['state'], 'cleanup_failed')
+        with self.assertRaisesRegex(RuntimeError, 'unfinished'):
+            with artifacts.ArtifactRun('tests', root=self.root):
+                pass
+
+    def test_automatic_failed_or_incomplete_validation_does_not_register_eligibility(self):
+        build_run = self.pair()
+        with self.assertRaisesRegex(RuntimeError, 'synthetic_failure'):
+            with artifacts.ArtifactRun('portable', root=self.root, review=True) as run:
+                output = self.read(build_run)['outputs']
+                run.record.update(portable_build=artifacts.bind_portable_build(
+                    self.root, self.root / output['dist'], output['inventory']), portable_complete=True)
+                raise RuntimeError('synthetic_failure')
+        self.assertNotIn('candidate_validation', self.read(build_run))
+        self.assertTrue((build_run.preserved / 'previous-dist').exists())
+        record = self.read(run)
+        record.update(state='released', review_pending=False)
+        artifacts.save_record(self.root, record)
+        with artifacts.ArtifactRun('portable', root=self.root, review=True) as incomplete:
+            incomplete.record.update(portable_build=run.record['portable_build'], portable_complete=False)
+        self.assertNotIn('candidate_validation', self.read(build_run))
+        self.assertTrue((build_run.preserved / 'previous-dist').exists())
+
+    def test_close_review_deletes_only_verified_copy_keeps_zip_evidence_and_current(self):
+        build_run = self.pair()
+        review = self.validate(build_run)
+        protected = [build_run.preserved / 'previous-release.zip', build_run.preserved / 'previous-release.sha256',
+                     review.evidence / 'validation.json', review.evidence / 'screen.png',
+                     self.root / self.read(build_run)['outputs']['zip']]
+        hashes = {p: artifacts.file_hash(p) for p in protected}
+        self.assertTrue((build_run.preserved / 'previous-dist').exists())
+        self.approve(review)
+        self.assertFalse((build_run.preserved / 'previous-dist').exists())
+        self.assertEqual({p: artifacts.file_hash(p) for p in protected}, hashes)
+        record = self.read(build_run)['candidate_copy']
+        self.assertEqual(record['status'], 'deleted')
+        self.assertEqual(record['deleted_files'], 2)
+        self.assertEqual(record['validation_run'], review.record['id'])
+        self.assertEqual(self.read(review)['state'], 'released')
+        self.assertFalse(artifacts.cleanup_plan(self.root, review.record['id'])['targets'])
+        with artifacts.ArtifactRun('tests', root=self.root):
+            pass  # 重复入口不重复删除。
+
+    def test_pending_or_failed_portable_never_unlocks_copy(self):
+        build_run = self.pair()
+        review = self.validate(build_run)
+        with artifacts.ArtifactRun('tests', root=self.root):
+            pass
+        self.assertTrue((build_run.preserved / 'previous-dist').exists())
+        record = self.read(review)
+        record.update(state='failed', outcome='failed', failure_type='RuntimeError')
+        artifacts.save_record(self.root, record)
+        with self.assertRaisesRegex(RuntimeError, 'not_eligible'):
+            self.approve(review)
+        self.assertTrue((build_run.preserved / 'previous-dist').exists())
+
+    def test_incomplete_or_changed_validation_rejected(self):
+        build_run = self.pair()
+        review = self.validate(build_run)
+        record = self.read(review)
+        record['portable_complete'] = False
+        artifacts.save_record(self.root, record)
+        with self.assertRaisesRegex(RuntimeError, 'not_eligible'):
+            self.approve(review)
+        record['portable_complete'] = True
+        artifacts.save_record(self.root, record)
+        self.write(review.evidence / 'screen.png', b'changed')
+        with self.assertRaisesRegex(RuntimeError, 'not_eligible'):
+            self.approve(review)
+
+    def test_partial_validation_even_with_complete_marker_cannot_close(self):
+        build_run = self.pair()
+        review = self.validate(build_run)
+        report = review.evidence / 'validation.json'
+        summary = json.loads(report.read_text())
+        summary['runs'].pop()
+        report.write_text(json.dumps(summary), encoding='utf-8')
+        record = self.read(review)
+        record['portable_report_sha256'] = artifacts.file_hash(report)
+        record['evidence_hashes'] = artifacts.inventory(self.root, review.evidence, hashes=True)
+        artifacts.save_record(self.root, record)
+        with self.assertRaisesRegex(RuntimeError, 'binding_changed'):
+            self.approve(review)
+
+    def test_close_review_respects_process_lock(self):
+        build_run = self.pair()
+        review = self.validate(build_run)
+        with artifacts.operation_lock(self.root):
+            with self.assertRaisesRegex(RuntimeError, 'operation_busy'):
+                self.approve(review)
+        self.assertTrue(self.read(review)['review_pending'])
+
+    def test_extra_credential_in_evidence_is_rejected_before_hash_read(self):
+        build_run = self.pair()
+        review = self.validate(build_run)
+        extra = self.write(review.evidence / 'secret.dat')
+        real_hash = artifacts.file_hash
+        def checked_hash(path):
+            self.assertNotEqual(path, extra)
+            return real_hash(path)
+        with patch.object(artifacts, 'file_hash', side_effect=checked_hash):
+            with self.assertRaisesRegex(RuntimeError, 'not_eligible'):
+                self.approve(review)
+        self.assertTrue(extra.exists())
+
+    def test_same_commit_different_zip_cannot_reuse_validation(self):
+        build_run = self.pair()
+        review = self.validate(build_run)
+        self.distribution(b'new-but-different', '2' * 40)
+        with self.assertRaisesRegex(RuntimeError, 'manifest_changed'):
+            self.approve(review)
+        self.assertTrue((build_run.preserved / 'previous-dist').exists())
+
+    def test_binding_records_build_id_and_zip_and_rejects_wrong_build_info(self):
+        build_run = self.pair()
+        review = self.validate(build_run)
+        binding = self.read(review)['portable_build']
+        self.assertEqual(binding['build_id'], build_run.record['id'])
+        self.assertEqual(binding['zip_sha256'], self.read(build_run)['outputs']['sha256'])
+        source = self.root / self.read(build_run)['outputs']['dist']
+        identity = json.loads((source / 'BUILD_INFO.json').read_text())
+        identity['build_run_id'] = 'build-' + '0' * 32
+        (source / 'BUILD_INFO.json').write_text(json.dumps(identity), encoding='utf-8')
+        self.assertIsNone(artifacts.bind_portable_build(self.root, source, artifacts.candidate_files(self.root, source)))
+
+    def test_public_distribution_and_unmarked_history_stay_protected(self):
+        for purpose in ('public-release', artifacts.TECHNICAL_PURPOSE):
+            with self.subTest(purpose=purpose), tempfile.TemporaryDirectory(dir=self.root) as scratch:
+                original = self.root
+                self.root = Path(scratch)
+                try:
+                    build_run = self.pair(purpose)
+                    if purpose == artifacts.TECHNICAL_PURPOSE:
+                        record = self.read(build_run)
+                        record.pop('candidate_copy')
+                        artifacts.save_record(self.root, record)
+                    review = self.validate(build_run)
+                    self.approve(review)
+                    self.assertTrue((build_run.preserved / 'previous-dist').exists())
+                finally:
+                    self.root = original
+
+    def test_tampered_or_missing_archives_stop_without_deleting_copy(self):
+        for name in ('previous-release.zip', 'previous-release.sha256'):
+            with self.subTest(name=name), tempfile.TemporaryDirectory(dir=self.root) as scratch:
+                original = self.root
+                self.root = Path(scratch)
+                try:
+                    build_run = self.pair()
+                    review = self.validate(build_run)
+                    (build_run.preserved / name).unlink()
+                    with self.assertRaisesRegex(RuntimeError, 'archive_missing'):
+                        self.approve(review)
+                    self.assertTrue((build_run.preserved / 'previous-dist').exists())
+                    self.assertEqual(self.read(build_run)['state'], 'cleanup_failed')
+                finally:
+                    self.root = original
+
+    def test_archive_or_checksum_tampering_is_not_accepted(self):
+        for name in ('previous-release.zip', 'previous-release.sha256'):
+            with self.subTest(name=name), tempfile.TemporaryDirectory(dir=self.root) as scratch:
+                original = self.root
+                self.root = Path(scratch)
+                try:
+                    build_run = self.pair()
+                    review = self.validate(build_run)
+                    self.write(build_run.preserved / name, b'tampered')
+                    with self.assertRaisesRegex(RuntimeError, 'checksum_mismatch'):
+                        self.approve(review)
+                    self.assertTrue((build_run.preserved / 'previous-dist').exists())
+                finally:
+                    self.root = original
+
+    def test_user_data_and_extra_files_never_read_or_deleted(self):
+        for name in ('runtime/config/secret.dat', 'secret.dat', 'user.sqlite', 'paper.pdf', 'extra.txt'):
+            with self.subTest(name=name), tempfile.TemporaryDirectory(dir=self.root) as scratch:
+                original = self.root
+                self.root = Path(scratch)
+                try:
+                    build_run = self.pair()
+                    review = self.validate(build_run)
+                    extra = self.write(build_run.preserved / 'previous-dist' / name)
+                    real_hash = artifacts.file_hash
+                    def no_sensitive_read(path):
+                        self.assertNotEqual(path, extra)
+                        return real_hash(path)
+                    with patch.object(artifacts, 'file_hash', side_effect=no_sensitive_read):
+                        with self.assertRaisesRegex(RuntimeError, 'user_data|manifest_changed'):
+                            self.approve(review)
+                    self.assertTrue(extra.exists())
+                finally:
+                    self.root = original
+
+    def test_active_reference_defers_cleanup_then_next_entry_reclaims_before_capacity(self):
+        build_run = self.pair()
+        review = self.validate(build_run)
+        old = build_run.preserved / 'previous-dist'
+        with artifacts.ArtifactRun('visual', root=self.root, review=True) as reference:
+            reference.protect(old)
+        self.approve(review)
+        self.assertTrue(old.exists())
+        self.assertEqual(self.read(build_run)['candidate_copy']['retention_reason'], 'active_reference_or_process')
+        record = self.read(reference)
+        record.update(state='released', review_pending=False)
+        artifacts.save_record(self.root, record)
+        bytes_before = sum(artifacts.inventory(self.root, self.root / artifacts.REGISTRY).values())
+        with artifacts.ArtifactRun('tests', root=self.root, work_limit=bytes_before-1):
+            pass
+        self.assertFalse(old.exists())
+
+    def test_manual_evidence_deletion_does_not_count_as_approval(self):
+        build_run = self.pair()
+        review = self.validate(build_run)
+        plan = artifacts.cleanup_plan(self.root, review.record['id'], review_complete=True)
+        with self.assertRaisesRegex(RuntimeError, 'use_close_review'):
+            artifacts.apply_plan(self.root, review.record['id'], plan['plan_sha256'], review_complete=True)
+        self.assertTrue((review.evidence / 'validation.json').exists())
+
+    def test_delete_failure_and_interrupt_protect_residue_and_block_next_entry(self):
+        build_run = self.pair()
+        review = self.validate(build_run)
+        with patch.object(artifacts, 'remove_exact', side_effect=PermissionError):
+            with self.assertRaises(PermissionError):
+                self.approve(review)
+        self.assertEqual(self.read(build_run)['state'], 'cleanup_failed')
+        self.assertTrue((build_run.preserved / 'previous-dist').exists())
+        with self.assertRaisesRegex(RuntimeError, 'unfinished'):
+            with artifacts.ArtifactRun('tests', root=self.root):
+                pass
+
+    def test_interrupt_during_delete_leaves_rotating_and_requires_manual_recovery(self):
+        build_run = self.pair()
+        review = self.validate(build_run)
+        with patch.object(artifacts, 'remove_exact', side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                self.approve(review)
+        self.assertEqual(self.read(build_run)['state'], 'rotating')
+        with self.assertRaisesRegex(RuntimeError, 'unfinished'):
+            with artifacts.ArtifactRun('tests', root=self.root):
+                pass
+
+    def test_live_process_and_unknown_status_prevent_approval(self):
+        build_run = self.pair()
+        review = self.validate(build_run)
+        with patch.object(artifacts, 'candidate_process_active', return_value=True):
+            with self.assertRaisesRegex(RuntimeError, 'resources_still_active'):
+                self.approve(review)
+        with patch.object(artifacts, 'candidate_process_active', side_effect=RuntimeError('status_unknown')):
+            with self.assertRaisesRegex(RuntimeError, 'status_unknown'):
+                self.approve(review)
+        self.assertTrue(self.read(review)['review_pending'])
+
+    def test_zip_file_set_and_hash_are_both_checked(self):
+        build_run = self.pair()
+        old = build_run.preserved / 'previous-dist'
+        archive = build_run.preserved / 'previous-release.zip'
+        checksum = build_run.preserved / 'previous-release.sha256'
+        files = self.read(build_run)['candidate_copy']['files']
+        for wrong_name in ('extra.txt', 'arXivKaleid.exe'):
+            with zipfile.ZipFile(archive, 'w') as stream:
+                stream.writestr(build.NAME + '/' + wrong_name, b'wrong')
+                if wrong_name == 'arXivKaleid.exe':
+                    stream.write(old / 'BUILD_INFO.json', build.NAME + '/BUILD_INFO.json')
+            self.write(checksum, (artifacts.file_hash(archive) + '  ' + build.NAME + '.zip\n').encode())
+            with self.assertRaisesRegex(RuntimeError, 'zip_manifest_changed|zip_hash_changed'):
+                artifacts.verify_candidate_archive(self.root, old, archive, checksum, files)
+
+    def test_real_junction_is_rejected_without_following_user_files(self):
+        build_run = self.pair()
+        review = self.validate(build_run)
+        user = self.write(self.root / 'user/keep')
+        link = build_run.preserved / 'previous-dist/link'
+        if os.name == 'nt':
+            result = subprocess.run(['cmd', '/c', 'mklink', '/J', str(link), str(user.parent)],
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(result.returncode, 0)
+        else:
+            link.symlink_to(user.parent, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, '目录链接|link'):
+            self.approve(review)
+        self.assertEqual(user.read_bytes(), b'synthetic')
+
+    def test_record_cannot_redirect_delete_scope(self):
+        build_run = self.pair()
+        review = self.validate(build_run)
+        user = self.write(self.root / 'user/keep')
+        record = self.read(build_run)
+        record['candidate_copy']['directory'] = 'user'
+        artifacts.save_record(self.root, record)
+        with self.assertRaisesRegex(RuntimeError, 'delete_scope'):
+            self.approve(review)
+        self.assertTrue(user.exists())
+
+    def test_output_record_cannot_redirect_read_to_user_directory(self):
+        build_run = self.pair()
+        review = self.validate(build_run)
+        record = self.read(build_run)
+        record['outputs']['dist'] = '.desktop-runtime'
+        artifacts.save_record(self.root, record)
+        with self.assertRaisesRegex(RuntimeError, 'output_scope_invalid'):
+            self.approve(review)
 
 
 class LicenseAndReleaseTests(ArtifactFixture):

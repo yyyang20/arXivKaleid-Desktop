@@ -30,7 +30,7 @@
 | `generate_round2_report.py` | 当前 Round 2 结果验证、页数与推荐区块渲染辅助函数 |
 | `packaging/windows/` | one-folder spec、冻结入口、portable 自检和 vendor/许可证元数据 |
 | `scripts/` | 本地 Windows portable 构建、许可证收集、零模型验证及隔离离线 GUI 视觉 QA 入口 |
-| `scripts/local_artifacts.py` | 项目内生命周期、进程锁、容量和留存门槛、准确处置计划；不自动淘汰历史材料 |
+| `scripts/local_artifacts.py` | 项目内生命周期、进程锁、容量和留存门槛、准确处置计划；新登记技术副本的验证绑定与自动安全清理，以及独立的发布人工验收结案，不自动淘汰其他历史材料 |
 | `scripts/run_local_checks.py` | 独立 TEMP/TMP 与测试根目录的离线 unittest 薄入口 |
 | `scripts/validate_arxiv_history.py` | 获准后在独立 runtime 通过真实 GUI/QThread 验收多版本论文、无更新日、旧日回抓、快照和指定版本 PDF；硬禁止模型 |
 | `scripts/verify_public_release.py` | 匿名只读核验发行资产、冻结源码与历史基线；不执行远端写入 |

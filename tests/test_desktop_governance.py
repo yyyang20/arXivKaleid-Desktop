@@ -262,7 +262,9 @@ def artifact_contract_errors(agents, operations, desktop, checklist):
     """生命周期与历史 portable 是不同范围；缺失门槛或全局禁令均拒绝。"""
     contracts = {
         'agents': (agents, ('旧材料移入本次目录仍受保护', '跨运行残留和受保护旧证据', '当次明确授权',
-            '普通证据自动轮换', '未知故障默认保护')),
+            '普通证据自动轮换', '未知故障默认保护', 'verified_candidate_copy_v1',
+            'ZIP 完整性、逐文件哈希校验和完整 portable 验证全部通过',
+            '人工验收不作为副本清理条件', '不自动迁移历史记录')),
         'operations': (operations, ('**4 GiB**', '**512 MiB**', '进程文件锁', '所属进程、线程及数据库连接退出',
             '不覆盖原始错误', '人工验收截图', '强制中断', '受保护旧证据不会自动轮换', '不自动删除残留',
             '最近两次成功证据和最近一次普通失败诊断', '标记绑定实际异常对象', 'local_artifacts_v2',
@@ -272,7 +274,8 @@ def artifact_contract_errors(agents, operations, desktop, checklist):
             '退役的历史包装脚本和旧许可副本不再作为构建输入', '当次明确授权才能精确清理')),
         'desktop': (desktop, ('--license-input-manifest', 'run_local_checks.py', 'managed-artifacts',
             '干净提交', 'previous-*', '缺失或不符即停止',
-            '退役的历史包装脚本和旧许可副本不再作为构建输入', '当次明确授权')),
+            '退役的历史包装脚本和旧许可副本不再作为构建输入', '当次明确授权', 'close-review',
+            'ZIP SHA-256', '未标记历史记录及其他 previous-* 不自动删除')),
         'checklist': (checklist, ('本节的不得清理要求限定旧发行物和历史材料', 'verify_public_release.py',
             '不改变本节授权及正式发布后远端核验门槛')),
     }
@@ -315,6 +318,19 @@ class DesktopGovernanceTests(unittest.TestCase):
         fragment = '本节的不得清理要求限定旧发行物和历史材料'
         changed[3] = changed[3].replace(fragment, '') + '\n' + fragment
         self.assertIn('historical_rule_location', artifact_contract_errors(*changed))
+
+    def test_candidate_cleanup_requires_explicit_policy_and_automatic_validation(self):
+        documents = [read_utf8(p) for p in ('AGENTS.md', 'docs/OPERATIONS.md',
+            'docs/desktop/DESKTOP_OPERATIONS.md', 'docs/public_release/RELEASE_CHECKLIST.md')]
+        for index, fragment in ((0, 'verified_candidate_copy_v1'),
+                                (0, '人工验收不作为副本清理条件'), (0, '不自动迁移历史记录'),
+                                (2, 'close-review'), (2, 'ZIP SHA-256')):
+            changed = documents.copy()
+            changed[index] = changed[index].replace(fragment, '')
+            self.assertTrue(artifact_contract_errors(*changed))
+        self.assert_fragments(documents[1], ('新登记还保存旧身份、完整文件清单及归档 SHA-256',
+            '敏感文件仅核验存在性，不读取内容', '失败、不完整或证据变化的验证不能结案',
+            '删除后记录文件数、释放容量、归档哈希和自动验证来源', '不迁移 v1 或未标记的历史 v2 记录'))
 
     def assert_fragments(self, text, fragments):
         for fragment in fragments:
