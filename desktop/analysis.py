@@ -380,6 +380,8 @@ class AnalysisAttempt:
             if (config["limits"]["max_round2_pdf_pages"] != 60
                     or config["deepseek"]["max_retries"] != 0):
                 raise RuntimeError("desktop_shared_limits_invalid")
+            if self.snapshot.fetch_policy != config["fetch_policy"]:
+                raise RuntimeError("desktop_snapshot_invalid")
             # 唯一候选来源就是此对象；复制扁平 metadata，不查询或重排历史。
             papers = [dict(p) for p in self.snapshot.papers]
             keys = [(p["arxiv_id"], p["version"]) for p in papers]
@@ -479,7 +481,7 @@ class AnalysisAttempt:
             stage_timer = StageTimer()
             download_results = []
             if selected:
-                pdfs_dir = runtime_path("pdfs")
+                pdfs_dir = runtime_path("pdfs", "version-evidence-v1")
                 pdfs = [pdf_processing.SelectedPaper(p["arxiv_id"], p["version"], p["title"]) for p in selected]
                 # 下载器仍执行单篇失败隔离；预先核验日期目录和每个文件的 runtime 边界。
                 for paper in pdfs:

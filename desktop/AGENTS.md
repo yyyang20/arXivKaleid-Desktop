@@ -2,7 +2,7 @@
 
 先遵循根目录 [AGENTS.md](../AGENTS.md) 和 [文档索引](../docs/README.md)，再阅读 [Desktop 文档入口](../docs/desktop/README.md)。
 
-- 当前阶段包含 PySide6 GUI、submittedDate 候选抓取、DPAPI 凭据保存、两轮分析和 Markdown 日报渲染。
+- 当前阶段包含 PySide6 GUI、北京时间版本提交日候选抓取、独立版本元数据库、DPAPI 凭据保存、两轮分析和 Markdown 日报渲染。
 - 复用根目录候选、筛选、PDF、全文、usage 和报告函数；`main.py` 提供核心函数，不是应用启动入口。
 - 抓取和分析在 QThread 中运行；控件仅由 GUI 线程更新；新抓取立即废弃旧快照并清除日报。
 - 源码模式的运行数据只能位于项目内被忽略的 `.desktop-runtime/`；portable 模式只能位于 EXE 同级 `runtime/`。只读资源与运行数据分离，不依赖 cwd，不回退到用户目录；禁止明文凭据落盘或输出。

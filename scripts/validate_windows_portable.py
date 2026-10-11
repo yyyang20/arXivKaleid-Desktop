@@ -56,7 +56,10 @@ def close_own_window(process):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--arxiv', action='store_true')
+    parser.add_argument('--arxiv-date', help='真实网络验收的北京时间日期，必须在 GUI 范围内')
     args = parser.parse_args()
+    if args.arxiv_date and not args.arxiv:
+        parser.error('--arxiv-date requires --arxiv')
     source = checked_path(ROOT, 'dist', NAME)
     verify_tree(source)
     identity = json.loads((source / 'BUILD_INFO.json').read_text(encoding='utf-8'))
@@ -77,7 +80,8 @@ def collect_validation_evidence(run):
     for path in run.work.rglob('*'):
         if path.is_file() and (path.suffix.lower() == '.png' or path.name in
                 ('portable-check.json', 'recovery-check.json', 'external-library-name.txt')
-                or path.parent == run.work and path.suffix == '.log'):
+                or path.parent == run.work and path.suffix == '.log'
+                or path.suffix == '.jsonl' and path.parent.name == 'logs'):
             run.capture(path, path.relative_to(run.work).as_posix())
 
 
@@ -102,9 +106,12 @@ def validate_portable(run, source, identity, args):
     work = run.work
     results = []
     native_dpr = None
-    modes = [('native', None)] if args.arxiv else [('native', None), ('simulated-100', 1),
-            ('simulated-125', 1.25), ('simulated-150', 1.5), ('simulated-200', 2)]
+    modes = [('native', None), ('simulated-100', 1), ('simulated-125', 1.25),
+             ('simulated-150', 1.5), ('simulated-200', 2)]
+    if args.arxiv:
+        modes.append(('native-network', None))
     for mode, target_dpr in modes:
+        network_mode = mode == 'native-network'
         copy = checked_path(work, '隔离副本 ' + mode)
         shutil.copytree(source, copy)
         run.checkpoint()
@@ -120,8 +127,10 @@ def validate_portable(run, source, identity, args):
                        QT_SCALE_FACTOR_ROUNDING_POLICY='PassThrough')
         assert shutil.which('python', path=env['PATH']) is None
         command = [str(copy / 'arXivKaleid.exe'), '--portable-check', '--visual-qa']
-        if args.arxiv:
+        if network_mode:
             command.append('--arxiv')
+            if args.arxiv_date:
+                command.extend(['--arxiv-date', args.arxiv_date])
         with (work / (mode + '-process.log')).open('wb') as log:
             result = run.process(command, cwd=work, env=env, timeout=1600,
                                     stdout=log, stderr=log, creationflags=0x08000000)
@@ -144,6 +153,7 @@ def validate_portable(run, source, identity, args):
         assert recovery.returncode == 0
         restored = json.loads((copy / 'runtime/work/recovery-check.json').read_text())
         assert restored['synthetic_dpapi_recovered']
+        assert restored['version_metadata_restored_exactly']
         assert restored['user_guide_restored']
         assert restored['history_restored_exactly'] and restored['deleted_history_stays_deleted']
         assert restored['research_requirements_restored_exactly']

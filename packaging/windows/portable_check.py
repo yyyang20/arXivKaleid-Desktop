@@ -64,6 +64,12 @@ def run_recovery():
         window.switch_page(window.user_guide_page)
         assert '两轮筛选' in window.user_guide_page.browser.toPlainText()
         result['user_guide_restored'] = True
+        from desktop.version_metadata import VersionStore
+        expected_metadata = previous['version_metadata']
+        metadata = VersionStore(pipeline.PROJECT_ROOT).get(tuple(expected_metadata['key']))
+        assert hashlib.sha256(json.dumps(metadata, sort_keys=True, ensure_ascii=False,
+                    separators=(',', ':')).encode('utf-8')).hexdigest() == expected_metadata['sha256']
+        result['version_metadata_restored_exactly'] = True
         if previous.get('visual_qa'):
             from desktop.research_requirements import RequirementsStore
             for stage, digest in previous['visual_qa']['requirements']['saved_sha256'].items():
@@ -107,7 +113,7 @@ def run_recovery():
     return 0 if result['ok'] else 1
 
 
-def run(*, network=False, visual=False):
+def run(*, network=False, visual=False, target_date=None):
     # 已使用过的目录绝不运行诊断，避免读取任何用户 Secret。
     root = paths.application_root(pipeline.PROJECT_ROOT)
     runtime = paths.runtime_path(pipeline.PROJECT_ROOT)
@@ -142,6 +148,17 @@ def run(*, network=False, visual=False):
         config, resources, profile, prompt = run_round2.read_round2_context(paths.resource_root(pipeline.PROJECT_ROOT))
         assert config['versions']['research_profile_version'] == profile['profile_version'] and prompt
         import main
+        from desktop.version_metadata import VersionStore, encode_paper
+        # 全新副本只写合成元数据；另一个进程重启核对，不触及用户数据库。
+        synthetic_version = dict(id='https://arxiv.org/abs/0001.99999v2', arxiv_id='0001.99999',
+            version=2, title='Synthetic version', authors='Synthetic author', summary='Synthetic abstract',
+            categories='gr-qc', primary_category='gr-qc', published='1999-12-01T00:00:00+00:00',
+            updated='2000-01-01T00:00:00+00:00', abs_url='https://arxiv.org/abs/0001.99999v2',
+            pdf_url='https://arxiv.org/pdf/0001.99999v2')
+        version_store = VersionStore(pipeline.PROJECT_ROOT)
+        version_store.save('synthetic-version-query', date(2000, 1, 1), ('gr-qc',), [synthetic_version], 1)
+        assert version_store.get(('0001.99999', 2)) == synthetic_version
+        report['version_metadata'] = {'key': ['0001.99999', 2], 'sha256': encode_paper(synthetic_version)[1]}
         # 冻结程序实际走最小协议；评价不能改变合法身份入选。
         candidates = [dict(arxiv_id=f'2609.{i:05d}', version=1, title='Synthetic paper',
                            summary='Numerical method', round2_input_mode='full_text',
@@ -322,18 +339,59 @@ def run(*, network=False, visual=False):
                       analysis_refusal_no_worker=True)
         if network:
             # 使用真正 GUI/QThread 候选入口；分析按钮不会被点击。
+            if target_date is not None:
+                from datetime import timedelta
+                today = datetime.now(ZoneInfo('Asia/Shanghai')).date()
+                assert today - timedelta(days=365) <= target_date <= today
+                window.select_date(target_date)
+            fetch_started = None
+
+            def start_network_fetch():
+                nonlocal fetch_started
+                fetch_started = time.monotonic()
+                window.start_fetch()
+
             def done():
                 if window.worker is not None:
                     QTimer.singleShot(100, done)
                     return
+                elapsed = time.monotonic() - fetch_started
+                report['fetch_elapsed_seconds'] = round(elapsed, 3)
+                report['fetch_limit_seconds'] = 120
+                report['fetch_within_limit'] = elapsed <= 120
                 report['arxiv'] = window.snapshot is not None
                 if window.snapshot:
                     report['candidate_date'] = window.snapshot.candidate_date.isoformat()
                     report['candidate_count'] = window.snapshot.unique_count
-                    report['ok'] = True
+                    report['discovery_pages'] = window.snapshot.page_count
+                    report['network_count'] = window.snapshot.network_count
+                    report['history_count'] = window.snapshot.reused_count
+                    try:
+                        assert elapsed <= 120, 'fetch_performance_limit_exceeded'
+                        from desktop.arxiv_versions import timestamp
+                        from pdf_processing import SelectedPaper, fetch_pdf_bytes, build_online_pdf_url
+                        lower, upper = main.beijing_submission_bounds(window.snapshot.candidate_date)
+                        assert all(lower <= timestamp(p['updated']) < upper or
+                                   lower <= timestamp(p['published']) < upper for p in window.snapshot.papers)
+                        chosen = max(window.snapshot.papers, key=lambda p: p['version'])
+                        pdf_url = build_online_pdf_url(SelectedPaper(chosen['arxiv_id'], chosen['version'], chosen['title']))
+                        assert pdf_url == chosen['pdf_url']
+                        content = fetch_pdf_bytes(pdf_url)
+                        report['exact_version_pdf'] = {'arxiv_id': chosen['arxiv_id'], 'version': chosen['version'],
+                                                       'bytes': len(content), 'sha256': hashlib.sha256(content).hexdigest()}
+                        report['historical_updated_versions'] = sum(p['version'] > 1 for p in window.snapshot.papers)
+                        if target_date:
+                            assert report['historical_updated_versions'] > 0
+                        assert window.grab().save(str(root / 'runtime/work/network-fetched.png'))
+                        report['ok'] = True
+                    except Exception as exc:
+                        report['ok'] = False
+                        report['network_failure_type'] = type(exc).__name__
+                else:
+                    report['network_failure_code'] = 'fetch_failed'
                 window.close()
                 application.quit()
-            QTimer.singleShot(100, window.start_fetch)
+            QTimer.singleShot(100, start_network_fetch)
             QTimer.singleShot(200, done)
         else:
             report['ok'] = True
@@ -346,6 +404,16 @@ def run(*, network=False, visual=False):
         diagnostics.close()
         log_files = tuple((root / 'runtime/logs').glob('desktop-*.jsonl'))
         assert len(log_files) == 1 and 'portable_check' in log_files[0].read_text(encoding='utf-8')
+        if network:
+            events = [json.loads(line) for line in log_files[0].read_text(encoding='utf-8').splitlines()]
+            requests = [e['details'] for e in events if e.get('stage') == 'http' and e.get('state') == 'start']
+            kinds = {'FirstSubmissions', 'LatestUpdates', 'AdvancedSearch', 'LatestMetadata'}
+            assert requests and all(r.get('request_kind') in kinds and
+                                    not r.get('resumption_token_present') for r in requests)
+            report['fetch_request_count'] = len(requests)
+            report['fetch_requests_by_source'] = {kind: sum(r['request_kind'] == kind for r in requests)
+                                                  for kind in sorted(kinds)}
+            report['oai_requests'] = 0
         report.update(diagnostics_jsonl=True, diagnostics_runtime_only=True)
         token = os.environ.get('ARXIVKALEID_DIAGNOSTIC_TOKEN', '')
         report['diagnostic_token_sha256'] = hashlib.sha256(token.encode()).hexdigest()

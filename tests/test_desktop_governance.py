@@ -505,6 +505,8 @@ class DesktopGovernanceTests(unittest.TestCase):
             'Round 2 输出传输': f"`{literal_constant('main.py', 'ROUND2_OUTPUT_TRANSPORT')}`",
             'Desktop 主工作 SQLite': f"schema v{literal_constant('main.py', 'DESKTOP_SCHEMA_VERSION')}",
             'Desktop 独立历史 SQLite': f"schema v{literal_constant('desktop/history.py', 'SCHEMA_VERSION')}",
+            'Desktop 版本元数据 SQLite': f"schema v{literal_constant('desktop/version_metadata.py', 'SCHEMA_VERSION')}",
+            '候选抓取策略': f"`{config['fetch_policy']}`",
         }
         self.assertEqual(identity_errors(read_utf8('docs/PROJECT_SPEC.md'), expected), [])
 

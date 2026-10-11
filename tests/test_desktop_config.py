@@ -59,6 +59,7 @@ class DesktopConfigTests(unittest.TestCase):
         mutations = [
             lambda c: c.update(automation={}),
             lambda c: c.update(config_version='online_config'),
+            lambda c: c.update(fetch_policy='latest_version'),
             lambda c: c['deepseek'].update(api_key_file='config/local_secret.json'),
             lambda c: c['deepseek'].update(max_retries=1),
             lambda c: c['versions'].update(round2_prompt_version='round2_v14'),

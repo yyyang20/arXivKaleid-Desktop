@@ -580,7 +580,9 @@ class DesktopWindow(QWidget):
                 self.show_outcome(worker.outcome, operation_id=worker.operation_id)
                 details = worker.outcome.details
                 self.statistics["抓取日期（北京时间）"].setText(details.get("target_date", worker.target_date.isoformat()))
-                self.statistics["抓取完成时间"].setText(details.get("completed_time", "—"))
+                self.statistics["抓取完成时间（北京时间）"].setText(
+                    details.get("completed_time", "—").removesuffix(" 北京时间")
+                )
                 self.statistics["原始条目数"].setText("0")
                 self.statistics["去重后候选数"].setText("0")
                 self.task_panel.fetch_details.setText(worker.outcome.summary)
@@ -595,7 +597,7 @@ class DesktopWindow(QWidget):
         else:
             snapshot = self.snapshot
             values = (
-                snapshot.candidate_date.isoformat(), snapshot.completed_time_text,
+                snapshot.candidate_date.isoformat(), snapshot.completed_time_text.removesuffix(" 北京时间"),
                 str(snapshot.raw_count), str(snapshot.unique_count),
             )
             for label, value in zip(self.statistics.values(), values):

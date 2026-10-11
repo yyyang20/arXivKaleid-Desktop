@@ -7,7 +7,12 @@ import sys
 
 if "--portable-check" in sys.argv:
     from portable_check import run
-    raise SystemExit(run(network="--arxiv" in sys.argv, visual="--visual-qa" in sys.argv))
+    diagnostic_date = None
+    if "--arxiv-date" in sys.argv:
+        from datetime import date
+        diagnostic_date = date.fromisoformat(sys.argv[sys.argv.index("--arxiv-date") + 1])
+    raise SystemExit(run(network="--arxiv" in sys.argv, visual="--visual-qa" in sys.argv,
+                         target_date=diagnostic_date))
 
 if "--portable-recovery-check" in sys.argv:
     from portable_check import run_recovery

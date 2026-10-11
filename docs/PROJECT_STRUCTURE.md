@@ -32,6 +32,7 @@
 | `scripts/` | 本地 Windows portable 构建、许可证收集、零模型验证及隔离离线 GUI 视觉 QA 入口 |
 | `scripts/local_artifacts.py` | 项目内生命周期、进程锁、容量和留存门槛、准确处置计划；不自动淘汰历史材料 |
 | `scripts/run_local_checks.py` | 独立 TEMP/TMP 与测试根目录的离线 unittest 薄入口 |
+| `scripts/validate_arxiv_history.py` | 获准后在独立 runtime 通过真实 GUI/QThread 验收多版本论文、无更新日、旧日回抓、快照和指定版本 PDF；硬禁止模型 |
 | `scripts/verify_public_release.py` | 匿名只读核验发行资产、冻结源码与历史基线；不执行远端写入 |
 
 根目录保留核心函数模块供 Desktop 调用；应用启动入口为 `python -B -m desktop.app`。当前仓库没有 Online 自动化、云端状态、恢复、错误样本或 Issue 日报发布模块，也没有 GitHub workflow。
@@ -68,7 +69,9 @@ docs/
 
 | 路径 | 职责 |
 |---|---|
-| `desktop/config.py` | `desktop_config_v5` 只读契约、预算边界和四份资源文本哈希校验 |
+| `desktop/config.py` | `desktop_config_v6` 只读契约、抓取策略、预算边界和四份资源文本哈希校验 |
+| `desktop/arxiv_versions.py` | 首次／最新提交日发现、Advanced Search 分页、历史 ID 补查与最新版 Atom 校验 |
+| `desktop/version_metadata.py` | 独立版本元数据库 schema v1、元数据哈希和查询成员原子保存 |
 | `desktop/research_requirements.py` | 两轮独立保存、校验、默认读取及分析快照 |
 | `desktop/prompt_page.py` | 完整研究提示词查看/编辑、保存、取消、恢复与未保存保护 |
 | `desktop/user_guide.py` | 使用说明资源读取、冻结哈希、只读 Markdown 和内部导航入口 |
@@ -88,7 +91,8 @@ docs/
 |---|---|
 | `test_desktop_config.py` | 当前配置、预算、模型协议、Prompt 路径及哈希，拒绝旧 Online 配置字段 |
 | `test_desktop_decoupling.py` | 合成场景技术门禁基线、主库 schema v1、缓存、预算、导入边界和隔离源码运行 |
-| `test_desktop_pipeline.py` | 假 Atom、日期边界、计数、排序、冻结快照、进度及安全传输诊断 |
+| `test_desktop_pipeline.py` | 假 HTML/Atom、最新版与历史关联补查、日期边界、分页、分类迁移、快照及元数据库事务 |
+| `test_arxiv_transport.py` | 网络期限与外层等待、单次尝试、超时部分证据、响应头隐私及性能验收用例 |
 | `test_desktop_analysis.py` | mock HTTP 两轮集成、可选自由评价、门控、预算、单次 attempt、工作数据隔离和日报事实 |
 | `test_research_prompt_protocol.py` | 最小身份协议、跨领域自由评价、第二轮交接独立性、Token 并列裁决、缓存及安全日报 |
 | `test_desktop_secrets.py` | 密文落盘、错误、路径和 Windows DPAPI 假值往返 |
@@ -107,7 +111,7 @@ docs/
 源码运行数据位于 `.desktop-runtime/`，portable 对应 EXE 同级 `runtime/`；详细目录见 [Desktop 当前运行数据](desktop/DESKTOP_STRUCTURE.md#当前运行数据)。
 
 - 工作库、锁、PDF、DPAPI 密文、请求缓存和会话日志的具体路径及职责见 [Desktop 当前运行数据](desktop/DESKTOP_STRUCTURE.md#当前运行数据)；SQLite 数据边界见 [当前业务规范](PROJECT_SPEC.md#sqlite-工作数据)。
-- 候选快照只在内存中冻结；成功日报的原始 Markdown 与计数进入独立 `history/history.sqlite`，不写根 `reports/`，不参与后续候选、筛选或工作库重置。
+- 成功候选保存至独立 `metadata/arxiv_versions.sqlite`，分析只消费内存冻结快照；原始日报与计数保存到独立 `history/history.sqlite`，不写根 `reports/`，不参与候选选择或工作库重置。
 - `build/`、`dist/`、`release/`、`.desktop-build/`、`.codex-validation/`、`.codex-audit-*/`、Python 缓存及运行数据被 Git 忽略。
 - `release/` 和 `dist/` 在构建和验证期间保留候选及旧成品；正式发布和新旧远端核验成功后，按分别列明的当次授权精确收口，`release/` 只保留最新正式 ZIP 与 `.sha256`，`dist/` 只保留当前正式版本及仍有明确必要的成品。旧 `dist/` 必须与对应远端正式 ZIP 逐文件一致且已无构建、验证或待审用途，含 `runtime/` 的目录继续保护。历史正式版本存于 GitHub Releases；授权、核验和精确清理边界见 [本地历史 portable 收口](OPERATIONS.md#本地历史-portable-收口)，不清理其他忽略材料。
 - `.gitignore` 仍保护旧 `config/local_secret.json`、`data/` 数据库、PDF、`reports/` 和日志等路径；这些忽略规则不表示旧运行入口仍然存在。

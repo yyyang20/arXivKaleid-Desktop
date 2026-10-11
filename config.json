@@ -120,7 +120,8 @@
     "round1_research_prompt": "prompts/research_prompt_round1_v2.txt",
     "round2_research_prompt": "prompts/research_prompt_round2_v2.txt"
   },
-  "config_version": "desktop_config_v5",
+  "config_version": "desktop_config_v6",
+  "fetch_policy": "beijing_first_latest_history_v1",
   "budget": {
     "max_batch_cost_cny": "3.00"
   },

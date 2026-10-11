@@ -15,7 +15,7 @@ import sqlite3
 from contextlib import closing
 
 from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QPointF, QRect, Qt, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices, QEnterEvent, QFont, QFontMetrics, QInputMethodEvent, QKeyEvent, QMouseEvent
+from PySide6.QtGui import QDesktopServices, QEnterEvent, QFont, QFontMetrics, QInputMethodEvent, QKeyEvent, QMouseEvent, QTextCursor, QTextFormat
 from PySide6.QtWidgets import QMessageBox, QStyleOptionViewItem
 from desktop import app
 from desktop.errors import make_issue
@@ -332,7 +332,7 @@ def exercise_user_guide(application, window, capture):
 
 
 def exercise_requirements(application, window, capture, output):
-    """真实纯文本输入、模态对话框和保存失败；只供隔离验证副本使用。"""
+    """真实 Markdown 查看、纯文本编辑、模态对话框和保存失败；仅用于隔离验证。"""
     from desktop.research_requirements import RequirementsError
     page = window.prompt_page
     window.switch_page(page)
@@ -385,14 +385,14 @@ def exercise_requirements(application, window, capture, output):
             mouse_event(QEvent.Type.MouseButtonPress, entry, point, Qt.MouseButton.LeftButton)
             mouse_event(QEvent.Type.MouseButtonRelease, entry, point, Qt.MouseButton.LeftButton)
             assert page.stage == stage and page.stack.currentIndex() == 1
-            assert page.editor.isReadOnly() and not page.editing
+            assert page.body_stack.currentWidget() is page.browser and page.browser.isReadOnly() and not page.editing
             page.go_back()
             application.processEvents()
         for key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
             entry.setFocus()
             for kind in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
                 QCoreApplication.sendEvent(entry, QKeyEvent(kind, key, Qt.KeyboardModifier.NoModifier))
-            assert page.stage == stage and page.stack.currentIndex() == 1 and page.editor.isReadOnly()
+            assert page.stage == stage and page.stack.currentIndex() == 1 and page.body_stack.currentWidget() is page.browser
             page.go_back()
             application.processEvents()
 
@@ -437,28 +437,44 @@ def exercise_requirements(application, window, capture, output):
     saved = {}
     for stage in ('round1', 'round2'):
         page.open_round(stage)
-        assert not page.saved.custom and page.editor.isReadOnly()
+        assert not page.saved.custom and page.browser.isReadOnly()
+        assert page.body_stack.currentWidget() is page.browser and not page.editor.isVisible()
+        assert page.browser.document().find('目标').blockFormat().headingLevel() == 1
+        assert not page.browser.openLinks() and not page.browser.openExternalLinks()
         # 只读控件允许选择但不启用输入法；普通键盘事件不能改写正文。
-        page.editor.setFocus()
-        original_text = page.editor.toPlainText()
-        page.editor.selectAll()
-        assert page.editor.textCursor().hasSelection()
-        cursor = page.editor.textCursor()
-        cursor.clearSelection()
-        page.editor.setTextCursor(cursor)
-        assert not page.editor.testAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled)
+        browser = page.browser
+        browser.setFocus()
+        original_text = browser.toPlainText()
+        # 双击通过真实 viewport 命中正文；复制只核验当前合成文档生成的 MIME 载荷。
+        cursor = QTextCursor(browser.document())
+        cursor.setPosition(2)
+        point = browser.cursorRect(cursor).center()
+        local = QPointF(point)
+        double_click = QMouseEvent(QEvent.Type.MouseButtonDblClick, local,
+                                  QPointF(browser.viewport().mapToGlobal(point)),
+                                  Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+        QCoreApplication.sendEvent(browser.viewport(), double_click)
+        assert browser.textCursor().hasSelection(), 'markdown_mouse_selection_failed'
         for event_type in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
-            QCoreApplication.sendEvent(page.editor, QKeyEvent(event_type, Qt.Key.Key_X, Qt.KeyboardModifier.NoModifier, 'x'))
-        assert page.editor.toPlainText() == original_text
+            QCoreApplication.sendEvent(browser, QKeyEvent(event_type, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier))
+        assert browser.createMimeDataFromSelection().text() == original_text
+        cursor = browser.textCursor()
+        cursor.clearSelection()
+        browser.setTextCursor(cursor)
+        assert not browser.testAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled)
+        for event_type in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
+            QCoreApplication.sendEvent(browser, QKeyEvent(event_type, Qt.Key.Key_X, Qt.KeyboardModifier.NoModifier, 'x'))
+        assert browser.toPlainText() == original_text
         assert page.back_button.width() < page.width() / 2
         assert page.back_button.mapTo(page, QPoint(0, 0)).x() == page.title.mapTo(page, QPoint(0, 0)).x()
         capture('14-' + stage + '-default')
-        page.begin_edit()
+        page.edit_button.click()
+        assert page.body_stack.currentWidget() is page.editor and page.editor.toPlainText() == page.saved.text
         page.editor.clear()
         page.editor.setFocus()
         # 通过 Qt 输入法提交事件验证真实控件处理中文，避免仅 setPlainText 冒充输入。
         event = QInputMethodEvent()
-        text = '离线合成研究要求 ' + stage + '：关注数值方法和计算结果。\n按用户研究价值排序。'
+        text = '# 离线合成研究要求 ' + stage + '\n\n**关注数值方法和计算结果。**\n\n- 按用户研究价值排序。\n\n```text\n合成代码片段\n```'
         event.setCommitString(text)
         QCoreApplication.sendEvent(page.editor, event)
         assert page.editor.toPlainText() == text
@@ -470,6 +486,7 @@ def exercise_requirements(application, window, capture, output):
         page.store.save = fail
         try:
             assert not page.save() and page.dirty and not page.saved.custom
+            assert page.body_stack.currentWidget() is page.editor and page.editor.toPlainText() == text
             capture('16-' + stage + '-save-failed')
         finally:
             page.store.save = original
@@ -477,21 +494,30 @@ def exercise_requirements(application, window, capture, output):
         page.go_back()
         assert page.stack.currentIndex() == 1 and page.dirty
         assert page.save() and page.saved.custom
+        assert page.body_stack.currentWidget() is browser and not page.editor.isVisible()
+        assert browser.document().firstBlock().blockFormat().headingLevel() == 1
+        assert browser.document().find('关注数值方法和计算结果。').charFormat().fontWeight() >= QFont.Weight.Bold
+        assert browser.document().find('按用户研究价值排序。').block().textList() is not None
+        assert browser.document().find('合成代码片段').blockFormat().property(QTextFormat.Property.BlockCodeLanguage) == 'text'
+        custom_view = browser.toPlainText()
         capture('18-' + stage + '-custom')
         page.begin_edit()
         page.editor.appendPlainText('应取消的草稿')
         page.cancel()
         assert page.editor.toPlainText() == text
+        assert page.body_stack.currentWidget() is browser and browser.toPlainText() == custom_view
         answer('no', '19-' + stage + '-restore-cancel')
         assert not page.restore_default() and page.saved.custom
         answer('yes', '20-' + stage + '-restore-confirm')
         assert page.restore_default() and not page.saved.custom
+        assert page.body_stack.currentWidget() is browser and browser.toPlainText() == original_text
+        capture('20b-' + stage + '-restored-markdown')
         page.begin_edit()
         page.editor.setPlainText(text)
         assert page.save()
         saved[stage] = hashlib.sha256(text.encode('utf-8')).hexdigest()
     # Fluent 控件有独立字体，不能只放大父页面后宣称较大字体已验证。
-    controls = (page.editor, page.purpose, page.state, page.message, page.back_button,
+    controls = (page.editor, page.browser, page.purpose, page.state, page.message, page.back_button,
                 page.edit_button, page.save_button, page.cancel_button, page.restore_button)
     normal_fonts = [(widget, widget.font()) for widget in controls]
     for widget in controls:
@@ -507,6 +533,20 @@ def exercise_requirements(application, window, capture, output):
     page.editor.verticalScrollBar().setValue(page.editor.verticalScrollBar().maximum())
     capture('21b-prompts-scroll')
     page.cancel()
+    # 只读 Markdown 同样检查最小窗口、大字体及独立滚动，不只验收编辑器。
+    long_text = text + '\n\n' + '\n\n'.join('较大字体查看验证：关注数值方法与计算结果。' for _ in range(60))
+    page.begin_edit()
+    page.editor.setPlainText(long_text)
+    assert page.save()
+    capture('21c-prompts-markdown-minimum-large-font')
+    assert page.browser.height() >= 160 and page.browser.document().defaultFont().pointSizeF() == 12
+    assert page.browser.verticalScrollBar().maximum() > 0
+    assert page.edit_button.isVisible() and not page.save_button.isVisible()
+    page.browser.verticalScrollBar().setValue(page.browser.verticalScrollBar().maximum())
+    capture('21d-prompts-markdown-scroll')
+    page.begin_edit()
+    page.editor.setPlainText(text)
+    assert page.save()
     for widget, font in normal_fonts:
         widget.setFont(font)
     window.resize(1060, 820)
@@ -517,6 +557,9 @@ def exercise_requirements(application, window, capture, output):
             'restore_confirmed': True, 'restore_cancelled': True, 'dirty_protection': True,
             'save_failure_kept_draft': True, 'minimum_large_font': True,
             'readonly_rejected_input': True, 'compact_left_return': True,
+             'markdown_rendered': True, 'markdown_mouse_and_keyboard_selection': True,
+             'markdown_copy_payload': True, 'markdown_source_preserved': True,
+             'markdown_minimum_large_font_scroll': True,
             'entry_whole_card_mouse': True, 'entry_keyboard': True, 'entry_hover_event': True,
             'entry_history_frame_height': frame.height(), 'entry_icon_size': 36,
             'entry_minimum_large_font': True, 'entry_wrapped_large_font': True}

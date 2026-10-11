@@ -1,6 +1,6 @@
 # Desktop 运行与验证
 
-最新公开成品为 alpha 11 Windows x64 portable，下载与运行方式见下文。
+当前开发版本为 `0.1.0-alpha.12`，尚未公开发布；最新公开成品仍为 alpha 11 Windows x64 portable，下载与运行方式见下文。
 
 本文档维护源码启动、依赖、本机构建、portable 验证及运行排错细节。开发与公开发布流程见根 [运行手册](../OPERATIONS.md)，安全、授权和完成要求以根 [AGENTS.md](../../AGENTS.md) 为准，阅读与更新路由见 [文档索引](../README.md)。
 
@@ -12,7 +12,7 @@
 python -B -m desktop.app
 ```
 
-当前公开版本为 `0.1.0-alpha.11`。使用 PySide6 / Qt `6.9.2`、PySide6-Fluent-Widgets `1.11.3` 基础版、PySideSix-Frameless-Window `0.8.2`、darkdetect `0.8.0`、Windows pywin32 `312`，均固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。不安装 full 的 scipy、pillow、colorthief。该文件同时引入 [requirements.txt](../../requirements.txt) 中的 pypdf 核心运行依赖；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
+开发版使用 PySide6 / Qt `6.9.2`、PySide6-Fluent-Widgets `1.11.3` 基础版、PySideSix-Frameless-Window `0.8.2`、darkdetect `0.8.0`、Windows pywin32 `312`，均固定在 [requirements-desktop.txt](../../requirements-desktop.txt)。不安装 full 的 scipy、pillow、colorthief。该文件同时引入 [requirements.txt](../../requirements.txt) 中的 pypdf 核心运行依赖；[requirements-build.txt](../../requirements-build.txt) 单独固定 PyInstaller 及构建依赖。
 
 仅在用户已授权且已核实为本项目专用的 Conda 环境中，才可安装 Desktop 依赖：
 
@@ -82,11 +82,17 @@ manifest 记录组件 name/version/build/包归档 SHA-256、来源发行归档 
 & $desktopPython -X utf8 -B scripts/validate_windows_portable.py
 # 仅在获准真实 arXiv 请求后执行；不会调用模型。
 & $desktopPython -X utf8 -B scripts/validate_windows_portable.py --arxiv
+# 历史日期须在 GUI 365 天范围内；诊断仍硬禁止模型，额外核验精确版本 PDF。
+& $desktopPython -X utf8 -B scripts/validate_windows_portable.py --arxiv --arxiv-date '2026-08-03'
+# 冻结前：真实 GUI/QThread 验证首次／最新提交日、历史补查及每次 120 秒性能门槛。
+& $desktopPython -X utf8 -B scripts/validate_arxiv_history.py
 ```
 
-验证器先检查干净发行树，再复制到本次 `.desktop-build/managed-artifacts/portable-<ID>/work/`，使用非源码 cwd 和仅包含 Windows System32 的 PATH 启动 EXE。诊断窗口创建前仅对当前诊断线程调用 [ImmDisableIME](https://learn.microsoft.com/en-us/windows/win32/api/imm/nf-imm-immdisableime)，避免第三方输入法 DLL 干扰严格来源检查；不改变系统输入法、正式 GUI 或普通重启入口，不覆盖真实输入法交互。检查资源、Qt GUI/Markdown、进度控件、首次分析告知默认拒绝、拒绝后快照未消费且分析线程未启动、DPAPI 假值、SQLite、pypdf、时区、bundled curl 与重启。`--arxiv` 通过实际 GUI/QThread 抓取候选，不点击分析按钮；诊断进程硬禁用模型入口。结果只写验证副本的 `runtime/` 和项目内验证摘要，不接触真实 Key。已有 runtime 的副本拒绝诊断。
+验证器先检查干净发行树，再复制到本次 `.desktop-build/managed-artifacts/portable-<ID>/work/`，使用非源码 cwd 和仅包含 Windows System32 的 PATH 启动 EXE。诊断窗口创建前仅对当前诊断线程调用 [ImmDisableIME](https://learn.microsoft.com/en-us/windows/win32/api/imm/nf-imm-immdisableime)，避免第三方输入法 DLL 干扰严格来源检查；不改变系统输入法、正式 GUI 或普通重启入口，不覆盖真实输入法交互。检查资源、Qt GUI/Markdown、进度控件、首次告知默认拒绝、DPAPI 假值、SQLite、pypdf、时区、bundled curl 与重启；独立版本元数据库用合成记录验证跨进程内容哈希恢复。`--arxiv` 通过实际 GUI/QThread 完整抓取所查分类，不点击分析；`--arxiv-date` 可选择范围内历史日期，并检验当前版本元数据与明确版本 PDF 最终 URL 和 SHA-256。历史日期验收须包含更新版本，零结果不能替代成功验证。诊断进程硬禁用模型，所有结果只写新副本 runtime 和受管摘要，不接触真实 Key，已有 runtime 拒绝诊断。
 
-五组 DPI、恢复、普通重启和反例全部完成，所属进程退出且合成数据隐私检查通过后，将报告与必要截图复制到本次 `evidence/` 并核对哈希，再释放九份程序副本和合成运行数据。失败保存已有安全证据；证据收集失败则保留 work 并停止后续运行。原始干净发行目录始终受保护，人工验收截图保留到明确结案，规则见根运行手册的 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期)。
+`validate_arxiv_history.py` 在独立受管 runtime 检查当天、近期及数月前日期的冷查询，记录各来源分页、请求数和完整抓取耗时，单次验收不得超过 120 秒，失败不自动重跑。固定多版本论文用于最新版与 PDF 校验；历史关联夹具来自真实指定旧版 Atom，明确标注为合成关联，不冒充过去实际抓取。补查必须取得联网最新版并保留原记录、快照；验收全程禁止 OAI 和模型。Advanced Search 页面变化、服务及网络延迟可导致验收失败，不能截断结果满足性能门槛。
+
+五组 DPI、恢复、普通重启和反例全部完成，所属进程退出且合成数据隐私检查通过后，将报告、必要截图及脱敏会话 JSONL 复制到本次 `evidence/` 并核对哈希，再释放九份程序副本和合成运行数据。失败保存已有安全证据；证据收集失败则保留 work 并停止后续运行。原始干净发行目录始终受保护，人工验收截图保留到明确结案，规则见根运行手册的 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期)。
 
 默认离线验证在真实 Windows 平台抓取七个主要状态、详情、失败、设置禁改与最小窗口截图，使用真实 QThread 与合成计算，不分发 unittest/mock 或开发 QA 脚本。Python 网络及非本地版本检查的子进程传输被硬禁止。新建副本写入合成 DPAPI 后，只有匹配验证器随机诊断令牌的新进程才检查恢复；普通 GUI 额外重复启动/关闭三次。图像和诊断只在副本 `runtime/work/`，绝不回流发行包。
 
@@ -108,11 +114,11 @@ Qt `QDomDocument.setContent` 弃用提示暂为非阻塞已知问题，以冻结
 
 本地技术候选交付即停止，不 push、PR、merge、tag、GitHub Release 或上传资产。正式发布需另行授权，从合并后的干净 main 重建，技术候选不可直接发布。发布及匿名核验通过后，仅以文档 PR 收口，不重建或替换已公开资产。
 
-`.desktop-runtime/` 位于项目根目录并被 Git 忽略。源码诊断日志位于 `.desktop-runtime/logs/`；`config/secret.dat` 为当前 Windows 用户的 DPAPI 密文；`cache/arxiv/last_request_time.txt` 为请求间隔记录。候选在当前进程冻结；开始分析后将其写入本次工作库，不作为跨运行历史。
+`.desktop-runtime/` 位于项目根目录并被 Git 忽略。源码诊断日志位于 `.desktop-runtime/logs/`；`config/secret.dat` 为当前 Windows 用户的 DPAPI 密文；`cache/arxiv/last_request_time.txt` 为请求间隔记录。成功候选先事务保存到 `metadata/arxiv_versions.sqlite`（schema v1），再在当前进程冻结；分析将快照复制到本次工作库。重复抓取仍联网刷新；未知 schema、损坏、哈希冲突及保存失败保留原库并阻止本批分析，不从旧工作库或日报导入候选。
 
 日志文件按进程创建，完整 JSON 行写入后立即 flush。GUI 的“打开日志目录”只在持久日志可用时启用；目录创建、序列化或写入失败时显示“诊断仅保留在当前会话”，原业务错误和成功状态不受影响。日志可随时在应用关闭后手工删除；分享前仍应检查内容，只提供与问题相关的文件，不要发送整个 `runtime/`。
 
-当前分析主库为 `work/arxiv_kaleid.sqlite`，全文库为 `work/round2_inputs.sqlite`。每个新 attempt 只重置这两个已知文件及 `-journal`、`-wal`、`-shm` sidecar；不得手工删除其他运行数据。`work/analysis.lock` 使用进程文件锁，其他分析运行时安全拒绝；正常退出或进程退出均释放锁。PDF 保留在 `pdfs/<候选日期>/`，继续使用完整 arXiv ID 和 version 安全文件名。
+当前分析主库为 `work/arxiv_kaleid.sqlite`，全文库为 `work/round2_inputs.sqlite`。每个新 attempt 只重置这两个已知文件及 `-journal`、`-wal`、`-shm` sidecar；不得手工删除其他运行数据。`work/analysis.lock` 使用进程文件锁，其他分析运行时安全拒绝；正常退出或进程退出均释放锁。新 PDF 位于 `pdfs/version-evidence-v1/<候选日期>/`，来源证据与 SHA-256 成功校验才复用；旧 PDF 保留。版本元数据库与日报历史不参与重置。
 
 alpha 9 历史库独立位于 `history/history.sqlite`，以明文保存当次原始日报与最小元数据，不存 Key 或提取全文工作数据，不参与工作库重置。无 Key 也可查看历史；正常零推荐保留，同日多次分别保留。确认删除只删除该条历史，不删除 PDF、日志或凭据，不提供恢复。历史不自动清理，升级 alpha 8 后不会从旧工作库补造记录。数据库损坏、未知版本或读写失败时保留原文件并单独提示；保存失败不否定分析成功，不人工重试或重新调用模型。
 

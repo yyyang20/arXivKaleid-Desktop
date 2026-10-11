@@ -8,7 +8,7 @@
 | `desktop/__init__.py` | 包入口和 Desktop 版本 |
 | `desktop/config.py` | Desktop 只读配置契约、预算和 Prompt 资源哈希校验 |
 | `desktop/research_requirements.py` | 无 Qt 的两轮保存记录、文本校验、原子替换、默认资源及不可变分析快照 |
-| `desktop/prompt_page.py` | 两轮统一详情、纯文本编辑、保存/取消/恢复默认和未保存保护 |
+| `desktop/prompt_page.py` | 两轮统一详情、只读 Markdown 渲染与源文本编辑切换、保存/取消/恢复默认和未保存保护 |
 | `desktop/user_guide.py` | 用户指南安全读取、冻结哈希校验、只读 Markdown；内部跳转复用主窗口切页保护 |
 | `docs/desktop/USER_GUIDE.md` | 内置使用说明唯一正文；portable 位于 `_internal/docs/desktop/USER_GUIDE.md` |
 | `desktop/paths.py` | application/resource/runtime 根、路径安全、时区与 bundled curl 校验 |
@@ -24,7 +24,9 @@
 | `desktop/analysis.py` | 一次性快照分析、工作库重置和锁、两轮/PDF/全文编排、累计费用预检、结构化进度与安全结果 |
 | `desktop/progress.py` | 抓取与分析共用的不可变结构化进度事件及不影响业务流程的安全派发 |
 | `desktop/report.py` | 当前 run 的 SQLite 事实与 Desktop Markdown 外壳，复用 Round 2 推荐区块 |
-| `desktop/pipeline.py` | 固定候选规则、现有 submittedDate 核心调用、真实日期/分类进度、runtime 路径约束和只读内存快照 |
+| `desktop/pipeline.py` | 分类级版本抓取编排、原子保存、真实日期/分页/复用进度和只读内存快照 |
+| `desktop/arxiv_versions.py` | 首次／最新提交日发现、HTML 分页、历史 ID 补查与当前版本校验 |
+| `desktop/version_metadata.py` | 轻量持久版本元数据、查询记录和成员关联 schema v1 |
 | `desktop/secrets.py` | ctypes DPAPI、密文原子保存与恢复，独立于 Qt |
 | `requirements-desktop.txt` | 固定 PySide6、基础 Fluent、frameless、darkdetect 和 Windows pywin32 依赖 |
 | `requirements-build.txt` | 固定 PyInstaller 和仅构建阶段依赖 |
@@ -77,14 +79,16 @@ portable 根目录包含直接来自仓库根的 GPLv3 `LICENSE`。应用源码�
 │  └─ desktop-<UTC>-<session_id>.jsonl
 ├─ history/
 │  └─ history.sqlite
+├─ metadata/
+│  └─ arxiv_versions.sqlite
 ├─ work/
 │  ├─ analysis.lock
 │  ├─ arxiv_kaleid.sqlite
 │  └─ round2_inputs.sqlite
 └─ pdfs/
-   └─ <候选日期>/
+   └─ version-evidence-v1/<候选日期>/
 ```
 
 Secret 保存过程中可暂存同目录下的随机命名密文 `.tmp` 文件，成功后原子替换。整个目录被忽略，不进入 Git，也不得进入 portable ZIP；`logs/` 不写入 `_internal/`、AppData、Documents 或 home。受管测试的合成 runtime 位于独立测试根，portable 和视觉 QA 合成 runtime 位于本次 work；它们按 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期) 收尾，真实用户运行数据不在该工具清理范围。
 
-候选快照只存在当前进程内；分析时复制到当前工作库，不跨运行去重。全文仅存于独立全文库，PDF 保留。成功日报字符串原样保存到独立历史库，重启后仍可查看；不写根 `reports/`。`run_round2.py` 使用显式 Key 注入，主库/全文库通过连接参数传入。根核心模块只保留 Desktop 所需功能，不依赖 Online 模块或资源。完整项目结构见 [PROJECT_STRUCTURE.md](../PROJECT_STRUCTURE.md)。
+版本元数据库跨运行保存成功候选，查询成员及元数据内容哈希与版本绑定，不保存其他日期辅助历史、不记录模型已完成状态。不可变候选快照存在当前进程内，分析复制到当前工作库；全文仅存于独立全文库。版本证据 PDF 与 `.provenance.json` 绑定来源和 SHA-256，旧 PDF 保留。成功日报原样保存到独立历史库，重启可查看，不写根 `reports/`。根模块不依赖 Online 自动化或云端资源，完整结构见 [PROJECT_STRUCTURE.md](../PROJECT_STRUCTURE.md)。

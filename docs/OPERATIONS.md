@@ -10,7 +10,7 @@
 
 ## Desktop 候选传输与安全诊断
 
-候选抓取由 `desktop/pipeline.py` 调用 `main.fetch_arxiv_metadata()`；查询、分页、超时、间隔与快照失效规则见 [Desktop 规范](desktop/DESKTOP_SPEC.md#候选抓取)。本节维护同次请求的安全诊断边界。
+候选抓取由 `desktop/pipeline.py`、`desktop/arxiv_versions.py` 复用 `main.fetch_arxiv_metadata()` 的单次传输，读取首次／最新提交日搜索及当前最新版 Atom，并补查本地历史关联；不请求 OAI。查询、分页、超时、间隔与快照失效规则见 [Desktop 规范](desktop/DESKTOP_SPEC.md#候选抓取)。本节维护同次请求的安全诊断边界。
 
 抓取入口将同次请求的结构化证据交给 Desktop 诊断记录器：可解析的非 200 响应记录安全正文特征，200 与非 200 都可记录 transport 证据。它们进入源码 `.desktop-runtime/logs/` 或 portable `runtime/logs/` 下的会话 JSONL，不新增网络请求，不保存响应原文。
 
@@ -26,7 +26,7 @@
 
 特征按字节进行大小写不敏感匹配：`<html` → `html`、`<?xml` → `xml`、`not acceptable` → `not_acceptable`、`access denied` → `access_denied`、`request blocked` → `request_blocked`、`rate exceeded` → `rate_exceeded`、`captcha` → `captcha`。这些仅表示样本中出现对应字节，不能单独证明响应格式、防护拦截或故障根因；样本范围之外的内容不参与分析。
 
-诊断只使用已接收的字节，不限制网络下载大小，不补打正文摘录。连接失败、超时或状态解析失败不生成上述 HTTP 响应证据，沿用现有稳定错误与安全 details。
+诊断只使用已接收的字节，不限制网络下载大小，不补打正文摘录。连接失败和超时额外记录已收字节数、正文未完成标记、curl 退出码以及 `curl`／`python_subprocess` 超时来源；同次请求已有固定 write-out 和白名单响应头也可保留，缺失不补打网络请求。沿用现有稳定错误，不把部分正文或 HTTP 200 响应头记为抓取成功。
 
 ### 同次请求 transport 证据
 
@@ -40,8 +40,10 @@
 | `response_header_capture` | 响应头临时捕获状态 |
 | `response_headers` | 通过白名单、长度和 ASCII 检查的最终 HTTP 响应头 |
 | `response_headers_rejected` | 值不合规的白名单头名，不包含原值 |
+| `request_kind`、`request_index`、`candidate_date`、`resumption_token_present` | 请求类型、序号、北京时间候选日期及是否为 token 分页，不保存 token 或完整 URL |
+| `timeout_seconds`、`process_timeout_seconds`、`timeout_source`、`body_complete` | 网络期限、外层进程期限、超时来源及不完整正文标记 |
 
-响应头白名单为 `date`、`server`、`via`、`age`、`content-type`、`content-length`、`retry-after`、`x-cache`、`x-cache-hits`、`x-served-by`、`x-timer`、`cf-ray`。每项最多保留一个 128 字节的可打印 ASCII 值；Cookie、未知头、控制字符和超限值不得进入日志。
+响应头白名单为 `date`、`server`、`via`、`age`、`content-type`、`content-length`、`retry-after`、`x-cache`、`x-cache-hits`、`x-served-by`、`x-timer`、`cf-ray`。每项最多保留一个 128 字节的可打印 ASCII 值；传输解析器的单元素列表在日志中规范为字符串。Cookie、未知头、控制字符和超限值不得进入日志。分类分页完成也记录分类、页码与本页数量。
 
 临时响应头文件只存在于当前请求的 runtime 缓存目录，处理后清理；路径不输出，不进入 SQLite 或发行包。不启用 verbose，不记录 stderr、原始响应头、正文原文、Cookie、Secret、代理值或临时路径，不执行额外 DNS、HTTP 或网络探针。
 

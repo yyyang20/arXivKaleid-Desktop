@@ -15,7 +15,7 @@ from typing import Any
 from desktop.paths import checked_path
 
 
-CONFIG_VERSION = "desktop_config_v5"
+CONFIG_VERSION = "desktop_config_v6"
 MAX_BATCH_COST_CNY = Decimal("3.00")
 PROMPTS = {
     "round1_prompt": "prompts/relevance_round1_v23.txt",
@@ -56,8 +56,12 @@ def load_config(config_path: Path) -> dict[str, Any]:
         "round1_selection_policy", "round1_selection_policy_version",
         "request_timeout_seconds", "deepseek",
         "versions", "limits", "budget", "paths", "resource_integrity",
+        "fetch_policy",
     }:
         raise RuntimeError("desktop_config_fields_invalid")
+    from desktop.version_metadata import FETCH_POLICY
+    if config.get("fetch_policy") != FETCH_POLICY:
+        raise RuntimeError("desktop_fetch_policy_invalid")
     if config.get("round1_selection_policy") != "user_prompt_selection" or (
         config.get("round1_selection_policy_version") != "user_prompt_selection_v1"
     ):

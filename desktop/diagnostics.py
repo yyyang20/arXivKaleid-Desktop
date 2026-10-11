@@ -33,6 +33,8 @@ _DETAIL_KEYS = {
     "candidate_count", "selected_count", "eligible_count", "recommendation_count",
     "paper_issue_count", "outcome_count", "log_failure_kind",
     "model_request_sent", "input_tokens", "output_tokens",
+    "request_kind", "request_index", "candidate_date", "category", "resumption_token_present",
+    "timeout_seconds", "process_timeout_seconds", "timeout_source", "body_complete",
 }
 _HEADER_KEYS = {
     "date", "server", "via", "age", "content-type", "content-length",
@@ -75,12 +77,17 @@ def sanitize_details(details: Mapping[str, Any] | None) -> dict[str, Any]:
                         diagnostic[name] = scalar
             safe[key] = diagnostic
         elif key == "response_headers" and isinstance(value, Mapping):
-            safe[key] = {
-                str(header): scalar
-                for header, raw in value.items()
-                if str(header).lower() in _HEADER_KEYS
-                and (scalar := _safe_scalar(raw)) is not None
-            }
+            headers = {}
+            for header, raw in value.items():
+                name = str(header).lower()
+                if name not in _HEADER_KEYS:
+                    continue
+                # 传输解析器返回单元素列表；只保留白名单内一个短 ASCII 值。
+                candidate = raw[0] if isinstance(raw, (list, tuple)) and raw else raw
+                if (isinstance(candidate, str) and 0 < len(candidate) <= 128
+                        and all(32 <= ord(ch) <= 126 for ch in candidate)):
+                    headers[name] = candidate
+            safe[key] = headers
         elif isinstance(value, Mapping):
             nested = {
                 str(nested_key): scalar

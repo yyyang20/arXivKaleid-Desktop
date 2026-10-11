@@ -75,6 +75,18 @@ def classify_failure_scope(boundary: FailureBoundary) -> str:
 
 
 _ISSUE_TEXT: dict[str, tuple[str, str, str, str]] = {
+    "AKD-FETCH-METADATA_FAILED": (
+        "fetch", "版本元数据库无法安全读取或保存。", "已有数据保留；本次不能开始分析。",
+        "请检查运行目录权限、磁盘空间、数据库版本和其他运行窗口；不会清空或重建原库。",
+    ),
+    "AKD-FETCH-HISTORY_INVALID": (
+        "fetch", "arXiv 搜索结果或分页不完整。", "本次没有生成部分候选快照。",
+        "请保留诊断并稍后手动重新抓取；不会自动重试。",
+    ),
+    "AKD-FETCH-VERSION_INVALID": (
+        "fetch", "arXiv 最新版本元数据校验失败。", "本次没有生成候选快照，不会使用缓存旧版代替。",
+        "请保留诊断并检查论文最新版本的公开状态。",
+    ),
     "AKD-HISTORY-SAVE_FAILED": (
         "history", "历史保存失败。", "分析成功，本次日报尚未持久保存；关闭后不会保留。",
         "请检查运行目录权限和磁盘空间；不会重新调用模型或重试保存。",
