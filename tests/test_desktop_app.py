@@ -935,11 +935,14 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.window.switch_page(page)
         page.open_round('round1')
         default = page.editor.toPlainText()
-        self.assertTrue(page.editor.isReadOnly())
-        page.editor.setFocus()
-        page.editor.selectAll()
-        self.assertTrue(page.editor.textCursor().hasSelection())
-        QTest.keyClicks(page.editor, 'readonly')
+        self.assertIs(page.body_stack.currentWidget(), page.browser)
+        self.assertTrue(page.browser.isReadOnly())
+        page.browser.setFocus()
+        page.browser.selectAll()
+        self.assertTrue(page.browser.textCursor().hasSelection())
+        viewed = page.browser.toPlainText()
+        QTest.keyClicks(page.browser, 'readonly')
+        self.assertEqual(page.browser.toPlainText(), viewed)
         self.assertEqual(page.editor.toPlainText(), default)
         self.assertFalse(self.window.api_key.text())
         page.begin_edit()
@@ -947,10 +950,13 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.assertIn('未保存修改', page.state.text())
         self.assertFalse(self.window.requirements_store.load('round1').custom)
         page.cancel()
+        self.assertIs(page.body_stack.currentWidget(), page.browser)
         self.assertEqual(page.editor.toPlainText(), default)
         page.begin_edit()
         page.editor.setPlainText('研究黑洞偏振图像')
         self.assertTrue(page.save())
+        self.assertIs(page.body_stack.currentWidget(), page.browser)
+        self.assertEqual(page.browser.toPlainText(), '研究黑洞偏振图像')
         page.begin_edit()
         page.editor.setPlainText('尚未保存')
         page.cancel()
@@ -958,6 +964,77 @@ class DesktopAppTests(IsolatedDesktopTest):
         from desktop.research_requirements import RequirementsStore
         self.assertEqual(RequirementsStore(self.root).load('round1').text, '研究黑洞偏振图像')
         self.assertFalse(RequirementsStore(self.root).load('round2').custom)
+
+    def test_prompt_markdown_render_copy_edit_and_preserve_source(self):
+        from PySide6.QtGui import QFont, QTextCursor, QTextFormat
+        from desktop.research_requirements import RequirementsStore
+        page = self.window.prompt_page
+        source = '# 合成标题\n\n**加粗文本**与 `inline_code`。\n\n- 列表条目\n\n```text\ncode_block\n```'
+        self.window.switch_page(page)
+        self.window.show()
+        for stage in ('round1', 'round2'):
+            with self.subTest(stage=stage):
+                page.store.save(stage, source)
+                original = page.store._path(stage).read_bytes()
+                page.open_round(stage)
+                QTest.qWait(30)
+                self.assertIs(page.body_stack.currentWidget(), page.browser)
+                self.assertFalse(page.editor.isVisible())
+                self.assertTrue(page.edit_button.isVisible())
+                self.assertFalse(page.save_button.isVisible())
+                doc = page.browser.document()
+                self.assertEqual(doc.firstBlock().blockFormat().headingLevel(), 1)
+                self.assertGreaterEqual(doc.find('加粗文本').charFormat().fontWeight(), QFont.Weight.Bold)
+                self.assertIsNotNone(doc.find('列表条目').block().textList())
+                self.assertTrue(doc.find('inline_code').charFormat().fontFixedPitch())
+                self.assertEqual(doc.find('code_block').blockFormat().property(QTextFormat.Property.BlockCodeLanguage), 'text')
+                self.assertNotIn('**', page.browser.toPlainText())
+                # 实际鼠标选择及键盘全选；复制载荷从 Qt 选区生成，不访问用户剪贴板。
+                cursor = QTextCursor(doc)
+                cursor.setPosition(2)
+                point = page.browser.cursorRect(cursor).center()
+                QTest.mouseDClick(page.browser.viewport(), Qt.MouseButton.LeftButton, pos=point)
+                self.assertTrue(page.browser.textCursor().hasSelection())
+                page.browser.setFocus()
+                QTest.keyClick(page.browser, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
+                mime = page.browser.createMimeDataFromSelection()
+                self.assertEqual(mime.text(), page.browser.toPlainText())
+                QTest.keyClicks(page.browser, 'blocked')
+                self.assertEqual(page.store._path(stage).read_bytes(), original)
+                QTest.mouseClick(page.edit_button, Qt.MouseButton.LeftButton)
+                self.assertIs(page.body_stack.currentWidget(), page.editor)
+                self.assertEqual(page.editor.toPlainText(), source)
+                self.assertFalse(page.editor.isReadOnly())
+                changed = source.replace('合成标题', '保存后的标题')
+                page.editor.setPlainText(changed)
+                QTest.mouseClick(page.save_button, Qt.MouseButton.LeftButton)
+                self.assertIs(page.body_stack.currentWidget(), page.browser)
+                self.assertIn('保存后的标题', page.browser.toPlainText())
+                self.assertEqual(RequirementsStore(self.root).load(stage).text, changed)
+                page.begin_edit()
+                self.assertEqual(page.editor.toPlainText(), changed)
+                page.editor.setPlainText('取消草稿')
+                QTest.mouseClick(page.cancel_button, Qt.MouseButton.LeftButton)
+                self.assertIn('保存后的标题', page.browser.toPlainText())
+                self.assertEqual(page.store.load(stage).text, changed)
+
+    def test_prompt_markdown_denies_links_resources_and_html(self):
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices, QTextDocument
+        page = self.window.prompt_page
+        source = '# 安全预览\n\n[外链](https://example.invalid)\n\n![图片](file:///private.png)\n\n<b>不能解释成HTML</b>'
+        page.store.save('round1', source)
+        with patch.object(QDesktopServices, 'openUrl', side_effect=AssertionError('no browser')):
+            page.open_round('round1')
+            self.assertFalse(page.browser.openLinks())
+            self.assertFalse(page.browser.openExternalLinks())
+            self.assertFalse(page.browser.textInteractionFlags() & Qt.TextInteractionFlag.LinksAccessibleByMouse)
+            self.assertFalse(page.browser.textInteractionFlags() & Qt.TextInteractionFlag.LinksAccessibleByKeyboard)
+            for url in ('file:///private.png', 'https://example.invalid/private.png'):
+                self.assertIsNone(page.browser.loadResource(QTextDocument.ResourceType.ImageResource, QUrl(url)))
+            self.assertIn('<b>不能解释成HTML</b>', page.browser.toPlainText())
+        page.begin_edit()
+        self.assertEqual(page.editor.toPlainText(), source)
 
     def test_prompt_entry_whole_card_and_keyboard_open_readonly(self):
         page = self.window.prompt_page
@@ -979,7 +1056,8 @@ class DesktopAppTests(IsolatedDesktopTest):
                 QTest.mouseClick(self.window.windowHandle(), Qt.MouseButton.LeftButton, pos=position)
                 self.assertEqual(page.stage, stage)
                 self.assertEqual(page.stack.currentIndex(), 1)
-                self.assertTrue(page.editor.isReadOnly())
+                self.assertIs(page.body_stack.currentWidget(), page.browser)
+                self.assertTrue(page.browser.isReadOnly())
                 self.assertFalse(page.editing)
             for key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
                 page.go_back()
@@ -1043,16 +1121,21 @@ class DesktopAppTests(IsolatedDesktopTest):
             self.assertFalse(page.restore_default())
         self.assertEqual(ask.call_args.args[-1], QMessageBox.StandardButton.No)
         self.assertTrue(page.dirty)
+        self.assertIs(page.body_stack.currentWidget(), page.editor)
+        self.assertEqual(page.editor.toPlainText(), '草稿')
         with patch('desktop.prompt_page.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes), patch.object(page.store, 'save', side_effect=RequirementsError('保存失败')):
             self.assertFalse(page.restore_default())
         self.assertTrue(page.dirty)
         with patch('desktop.prompt_page.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes):
             self.assertTrue(page.restore_default())
         self.assertFalse(page.editing)
+        self.assertIs(page.body_stack.currentWidget(), page.browser)
+        self.assertIn('目标', page.browser.toPlainText())
         target = page.store._path('round1')
         target.write_bytes(b'broken')
         page.open_round('round1')
         self.assertIsNone(page.saved)
+        self.assertFalse(page.browser.toPlainText())
         self.assertFalse(page.edit_button.isEnabled())
         with patch('desktop.prompt_page.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes):
             self.assertTrue(page.restore_default())
@@ -1129,6 +1212,8 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.assertFalse(page.restore_default())
         self.assertFalse(page.edit_button.isEnabled())
         self.assertFalse(page.restore_button.isEnabled())
+        self.assertIs(page.body_stack.currentWidget(), page.browser)
+        self.assertTrue(page.browser.isReadOnly())
         self.assertEqual(page.store.load('round1'), before)
         page.set_busy(False)
         self.prepare_analysis()
@@ -1144,7 +1229,7 @@ class DesktopAppTests(IsolatedDesktopTest):
     def test_prompt_large_font_minimum_window_layout(self):
         from PySide6.QtGui import QFont
         page = self.window.prompt_page
-        controls = (page.editor, page.purpose, page.state, page.message, page.back_button,
+        controls = (page.editor, page.browser, page.purpose, page.state, page.message, page.back_button,
                     page.edit_button, page.save_button, page.cancel_button, page.restore_button)
         for widget in controls:
             widget.setFont(QFont('Microsoft YaHei UI', 12))
@@ -1159,3 +1244,8 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.assertTrue(page.save_button.isVisible())
         self.assertLess(page.restore_button.mapTo(page, page.restore_button.rect().bottomRight()).y(), page.height())
         page.cancel()
+        QTest.qWait(30)
+        self.assertIs(page.body_stack.currentWidget(), page.browser)
+        self.assertGreaterEqual(page.browser.height(), 160)
+        self.assertEqual(page.browser.document().defaultFont().pointSizeF(), 12)
+        self.assertTrue(page.edit_button.isVisible())

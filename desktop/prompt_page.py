@@ -3,9 +3,9 @@
 # See LICENSE in the project root for the full license text.
 
 """复用两轮编辑窗口管理完整研究 Prompt，程序仅保留技术和安全边界。"""
-from PySide6.QtCore import QRect, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QPainter, QPen
-from PySide6.QtWidgets import QAbstractButton, QHBoxLayout, QMessageBox, QPlainTextEdit, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
+from PySide6.QtCore import QEvent, QRect, QRectF, QSize, Qt
+from PySide6.QtGui import QColor, QFont, QPainter, QPen, QTextDocument
+from PySide6.QtWidgets import QAbstractButton, QHBoxLayout, QMessageBox, QPlainTextEdit, QSizePolicy, QStackedWidget, QTextBrowser, QVBoxLayout, QWidget
 from qfluentwidgets import FluentIcon, PrimaryPushButton, PushButton, ScrollArea, TitleLabel
 
 from desktop.research_requirements import RequirementsError, RequirementsStore
@@ -99,6 +99,19 @@ class PromptEntryCard(QAbstractButton):
         self.update()
 
 
+class PromptBrowser(QTextBrowser):
+    """只呈现提示词文字；显示格式不参与保存或模型输入。"""
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.FontChange:
+            self.document().setDefaultFont(self.font())
+
+    def loadResource(self, resource_type, name):
+        # 用户可写 Markdown，但查看正文不能隐式访问图片、文件或网络。
+        return None
+
+
 class PromptPage(QWidget):
     TITLES = {"round1": "第一轮完整研究提示词", "round2": "第二轮完整研究提示词"}
     PURPOSES = {"round1": "根据题目和摘要，筛选进入全文分析的论文。", "round2": "根据题目、摘要和合格全文，确定最终推荐论文。"}
@@ -164,16 +177,33 @@ class PromptPage(QWidget):
         layout.addWidget(self.message)
         for label in (self.purpose, self.state, self.message):
             label.setStyleSheet(f"color: {TEXT_SECONDARY};")
-        # 使用与历史正文一致的 Qt 文本表面，避免只读聚焦也出现 Fluent 蓝色底边。
+        # 查看与编辑使用独立表面，原始 Markdown 始终来自保存值而非渲染文档。
+        self.body_stack = QStackedWidget()
+        self.browser = PromptBrowser()
+        self.browser.setReadOnly(True)
+        self.browser.setOpenLinks(False)
+        self.browser.setOpenExternalLinks(False)
+        self.browser.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.TextSelectableByKeyboard
+        )
+        self.browser.setAccessibleName("提示词 Markdown 正文（只读）")
+        self.browser.setStyleSheet(
+            f"QTextBrowser {{background:{CARD_BACKGROUND}; color:{TEXT_PRIMARY}; border:1px solid {CARD_BORDER}; border-radius:8px; padding:16px;}}"
+        )
         self.editor = QPlainTextEdit()
         editor_font = QFont("Microsoft YaHei UI")
         editor_font.setPixelSize(14)
+        self.browser.setFont(editor_font)
+        self.browser.setMinimumHeight(160)
         self.editor.setFont(editor_font)
         self.editor.setReadOnly(True)
         self.editor.setMinimumHeight(160)
+        self.editor.setAccessibleName("提示词 Markdown 源文本编辑器")
         self._editor_editable = None
         self.editor.textChanged.connect(self.update_controls)
-        layout.addWidget(self.editor, 1)
+        self.body_stack.addWidget(self.browser)
+        self.body_stack.addWidget(self.editor)
+        layout.addWidget(self.body_stack, 1)
         row = QHBoxLayout()
         self.edit_button = PrimaryPushButton(FluentIcon.EDIT, "编辑")
         self.save_button = PrimaryPushButton(FluentIcon.SAVE, "保存")
@@ -222,18 +252,29 @@ class PromptPage(QWidget):
             self.saved = self.store.load(stage)
             self.baseline = self.saved.text
             self.editor.setPlainText(self.saved.text)
+            self.render_saved()
             self.message.setText(self.boundary_message())
         except (RequirementsError, RuntimeError, OSError, ValueError):
             self.baseline = ""
             self.editor.clear()
+            self.browser.clear()
             self.message.setText("已保存内容或资源不可用；分析已阻止。可确认恢复本轮默认；资源损坏时请重新解压软件。")
         self.stack.setCurrentIndex(1)
         self.update_controls()
         return True
 
+    def render_saved(self):
+        # 禁止把自定义 HTML 当作富文本解释；保留 Qt Markdown 标题、列表和代码格式。
+        self.browser.document().setMarkdown(
+            self.saved.text if self.saved else "",
+            QTextDocument.MarkdownFeature.MarkdownDialectGitHub | QTextDocument.MarkdownFeature.MarkdownNoHTML,
+        )
+        self.browser.document().setDefaultFont(self.browser.font())
+
     def update_controls(self):
         editable = self.editing and not self.busy
         self.editor.setReadOnly(not editable)
+        self.body_stack.setCurrentWidget(self.editor if self.editing else self.browser)
         if editable != self._editor_editable:
             style = f"QPlainTextEdit {{background:{CARD_BACKGROUND}; color:{TEXT_PRIMARY}; border:1px solid {CARD_BORDER}; border-radius:8px; padding:16px;}}"
             if editable:
@@ -290,6 +331,7 @@ class PromptPage(QWidget):
         self.editing = False
         self.baseline = self.saved.text if self.saved else ""
         self.editor.setPlainText(self.baseline)
+        self.render_saved()
         self.message.setText(self.boundary_message())
         self.update_controls()
 

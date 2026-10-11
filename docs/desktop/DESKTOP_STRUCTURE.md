@@ -8,7 +8,7 @@
 | `desktop/__init__.py` | 包入口和 Desktop 版本 |
 | `desktop/config.py` | Desktop 只读配置契约、预算和 Prompt 资源哈希校验 |
 | `desktop/research_requirements.py` | 无 Qt 的两轮保存记录、文本校验、原子替换、默认资源及不可变分析快照 |
-| `desktop/prompt_page.py` | 两轮统一详情、纯文本编辑、保存/取消/恢复默认和未保存保护 |
+| `desktop/prompt_page.py` | 两轮统一详情、只读 Markdown 渲染与源文本编辑切换、保存/取消/恢复默认和未保存保护 |
 | `desktop/user_guide.py` | 用户指南安全读取、冻结哈希校验、只读 Markdown；内部跳转复用主窗口切页保护 |
 | `docs/desktop/USER_GUIDE.md` | 内置使用说明唯一正文；portable 位于 `_internal/docs/desktop/USER_GUIDE.md` |
 | `desktop/paths.py` | application/resource/runtime 根、路径安全、时区与 bundled curl 校验 |

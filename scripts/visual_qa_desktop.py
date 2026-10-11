@@ -220,6 +220,7 @@ def visual_qa(run):
             window.switch_page(window.prompt_page)
             window.prompt_page.open_round('round2')
             assert window.prompt_page.busy and not window.prompt_page.restore_button.isEnabled()
+            assert window.prompt_page.body_stack.currentWidget() is window.prompt_page.browser
             capture('05b-prompts-locked')
             window.switch_page(window.user_guide_page)
             assert window.user_guide_page.loaded and window.worker is not None
