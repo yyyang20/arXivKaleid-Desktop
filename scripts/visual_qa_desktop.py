@@ -31,7 +31,7 @@ from desktop.paths import checked_path
 from desktop.progress import ProgressEvent
 from scripts.local_artifacts import ArtifactRun, inventory, temporary_environment
 from desktop.history import HistoryStore
-from portable_visual import synthetic_snapshot as report_snapshot, synthetic_analysis_result, exercise_history, exercise_requirements, exercise_user_guide
+from portable_visual import synthetic_snapshot as report_snapshot, synthetic_analysis_result, exercise_history, exercise_requirements, exercise_user_guide, exercise_categories
 
 # 截图后的受管容量核验会扫描已留存材料；合成线程需等主线程完成多张截图。
 # 该期限仅用于离线 QA 的事件闸门，不改变真实网络、模型或资源门禁。
@@ -148,7 +148,7 @@ def visual_qa(run):
         ))
         if not gate.wait(QA_GATE_TIMEOUT_SECONDS):
             raise RuntimeError("qa_fetch_gate_timeout")
-        return report_snapshot(day)
+        return report_snapshot(day, categories=_kwargs['categories'])
 
     def analyze(attempt, _key, progress):
         for stage, message, count, total in (
@@ -208,6 +208,7 @@ def visual_qa(run):
             wait_until(lambda: window.worker is None)
             assert window.snapshot is not None and not window.snapshot.analysis_attempted
             capture("03-fetched")
+            categories = exercise_categories(application, window, capture, output)
             window.task_panel.set_expanded(True)
             capture("04-fetch-details")
             gate.clear()
@@ -270,7 +271,7 @@ def visual_qa(run):
         run.finish_evidence(close_qa)
     (output / "qa.json").write_text(json.dumps({
         "version": app.__version__, "qt_platform": application.platformName(),
-        "offline_synthetic": True, "history": history, "requirements": requirements, "user_guide": user_guide, "captures": captures,
+        "offline_synthetic": True, "history": history, "requirements": requirements, "user_guide": user_guide, "categories": categories, "captures": captures,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     compose_captures(output, "overview.png", [
         ("01-initial", "初始状态"), ("02-fetching", "正在获取候选"),

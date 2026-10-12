@@ -34,6 +34,9 @@ from desktop.task_panel import ANALYSIS_STAGES, STAGE_SYMBOLS
 from desktop.history import HistoryError, HistoryStore
 from desktop.prompt_page import PromptPage
 from desktop.research_requirements import RequirementsError, RequirementsStore
+from desktop.categories import DEFAULT_CATEGORIES, validate_categories
+from desktop.category_selection import CategorySelectionError, CategorySelectionStore
+from desktop.category_dialog import CategoryDialog
 
 
 ANALYSIS_NOTICE = (
@@ -65,10 +68,11 @@ class FetchWorker(QThread):
 
     def __init__(
         self, target_date: date, diagnostics: DesktopDiagnostics | None = None,
-        operation_id: str | None = None, parent=None,
+        operation_id: str | None = None, parent=None, *, categories=DEFAULT_CATEGORIES,
     ):
         super().__init__(parent)
         self.target_date = target_date
+        self.categories = validate_categories(categories)
         self.snapshot: CandidateSnapshot | None = None
         self.outcome: DesktopOutcome | None = None
         self.issue: DesktopIssue | None = None
@@ -78,11 +82,12 @@ class FetchWorker(QThread):
     def run(self) -> None:
         try:
             if self.diagnostics is None and self.operation_id is None:
-                result = fetch_candidates_for_date(self.target_date, self.progress.emit)
+                result = fetch_candidates_for_date(self.target_date, self.progress.emit, categories=self.categories)
             else:
                 result = fetch_candidates_for_date(
                     self.target_date, self.progress.emit,
                     diagnostics=self.diagnostics, operation_id=self.operation_id,
+                    categories=self.categories,
                 )
             if isinstance(result, CandidateSnapshot):
                 self.snapshot = result
@@ -160,12 +165,16 @@ class DesktopWindow(QWidget):
         window_icon: QIcon | None = None,
         history_store: HistoryStore | None = None,
         requirements_store: RequirementsStore | None = None,
+        category_store: CategorySelectionStore | None = None,
     ):
         super().__init__()
         self.secret_store = secret_store if secret_store is not None else SecretStore()
         self.diagnostics = diagnostics
         self.history_store = history_store if history_store is not None else HistoryStore()
         self.requirements_store = requirements_store if requirements_store is not None else RequirementsStore()
+        self.category_store = category_store if category_store is not None else CategorySelectionStore(self.requirements_store.source_root)
+        self.selected_categories = None
+        self.category_error = ""
         self.history_worker: HistoryWorker | None = None
         self._history_jobs = []
         self._history_generation = 0
@@ -266,8 +275,71 @@ class DesktopWindow(QWidget):
         self.calendar_button.clicked.connect(self.open_date_picker)
         self.date_picker.date_chosen.connect(self.select_date)
         self.analyze_button.clicked.connect(self.start_analysis)
+        self.home_page.modify_categories_button.clicked.connect(self.modify_categories)
+        self.home_page.restore_categories_button.clicked.connect(self.restore_categories)
+        self.load_categories()
         if self.diagnostics and not self.diagnostics.persistent:
             self.diagnostic_text.setText("诊断仅保留在当前会话；本地日志不可写。")
+
+    def load_categories(self):
+        try:
+            self.selected_categories = self.category_store.load()
+            self.category_error = ""
+        except CategorySelectionError as exc:
+            self.selected_categories = None
+            self.category_error = str(exc)
+        self.refresh_category_controls()
+
+    def refresh_category_controls(self):
+        page = self.home_page
+        page.category_label.setText(" · ".join(self.selected_categories) if self.selected_categories else "分类设置不可用")
+        page.category_status.setText(self.category_error)
+        page.category_status.setVisible(bool(self.category_error))
+        busy = self.worker is not None
+        page.modify_categories_button.setEnabled(not busy)
+        page.restore_categories_button.setEnabled(not busy and self.selected_categories != DEFAULT_CATEGORIES)
+        self.fetch_button.setEnabled(not busy and self.selected_categories is not None)
+
+    def save_categories(self, categories, dialog=None):
+        if self.worker is not None:
+            return False
+        try:
+            selected = self.category_store.save(categories)
+        except CategorySelectionError as exc:
+            if dialog is not None:
+                dialog.error_label.setText(str(exc))
+            else:
+                self.category_error = str(exc)
+                self.refresh_category_controls()
+            return False
+        # 保存成功只改变下一次查询设置；已有候选、统计、日报及分析资格保持不变。
+        self.selected_categories = selected
+        self.category_error = ""
+        self.refresh_category_controls()
+        if dialog is not None:
+            dialog.accept()
+        return True
+
+    @Slot()
+    def modify_categories(self):
+        if self.worker is not None:
+            return
+        dialog = CategoryDialog(self.selected_categories or DEFAULT_CATEGORIES, self)
+        if self.category_error:
+            dialog.error_label.setText(self.category_error)
+        dialog.confirm_button.clicked.connect(lambda: self.save_categories(dialog.categories, dialog))
+        dialog.exec()
+        dialog.deleteLater()
+
+    @Slot()
+    def restore_categories(self):
+        if self.worker is not None:
+            return
+        answer = QMessageBox.question(self, "恢复默认分类",
+            "确认恢复 gr-qc、astro-ph.HE、astro-ph.GA？已保存的分类选择将被替换，已有候选和日报不受影响。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if answer == QMessageBox.StandardButton.Yes:
+            self.save_categories(DEFAULT_CATEGORIES)
 
     def switch_page(self, page: QWidget) -> None:
         if page is not self.pages.currentWidget() and not self.prompt_page.protect_unsaved():
@@ -542,6 +614,11 @@ class DesktopWindow(QWidget):
     def start_fetch(self) -> None:
         if self.worker is not None:
             return
+        # 每次启动重新核验保存文件，复制到线程后不再读取设置。
+        self.load_categories()
+        if self.selected_categories is None:
+            return
+        selected_categories = tuple(self.selected_categories)
         target_date = self.refresh_target_date()
         self.date_picker.hide()
         # 先使旧快照失效，再启动网络工作；API Key 不参与候选管线。
@@ -562,8 +639,9 @@ class DesktopWindow(QWidget):
         self.fetch_progress.setRange(0, 0)
         operation_id = self.diagnostics.operation_id() if self.diagnostics else None
         self.worker = FetchWorker(
-            target_date, self.diagnostics, operation_id, self
+            target_date, self.diagnostics, operation_id, self, categories=selected_categories,
         )
+        self.refresh_category_controls()
         self.worker.progress.connect(self.handle_progress)
         self.worker.finished.connect(self.finish_fetch)
         self.worker.start()
@@ -608,13 +686,14 @@ class DesktopWindow(QWidget):
             )
             self.fetch_progress.setRange(0, 1)
             self.fetch_progress.setValue(1)
-            self.task_panel.show_snapshot(snapshot, pipeline.CATEGORIES)
+            self.task_panel.show_snapshot(snapshot, snapshot.categories)
         self.task_panel.finish(failed=worker.issue is not None)
         self.analyze_button.setEnabled(self.snapshot is not None and not self.snapshot.analysis_attempted)
         self.fetch_button.setEnabled(True)
         self.calendar_button.setEnabled(True)
         self.refresh_diagnostic_availability()
         self.worker = None
+        self.refresh_category_controls()
         worker.deleteLater()
 
     @Slot()
@@ -691,6 +770,7 @@ class DesktopWindow(QWidget):
         self.reset_analysis_progress()
         self.analysis_progress_text.setText("正在准备分析…")
         self.worker = AnalysisWorker(attempt, self.api_key.text(), self, self.history_store)
+        self.refresh_category_controls()
         self.worker.progress.connect(self.handle_progress)
         self.worker.finished.connect(self.finish_analysis)
         self.worker.start()
@@ -769,6 +849,7 @@ class DesktopWindow(QWidget):
         self.refresh_diagnostic_availability()
         self.worker = None
         self.prompt_page.set_busy(False)
+        self.refresh_category_controls()
         worker.deleteLater()
 
     @Slot(QUrl)

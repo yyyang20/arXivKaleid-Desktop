@@ -25,10 +25,11 @@ from desktop.errors import (
 from desktop.progress import ProgressCallback, ProgressEvent, emit_progress
 from desktop.version_metadata import FETCH_POLICY, MetadataError, VersionStore
 from desktop import arxiv_versions
+from desktop.categories import DEFAULT_CATEGORIES, validate_categories
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CATEGORIES = ("gr-qc", "astro-ph.HE", "astro-ph.GA")
+CATEGORIES = DEFAULT_CATEGORIES
 ATOM_TIMEOUT_SECONDS = 90
 SUBPROCESS_TIMEOUT_MARGIN_SECONDS = 15
 
@@ -152,6 +153,11 @@ def fetch_candidates_for_date(
     categories: tuple[str, ...] | None = None,
 ) -> CandidateFetchResult:
     """首次／最新提交日发现及历史关联补查，联网固定最新版并保存候选。"""
+    # 分类输入在访问库、创建缓存或联网之前校验，不把非法选择写成失败查询。
+    try:
+        categories = validate_categories(categories if categories is not None else CATEGORIES)
+    except ValueError:
+        raise CandidateError(make_issue("AKD-FETCH-CATEGORIES_INVALID")) from None
     import main
 
     # 独立且不向根 logger 传播；Desktop 不创建日志文件。
@@ -161,7 +167,6 @@ def fetch_candidates_for_date(
     operation_id = operation_id or (diagnostics.operation_id() if diagnostics else new_id())
     timer = StageTimer()
     current_day = target_date
-    categories = tuple(categories if categories is not None else CATEGORIES)
     category_positions = {category: index for index, category in enumerate(categories, start=1)}
     last_transport_failure: dict[str, object] = {}
     store = VersionStore(PROJECT_ROOT)

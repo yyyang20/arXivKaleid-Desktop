@@ -88,6 +88,103 @@ class DesktopAppTests(IsolatedDesktopTest):
             image = self.window.windowIcon().pixmap(size, size).toImage()
             self.assertEqual(image.pixelColor(0, 0).alpha(), 0)
 
+    def test_category_dialog_limits_cancel_save_and_snapshot_freeze(self):
+        from desktop.category_dialog import CategoryDialog
+        from desktop.categories import DEFAULT_CATEGORIES
+        dialog = CategoryDialog(DEFAULT_CATEGORIES, self.window)
+        self.addCleanup(dialog.deleteLater)
+        self.assertEqual(len(dialog.checkboxes), 51)
+        self.assertFalse(dialog.checkboxes['hep-th'].isEnabled())
+        for identity in DEFAULT_CATEGORIES:
+            dialog.checkboxes[identity].setChecked(False)
+        self.assertFalse(dialog.confirm_button.isEnabled())
+        dialog.checkboxes['hep-th'].setChecked(True)
+        dialog.reject()
+        self.assertEqual(self.window.selected_categories, DEFAULT_CATEGORIES)
+        self.window.snapshot = self.result
+        self.window.report.setMarkdown('# 已有日报')
+        self.assertTrue(self.window.save_categories(dialog.categories))
+        self.assertEqual(self.window.category_store.load(), ('hep-th',))
+        self.assertIs(self.window.snapshot, self.result)
+        self.assertEqual(self.result.categories, DEFAULT_CATEGORIES)
+        self.assertIn('已有日报', self.window.report.toPlainText())
+        with patch('desktop.app.fetch_candidates_for_date', return_value=self.result) as fetch:
+            self.window.start_fetch()
+            self.wait_until(lambda: self.window.worker is None)
+        self.assertEqual(fetch.call_args.kwargs['categories'], ('hep-th',))
+
+    def test_category_restore_confirmation_and_failed_save_keep_state(self):
+        from desktop.category_selection import CategorySelectionError
+        from desktop.categories import DEFAULT_CATEGORIES
+        self.window.save_categories(('physics.optics',))
+        with patch.object(app.QMessageBox, 'question', return_value=app.QMessageBox.StandardButton.No) as question:
+            self.window.restore_categories()
+        self.assertEqual(question.call_args.args[-1], app.QMessageBox.StandardButton.No)
+        self.assertEqual(self.window.selected_categories, ('physics.optics',))
+        with patch.object(self.window.category_store, 'save', side_effect=CategorySelectionError('合成保存失败')):
+            self.assertFalse(self.window.save_categories(('hep-th',)))
+        self.assertEqual(self.window.selected_categories, ('physics.optics',))
+        with patch.object(app.QMessageBox, 'question', return_value=app.QMessageBox.StandardButton.Yes):
+            self.window.restore_categories()
+        self.assertEqual(self.window.selected_categories, DEFAULT_CATEGORIES)
+        self.assertEqual(self.window.category_store.load(), DEFAULT_CATEGORIES)
+
+    def test_corrupt_category_config_blocks_fetch_until_repaired(self):
+        target = self.window.category_store.file
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text('{invalid', encoding='utf-8')
+        with patch('desktop.app.fetch_candidates_for_date') as fetch:
+            self.window.start_fetch()
+        fetch.assert_not_called()
+        self.assertFalse(self.window.fetch_button.isEnabled())
+        self.assertEqual(target.read_text(encoding='utf-8'), '{invalid')
+        self.assertTrue(self.window.home_page.modify_categories_button.isEnabled())
+        self.window.save_categories(('hep-th',))
+        self.assertTrue(self.window.fetch_button.isEnabled())
+
+    def test_fetch_worker_freezes_categories_before_thread_run(self):
+        categories = ['hep-th']
+        worker = app.FetchWorker(DAY, categories=categories)
+        categories[0] = 'quant-ph'
+        with patch('desktop.app.fetch_candidates_for_date', return_value=self.result) as fetch:
+            worker.run()
+        self.assertEqual(fetch.call_args.kwargs['categories'], ('hep-th',))
+        worker.deleteLater()
+
+    def test_category_buttons_busy_and_window_restart_persistence(self):
+        self.window.save_categories(('gr-qc',))
+        reopened = app.DesktopWindow(self.store)
+        try:
+            self.assertEqual(reopened.selected_categories, ('gr-qc',))
+        finally:
+            reopened.close()
+            reopened.deleteLater()
+        gate = threading.Event()
+        def fetch(day, progress, **kwargs):
+            gate.wait(3)
+            return self.result
+        with patch('desktop.app.fetch_candidates_for_date', side_effect=fetch):
+            self.window.start_fetch()
+            self.assertFalse(self.window.home_page.modify_categories_button.isEnabled())
+            self.assertFalse(self.window.home_page.restore_categories_button.isEnabled())
+            self.assertFalse(self.window.save_categories(('hep-th',)))
+            self.assertEqual(self.window.category_store.load(), ('gr-qc',))
+            gate.set()
+            self.wait_until(lambda: self.window.worker is None)
+        self.assertTrue(self.window.home_page.modify_categories_button.isEnabled())
+
+    def test_category_actions_are_secondary_and_collapsed_panel_is_compact(self):
+        from qfluentwidgets import TransparentToolButton
+        page = self.window.home_page
+        self.assertIsInstance(page.modify_categories_button, TransparentToolButton)
+        self.assertEqual(page.modify_categories_button.accessibleName(), '修改抓取分类')
+        self.assertEqual(page.restore_categories_button.toolTip(), '恢复默认抓取分类')
+        self.window.show()
+        self.window.task_panel.begin('fetch')
+        self.window.task_panel.finish()
+        self.application.processEvents()
+        self.assertLess(self.window.task_panel.height(), 100)
+
     def test_alpha7_pages_share_surface_palette_and_key_focus_style(self):
         self.assertIn(PAGE_BACKGROUND, self.window.styleSheet())
         self.assertIn(PAGE_BACKGROUND, self.window.home_page.styleSheet())
@@ -269,6 +366,8 @@ class DesktopAppTests(IsolatedDesktopTest):
             self.window.switch_page(self.window.settings_page)
             self.assertFalse(self.window.api_key.isEnabled())
             self.assertFalse(self.window.api_key.viewButton.isEnabled())
+            self.assertFalse(self.window.home_page.modify_categories_button.isEnabled())
+            self.assertFalse(self.window.home_page.restore_categories_button.isEnabled())
             self.wait_until(lambda: "2 / 3" in self.window.analysis_progress_text.text())
             self.assertTrue(self.window.task_panel.expanded)
             self.assertNotIn("%", self.window.analysis_progress_text.text())
@@ -294,7 +393,8 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.application.processEvents()
         panel = self.window.task_panel
         self.assertLessEqual(panel.details_scroll.geometry().bottom(), panel.open_logs_button.geometry().top())
-        self.assertGreaterEqual(self.window.home_page.report_stack.height(), 150)
+        self.assertGreaterEqual(self.window.home_page.report_stack.height(), 150,
+            f"首页高度 {self.window.home_page.height()}，任务高度 {panel.height()}，详情高度 {panel.details_scroll.height()}")
         self.assertLessEqual(panel.open_logs_button.geometry().bottom(), panel.height())
         self.assertGreaterEqual(self.window.statistics["原始条目数"].height(), 24)
 
@@ -315,7 +415,7 @@ class DesktopAppTests(IsolatedDesktopTest):
         gate = threading.Event()
         thread_ids = []
 
-        def fetch(_day, progress):
+        def fetch(_day, progress, **kwargs):
             thread_ids.append(QThread.currentThread())
             if len(thread_ids) == 2:
                 gate.wait(3)
@@ -505,7 +605,7 @@ class DesktopAppTests(IsolatedDesktopTest):
 
     def test_close_during_fetch_keeps_worker_alive_until_finished(self):
         gate = threading.Event()
-        def fetch(_day, _progress):
+        def fetch(_day, _progress, **kwargs):
             gate.wait(3)
             return self.result
         with patch("desktop.app.fetch_candidates_for_date", side_effect=fetch):
@@ -531,7 +631,7 @@ class DesktopAppTests(IsolatedDesktopTest):
     def test_fetch_progress_is_indeterminate_and_uses_event_category_total(self):
         gate = threading.Event()
 
-        def fetch(day, progress):
+        def fetch(day, progress, **kwargs):
             progress(ProgressEvent(
                 task_type="fetch", stage="category", state="running",
                 message=(f"候选抓取中 · UTC {day.isoformat()} · "

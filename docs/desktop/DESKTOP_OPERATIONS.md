@@ -1,6 +1,6 @@
 # Desktop 运行与验证
 
-当前公开版本为 `0.1.0-alpha.12`，最新成品为 alpha 12 Windows x64 portable 预发布测试版，下载与运行方式见下文。
+当前开发版本为 `0.1.0-alpha.13`，第一阶段仅生成绑定本地冻结 commit 的技术候选。已公开下载仍为 alpha 12 Windows x64 portable，下载与运行方式见下文。
 
 本文档维护源码启动、依赖、本机构建、portable 验证及运行排错细节。开发与公开发布流程见根 [运行手册](../OPERATIONS.md)，安全、授权和完成要求以根 [AGENTS.md](../../AGENTS.md) 为准，阅读与更新路由见 [文档索引](../README.md)。
 
@@ -77,6 +77,12 @@ manifest 记录组件 name/version/build/包归档 SHA-256、来源发行归档 
 根目录 LICENSE 是应用许可唯一源，单独复制到 portable 根目录。打包 README 的源码说明由构建器按用途填入：本地技术候选绑定本地冻结 commit，标明未公开发布；正式发行才生成同版本 tag 的免费源码链接，tag 提交必须等于 BUILD_INFO.json。第三方源码覆盖、独立执行平台/工具与系统库的排除理由见 THIRD_PARTY_NOTICES.txt。
 
 ## Portable 零模型验证
+
+alpha 13 源码冻结前，还须运行 `scripts/validate_physics_categories.py`：在独立受管 runtime 核对官方 Physics 51 个 ID、名称与归属，逐类执行轻量真实 API 查询，再通过真实 GUI/QThread 验收多个 Archive 的今天和历史完整抓取、分类组合及快照冻结。轻量探针不是完整抓取，历史验收须有非空更新版本；所有入口硬禁止模型，失败不自动重跑。离线回归明确验证 V1/V2/V3 的首次／最新日期与已有中间日关联语义。
+
+若前述验证在 51 类探针及 17 组完整抓取均已通过后中断，先按受管清单保留证据、获得当次授权并结案中断。可用 `--continue-evidence '<已结案运行>/evidence/physics-validation.json'` 仅补做尚未执行的真实历史关联刷新；入口核验原目录及全部前置结果，输出绑定原证据 SHA-256 的合并报告，不重跑已通过网络用例，也不将原中断记录改称成功。
+
+冻结 portable 的五组 DPI 验证包含分类窗口、选择边界、恢复确认、保存失败、坏配置修复和跨进程分类恢复；真实网络验证继续使用全新副本和现行请求／性能门槛。第一阶段全部通过后，仅将当次明确列明的旧 `release/` ZIP 与校验文件原样归档保留，交付一份 alpha 13 技术候选及校验文件；不执行 GitHub 写操作或将候选冒充正式包。
 
 ```powershell
 & $desktopPython -X utf8 -B scripts/validate_windows_portable.py

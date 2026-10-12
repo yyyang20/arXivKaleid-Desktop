@@ -9,11 +9,11 @@ from PySide6.QtWidgets import (
 )
 from qfluentwidgets import (
     BodyLabel, FluentIcon, PasswordLineEdit, PrimaryPushButton,
-    ScrollArea, SubtitleLabel, TitleLabel, ToolButton,
+    ScrollArea, SubtitleLabel, TitleLabel, ToolButton, TransparentToolButton,
 )
 from desktop import __version__
 from desktop.style import (
-    API_KEY_STYLE, PAGE_STYLE, SUBTLE_BACKGROUND, SUBTLE_BORDER, TEXT_PRIMARY, SurfaceCard,
+    API_KEY_STYLE, PAGE_STYLE, TEXT_PRIMARY, TEXT_SECONDARY, SurfaceCard,
 )
 from desktop.task_panel import TaskPanel, wrapping_label
 from desktop.date_picker import DatePickerPopup
@@ -37,20 +37,57 @@ class HomePage(QWidget):
         layout.setContentsMargins(24, 18, 24, 18)
         layout.setSpacing(12)
         fetch_card, fetch = card("抓取信息")
+        # 分类常驻后紧凑排列日期与统计，仍按字体的 sizeHint 保住操作和日报空间。
+        fetch.setContentsMargins(16, 10, 16, 10)
+        fetch.setSpacing(4)
         self.statistics = {}
-        form = QFormLayout()
+        dates = QHBoxLayout()
         for name in ("抓取日期（北京时间）", "抓取完成时间（北京时间）"):
             label = wrapping_label("—")
             self.statistics[name] = label
+            form = QFormLayout()
             form.addRow(name, label)
-        fetch.addLayout(form)
+            dates.addLayout(form, 1)
+        fetch.addLayout(dates)
+        category_card = QWidget()
+        category_card.setObjectName("categoryCard")
+        categories = QVBoxLayout(category_card)
+        categories.setContentsMargins(0, 0, 0, 0)
+        categories.setSpacing(3)
+        category_header = QHBoxLayout()
+        category_header.addWidget(BodyLabel("抓取分类"))
+        self.category_label = wrapping_label()
+        self.category_label.setObjectName("categorySelection")
+        category_header.addWidget(self.category_label, 1)
+        # 分类文字优先使用行内空间，次要操作使用现有 Fluent 无边框图标。
+        self.modify_categories_button = TransparentToolButton(FluentIcon.EDIT)
+        self.restore_categories_button = TransparentToolButton(FluentIcon.SYNC)
+        for button, description in ((self.modify_categories_button, "修改抓取分类"),
+                                    (self.restore_categories_button, "恢复默认抓取分类")):
+            button.setToolTip(description)
+            button.setAccessibleName(description)
+            button.setFixedSize(28, 28)
+        category_header.addWidget(self.modify_categories_button)
+        category_header.addWidget(self.restore_categories_button)
+        categories.addLayout(category_header)
+        hint = wrapping_label("Physics · 选择 1–3 个具体分类 · 当前设置用于下次抓取")
+        hint.setStyleSheet(f"color: {TEXT_SECONDARY};")
+        categories.addWidget(hint)
+        self.category_status = wrapping_label()
+        self.category_status.setStyleSheet("color: #a4262c;")
+        self.category_status.hide()
+        categories.addWidget(self.category_status)
+        fetch.addWidget(category_card)
         counts = QHBoxLayout()
         for name in ("原始条目数", "去重后候选数"):
             tile = QWidget()
             tile.setObjectName("statTile")
-            tile.setMinimumHeight(78)
+            tile.setMinimumHeight(54)
             column = QVBoxLayout(tile)
+            column.setContentsMargins(0, 2, 0, 2)
+            column.setSpacing(2)
             caption = wrapping_label(name)
+            caption.setStyleSheet(f"color: {TEXT_SECONDARY};")
             caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
             column.addWidget(caption)
             value = wrapping_label("—")
@@ -112,8 +149,9 @@ class HomePage(QWidget):
         report_layout.addWidget(self.report_stack, 1)
         layout.addWidget(report_card, 1)
         self.setStyleSheet(PAGE_STYLE + (
-            f"QWidget#statTile {{background: {SUBTLE_BACKGROUND}; border: 1px solid {SUBTLE_BORDER};"
-            "border-radius: 7px;}"
+            "QWidget#categoryCard {background: transparent; border: none;}"
+            "QLabel#categorySelection {color: #1559a7; font-weight: 600;}"
+            "QWidget#statTile {background: transparent; border: none;}"
             f"QLabel#statValue {{font-size: 21px; font-weight: 600; color: {TEXT_PRIMARY};}}"
         ))
 

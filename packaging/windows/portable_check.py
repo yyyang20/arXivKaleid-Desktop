@@ -71,6 +71,11 @@ def run_recovery():
                     separators=(',', ':')).encode('utf-8')).hexdigest() == expected_metadata['sha256']
         result['version_metadata_restored_exactly'] = True
         if previous.get('visual_qa'):
+            from desktop.category_selection import CategorySelectionStore
+            expected_categories = tuple(previous['visual_qa']['categories']['saved_categories'])
+            assert window.selected_categories == expected_categories
+            assert CategorySelectionStore(pipeline.PROJECT_ROOT).load() == expected_categories
+            result['categories_restored_exactly'] = True
             from desktop.research_requirements import RequirementsStore
             for stage, digest in previous['visual_qa']['requirements']['saved_sha256'].items():
                 saved = RequirementsStore().load(stage)
@@ -363,11 +368,20 @@ def run(*, network=False, visual=False, target_date=None):
                 if window.snapshot:
                     report['candidate_date'] = window.snapshot.candidate_date.isoformat()
                     report['candidate_count'] = window.snapshot.unique_count
+                    report['candidate_categories'] = list(window.snapshot.categories)
                     report['discovery_pages'] = window.snapshot.page_count
                     report['network_count'] = window.snapshot.network_count
                     report['history_count'] = window.snapshot.reused_count
                     try:
                         assert elapsed <= 120, 'fetch_performance_limit_exceeded'
+                        # 冻结程序也按快照实际分类核验，避免设置与返回候选脱节。
+                        selected = set(window.snapshot.categories)
+                        assert window.snapshot.categories == window.selected_categories
+                        assert all(selected & set(p['categories'].split(', ')) for p in window.snapshot.papers)
+                        assert len({p['arxiv_id'] for p in window.snapshot.papers}) == window.snapshot.unique_count
+                        assert window.snapshot.raw_count == sum(len(selected & set(p['categories'].split(', ')))
+                                                               for p in window.snapshot.papers)
+                        report['classification_match'] = True
                         from desktop.arxiv_versions import timestamp
                         from pdf_processing import SelectedPaper, fetch_pdf_bytes, build_online_pdf_url
                         lower, upper = main.beijing_submission_bounds(window.snapshot.candidate_date)

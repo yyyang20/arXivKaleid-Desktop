@@ -30,19 +30,20 @@ import run_round2
 import round2_fulltext_state as fulltext
 
 
-def synthetic_snapshot(day):
+def synthetic_snapshot(day, *, categories=pipeline.CATEGORIES):
     """完整元数据只用于隔离诊断，不通过任何网络入口取得。"""
     papers = tuple(dict(
         arxiv_id=f"2610.{i:05d}", version=1, id=f"https://arxiv.org/abs/2610.{i:05d}v1",
         title=f"离线合成论文 {i}：Polarized images of compact objects",
         authors="Synthetic Author", summary="Offline synthetic abstract for GUI validation.",
-        categories="gr-qc", primary_category="gr-qc",
+        categories="gr-qc, astro-ph.HE" if i < 9 else "gr-qc", primary_category="gr-qc",
         published=f"{day}T00:00:00Z", updated=f"{day}T01:00:00Z",
         abs_url=f"https://arxiv.org/abs/2610.{i:05d}v1",
         pdf_url=f"https://arxiv.org/pdf/2610.{i:05d}v1",
     ) for i in range(117))
     # 隔离诊断故意拉开抓取与生成时刻，防止两者错误地复用同一字段。
-    return app.CandidateSnapshot(day, datetime.now(timezone.utc) - timedelta(hours=2), 126, 117, papers)
+    raw_count = sum(len(set(p['categories'].split(', ')) & set(categories)) for p in papers)
+    return app.CandidateSnapshot(day, datetime.now(timezone.utc) - timedelta(hours=2), raw_count, 117, papers, categories=categories)
 
 
 def synthetic_analysis_result(attempt, source_root=None, *, recommendation_count=8):
@@ -565,6 +566,93 @@ def exercise_requirements(application, window, capture, output):
             'entry_minimum_large_font': True, 'entry_wrapped_large_font': True}
 
 
+def exercise_categories(application, window, capture, output):
+    """源码与冻结程序共用真实分类控件验收，只写隔离运行根。"""
+    from desktop.category_dialog import CategoryDialog
+    from desktop.category_selection import CategorySelectionError, CategorySelectionStore
+    from desktop.categories import DEFAULT_CATEGORIES
+    snapshot = window.snapshot
+    report = window.report.toPlainText()
+    old = window.selected_categories
+    dialog = CategoryDialog(old, window)
+    try:
+        dialog.show()
+        application.processEvents()
+        assert len(dialog.checkboxes) == 51
+        assert dialog.font().family() == window.font().family()
+        assert dialog.screen().availableGeometry().contains(dialog.frameGeometry()), 'category_dialog_outside_screen'
+        assert dialog.grab().save(str(output / 'categories-dialog.png'))
+        for identity in tuple(dialog.categories):
+            dialog.checkboxes[identity].click()
+        assert not dialog.confirm_button.isEnabled()
+        first = dialog.checkboxes['gr-qc']
+        first.setFocus()
+        for kind in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
+            QCoreApplication.sendEvent(first, QKeyEvent(kind, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier))
+        assert first.isChecked(), 'category_keyboard_toggle_failed'
+        dialog.checkboxes['hep-th'].click()
+        dialog.checkboxes['physics.optics'].click()
+        assert not dialog.checkboxes['quant-ph'].isEnabled()
+        assert dialog.confirm_button.isEnabled()
+        dialog.reject()
+        assert window.selected_categories == old
+    finally:
+        dialog.deleteLater()
+    selected = ('gr-qc', 'physics.optics')
+    assert window.save_categories(selected)
+    assert CategorySelectionStore(window.category_store.source_root).load() == selected
+    assert window.snapshot is snapshot and window.report.toPlainText() == report
+    original = QMessageBox.question
+    confirmations = []
+    try:
+        def confirm(parent, title, text, buttons, default):
+            confirmations.append(default)
+            return QMessageBox.StandardButton.No
+        QMessageBox.question = confirm
+        window.restore_categories()
+        assert window.selected_categories == selected
+        QMessageBox.question = lambda *args: QMessageBox.StandardButton.Yes
+        window.restore_categories()
+        assert window.selected_categories == DEFAULT_CATEGORIES
+        assert confirmations == [QMessageBox.StandardButton.No]
+    finally:
+        QMessageBox.question = original
+    original_save = window.category_store.save
+    try:
+        def fail(_selection):
+            raise CategorySelectionError('合成分类保存失败')
+        window.category_store.save = fail
+        assert not window.save_categories(selected)
+        assert window.selected_categories == DEFAULT_CATEGORIES
+    finally:
+        window.category_store.save = original_save
+    # 保留坏文件直到显式保存，修复过程中不丢弃已有快照。
+    window.category_store.file.write_text('{synthetic-invalid', encoding='utf-8')
+    window.load_categories()
+    assert not window.fetch_button.isEnabled() and window.snapshot is snapshot
+    assert window.category_store.file.read_text(encoding='utf-8') == '{synthetic-invalid'
+    assert window.save_categories(selected)
+    assert window.snapshot is snapshot and window.report.toPlainText() == report
+    capture('categories-saved-snapshot-frozen')
+    # 大字体与小窗口下检查可滚动内容和底部按钮。
+    dialog = CategoryDialog(selected, window)
+    try:
+        dialog.setFont(QFont(window.font().family(), 12))
+        dialog.resize(600, 500)
+        dialog.show()
+        application.processEvents()
+        assert dialog.confirm_button.isVisible()
+        assert dialog.confirm_button.mapTo(dialog, QPoint(0, 0)).y() + dialog.confirm_button.height() <= dialog.height()
+        dialog.scroll.verticalScrollBar().setValue(dialog.scroll.verticalScrollBar().maximum())
+        application.processEvents()
+        assert dialog.grab().save(str(output / 'categories-large-font.png'))
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+    return dict(count=51, saved_categories=list(selected), snapshot_frozen=True, keyboard=True,
+                quantity_limits=True, restore_confirmation=True, save_failure=True, corrupt_repair=True)
+
+
 def exercise(application, window, root, synthetic_key):
     """通过真实窗口槽、真实 QThread 与合成计算驱动状态，业务算法不改变。"""
     output = root / 'runtime/work/visual-qa'
@@ -616,7 +704,7 @@ def exercise(application, window, root, synthetic_key):
                                message=f'正在查询北京时间 {day.isoformat()} · 分类 2 / 3：astro-ph.HE\n当前已获取 67 条有效记录',
                                current_date=day, category='astro-ph.HE', category_index=2, category_total=3, processed=67))
         assert gate.wait(15)
-        return synthetic_snapshot(day)
+        return synthetic_snapshot(day, categories=kwargs['categories'])
 
     def analyze(attempt, _key, progress):
         for stage, state, message in [('round1', 'completed', 'Round 1 完成 · 有效入围 10 篇'),
@@ -668,6 +756,7 @@ def exercise(application, window, root, synthetic_key):
         wait(lambda: window.worker is None)
         assert not window.task_panel.expanded and window.analyze_button.isEnabled()
         capture('03-fetched')
+        categories = exercise_categories(application, window, capture, output)
         window.task_panel.set_expanded(True)
         capture('04-fetch-details')
         gate.clear()
@@ -777,7 +866,7 @@ def exercise(application, window, root, synthetic_key):
         samples.append(memory_bytes())
     assert samples[-1] - samples[3] < 32 * 1024 * 1024, 'portable_window_memory_growth'
     assert not gc.garbage
-    return {'captures': captures, 'history': history, 'requirements': requirements, 'user_guide': user_guide, 'qt_platform': application.platformName(),
+    return {'captures': captures, 'history': history, 'requirements': requirements, 'user_guide': user_guide, 'categories': categories, 'qt_platform': application.platformName(),
             'screen': screen.name(),
             'style': application.style().objectName(), 'loaded_libraries': loaded_libraries(root),
             'autosave': True, 'save_failure': True, 'key_locked': True, 'safe_links': True, 'log_directory_action': True,
