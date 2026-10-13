@@ -303,7 +303,7 @@ class ArtifactTests(ArtifactFixture):
                     with artifacts.ArtifactRun('build', root=root) as run:
                         with patch.object(run, 'process', return_value=subprocess.CompletedProcess([], code)):
                             try:
-                                build.build_portable({}, run)
+                                build.build_portable({'commit': 'a' * 40}, run)
                             finally:
                                 run.finish_evidence(lambda: run.capture(run.work / 'pyinstaller.log', 'pyinstaller.log'))
             self.assertEqual(self.read(run)['evidence_class'], 'ordinary' if code == 1 else 'protected')
@@ -670,6 +670,7 @@ class ArtifactTests(ArtifactFixture):
                     self.write(run.work / 'dist/arXivKaleid/_internal' / name, b'synthetic-resource')
                 return subprocess.CompletedProcess(args, 0)
             with patch.object(build, 'ROOT', self.root), patch.object(build, 'prepare_resources'), \
+                    patch.object(build, 'reusable_output', return_value=None), \
                     patch.object(build, 'prepare_curl'), patch.object(build, 'inspect_python_archive', return_value={}), \
                     patch.object(build, 'copy_public_documents'), patch.object(licenses, 'collect_licenses'), \
                     patch.object(build, 'frozen_identity', return_value=frozen), \
@@ -699,7 +700,10 @@ class CandidateCopyTests(ArtifactFixture):
     def distribution(self, payload, commit, purpose=artifacts.TECHNICAL_PURPOSE, build_id=None):
         directory = self.root / 'dist' / build.NAME
         self.write(directory / 'arXivKaleid.exe', payload)
-        identity = dict(commit=commit, purpose=purpose, working_tree_clean=True)
+        identity = dict(commit=commit, purpose=purpose, working_tree_clean=True,
+                        branch='codex/release', version=build.__version__)
+        if purpose == 'public-release':
+            identity['release_workflow'] = build.RELEASE_WORKFLOW
         if build_id is not None:
             identity['build_run_id'] = build_id
         self.write(directory / 'BUILD_INFO.json', json.dumps(identity).encode())
@@ -720,7 +724,7 @@ class CandidateCopyTests(ArtifactFixture):
             run.preserve_move(old, 'previous-dist')
             run.preserve_move(old_zip, 'previous-release.zip')
             run.preserve_move(old_sha, 'previous-release.sha256')
-            current, archive, checksum = self.distribution(b'new', '2' * 40, build_id=run.record['id'])
+            current, archive, checksum = self.distribution(b'new', '2' * 40, purpose=purpose, build_id=run.record['id'])
             files = artifacts.candidate_files(self.root, current)
             run.record['outputs'] = dict(zip=archive.relative_to(self.root).as_posix(),
                 checksum=checksum.relative_to(self.root).as_posix(), dist=current.relative_to(self.root).as_posix(),
@@ -759,6 +763,159 @@ class CandidateCopyTests(ArtifactFixture):
         with artifacts.operation_lock(self.root):
             artifacts.accept_portable_validation(self.root, self.read(run))
         artifacts.close_review(self.root, run.record['id'])
+
+    def test_release_approval_binds_exact_checksum_and_never_borrows_another_commit(self):
+        build_run = self.pair('public-release')
+        review = self.validate(build_run, automatic=True)
+        output = self.read(build_run)['outputs']
+        archive, checksum = self.root / output['zip'], self.root / output['checksum']
+        with self.assertRaisesRegex(RuntimeError, 'not_approved'):
+            artifacts.approved_portable(self.root, review.record['id'], '2' * 40, archive, checksum)
+        artifacts.close_review(self.root, review.record['id'])
+        proof = artifacts.approved_portable(self.root, review.record['id'], '2' * 40, archive, checksum)
+        self.assertEqual(proof['checksum_sha256'], artifacts.file_hash(checksum))
+        with self.assertRaisesRegex(RuntimeError, 'artifact_mismatch'):
+            artifacts.approved_portable(self.root, review.record['id'], '3' * 40, archive, checksum)
+        original = checksum.read_bytes()
+        checksum.write_bytes(original + b'\n')  # 语义相同也不是人工验收过的同一份校验文件。
+        with self.assertRaisesRegex(RuntimeError, 'artifact_mismatch'):
+            artifacts.approved_portable(self.root, review.record['id'], '2' * 40, archive, checksum)
+        checksum.write_bytes(original)
+        archive.write_bytes(archive.read_bytes() + b'changed')
+        with self.assertRaisesRegex(RuntimeError, 'checksum_mismatch'):
+            artifacts.approved_portable(self.root, review.record['id'], '2' * 40, archive, checksum)
+
+    def test_repeated_build_reuses_original_and_content_change_allows_new_c(self):
+        build_run = self.pair('public-release')
+        review = self.validate(build_run, automatic=True)
+        artifacts.close_review(self.root, review.record['id'])
+        frozen = dict(commit='2' * 40)
+        with patch.object(build, 'ROOT', self.root), patch.object(build, 'verify_tree'), \
+                patch.object(build, 'verify_merge_identity', return_value=[]), \
+                patch.object(build, 'prepare_resources') as prepare:
+            with artifacts.operation_lock(self.root):
+                first = build.reusable_output(frozen)
+            for commit in ('2' * 40, '3' * 40):
+                with artifacts.ArtifactRun('build', root=self.root) as repeat:
+                    build.build_portable(dict(commit=commit), repeat)
+            self.assertEqual(first['build_id'], build_run.record['id'])
+            self.assertEqual(first['commit'], '2' * 40)
+            prepare.assert_not_called()
+            # 原构建记录仍存在，复用审计不会轮换掉发布资格来源。
+            self.assertEqual(self.read(build_run)['outputs']['sha256'], first['sha256'])
+        with patch.object(build, 'ROOT', self.root), \
+                patch.object(build, 'verify_merge_identity', side_effect=RuntimeError('release_content_changed')):
+            with artifacts.operation_lock(self.root):
+                self.assertIsNone(build.reusable_output(dict(commit='3' * 40)))
+        checksum = self.root / self.read(build_run)['outputs']['checksum']
+        checksum.unlink()
+        with patch.object(build, 'ROOT', self.root), artifacts.operation_lock(self.root):
+            with self.assertRaisesRegex(RuntimeError, 'incomplete'):
+                build.reusable_output(frozen)
+
+    def test_new_c_validation_can_follow_unapproved_complete_review(self):
+        first = self.pair('public-release')
+        old_review = self.validate(first, automatic=True)
+        self.assertNotIn('release_review_approved', self.read(old_review))
+        # 新构建只替换合成包；旧待审证据继续保护，不建立拒绝状态。
+        with artifacts.ArtifactRun('build', root=self.root) as new:
+            output = self.read(first)['outputs']
+            directory, archive, checksum = artifacts.output_paths(self.root, output)
+            for path, name in ((directory, 'previous-dist'), (archive, 'previous-release.zip'),
+                               (checksum, 'previous-release.sha256')):
+                new.preserve_move(path, name)
+            current, archive, checksum = self.distribution(b'new-C', '3' * 40,
+                purpose='public-release', build_id=new.record['id'])
+            new.record.update(commit='3' * 40, outputs=dict(dist=current.relative_to(self.root).as_posix(),
+                zip=archive.relative_to(self.root).as_posix(), checksum=checksum.relative_to(self.root).as_posix(),
+                inventory=artifacts.candidate_files(self.root, current), sha256=artifacts.file_hash(archive)))
+            new.save()
+        with artifacts.ArtifactRun('portable', root=self.root, review=True):
+            pass
+        with self.assertRaisesRegex(RuntimeError, 'not_approved'):
+            artifacts.approved_portable(self.root, old_review.record['id'], '3' * 40, archive, checksum)
+
+    def test_preflight_and_public_readback_use_same_approved_package(self):
+        build_run = self.pair('public-release')
+        review = self.validate(build_run, automatic=True)
+        artifacts.close_review(self.root, review.record['id'])
+        output = self.read(build_run)['outputs']
+        archive, checksum = self.root / output['zip'], self.root / output['checksum']
+        baseline = self.write(self.root / 'history.json', b'{"releases": [], "tags": {}}')
+        repo, tag, commit = 'owner/project', 'v' + build.__version__, '2' * 40
+        ref = dict(type='commit', sha='3' * 40)
+        calls = []
+        def get(url):
+            calls.append(url)
+            return json.dumps({'object': ref} if url.endswith('/git/ref/heads/main') else []).encode()
+        args = ['--repo', repo, '--tag', tag, '--commit', commit, '--zip', output['zip'],
+                '--checksum', output['checksum'], '--history-baseline', baseline.name,
+                '--preflight', '--review-run-id', review.record['id']]
+        with patch.object(release_check, 'ROOT', self.root), \
+                patch.object(release_check, 'verify_merge_identity', return_value=['README.md']) as merged:
+            release_check.main(args, get=get)
+        merged.assert_called_once_with(self.root, commit, ref['sha'])
+        self.assertFalse(any('/releases/tags/' in url for url in calls))
+        release = dict(assets=[])
+        downloads = {}
+        for path in (archive, checksum):
+            url = f'https://github.com/{repo}/releases/download/{tag}/{path.name}'
+            downloads[url] = path.read_bytes()
+            release['assets'].append(dict(name=path.name, size=path.stat().st_size,
+                digest='sha256:' + artifacts.file_hash(path), state='uploaded', browser_download_url=url))
+        with self.assertRaisesRegex(RuntimeError, 'review_required'):
+            release_check.verify_assets(release, repo, tag, commit, archive, checksum, get=downloads.__getitem__)
+        result = release_check.verify_assets(release, repo, tag, commit, archive, checksum,
+            get=downloads.__getitem__, review_run_id=review.record['id'], root=self.root)
+        self.assertTrue(result['assets_equal_local'])
+        with self.assertRaisesRegex(RuntimeError, 'not_approved'):
+            release_check.verify_assets(release, repo, tag, commit, archive, checksum,
+                get=downloads.__getitem__, review_run_id=build_run.record['id'], root=self.root)
+
+    def test_preflight_rejects_unapproved_or_changed_merge_and_remote_main(self):
+        parent = self.root
+        for scenario in ('unapproved', 'content', 'moving-main'):
+            root = parent / scenario
+            root.mkdir()
+            with self.subTest(scenario=scenario), patch.object(self, 'root', root):
+                build_run = self.pair('public-release')
+                review = self.validate(build_run, automatic=True)
+                if scenario != 'unapproved':
+                    artifacts.close_review(root, review.record['id'])
+                output = self.read(build_run)['outputs']
+                baseline = self.write(root / 'history.json', b'{"releases": [], "tags": {}}')
+                args = ['--repo', 'owner/project', '--tag', 'v' + build.__version__,
+                    '--commit', '2' * 40, '--zip', output['zip'], '--checksum', output['checksum'],
+                    '--history-baseline', baseline.name, '--preflight', '--review-run-id', review.record['id']]
+                main_calls = []
+                def get(url):
+                    if url.endswith('/git/ref/heads/main'):
+                        main_calls.append(url)
+                        return json.dumps({'object': dict(type='commit',
+                            sha=('4' if scenario == 'moving-main' and len(main_calls) > 1 else '3') * 40)}).encode()
+                    return b'[]'
+                failure = ('not_approved' if scenario == 'unapproved' else
+                           'content_changed' if scenario == 'content' else 'changed_during_check')
+                with patch.object(release_check, 'ROOT', root), \
+                        patch.object(release_check, 'verify_merge_identity',
+                            side_effect=RuntimeError('release_content_changed') if scenario == 'content' else None,
+                            return_value=[]):
+                    with self.assertRaisesRegex(RuntimeError, failure):
+                        release_check.main(args, get=get)
+                if scenario == 'unapproved':
+                    self.assertEqual(main_calls, [])
+
+    def test_legacy_approval_without_checksum_proof_is_not_new_release_qualification(self):
+        build_run = self.pair('public-release')
+        review = self.validate(build_run, automatic=True)
+        artifacts.close_review(self.root, review.record['id'])
+        record = self.read(review)
+        record.pop('review_checksum_sha256')
+        artifacts.save_record(self.root, record)
+        output = self.read(build_run)['outputs']
+        with self.assertRaisesRegex(RuntimeError, 'not_approved'):
+            artifacts.approved_portable(self.root, review.record['id'], '2' * 40,
+                self.root / output['zip'], self.root / output['checksum'])
 
     def test_automatic_cleanup_does_not_wait_for_human_release_review(self):
         build_run = self.pair()

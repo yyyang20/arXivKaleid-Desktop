@@ -72,7 +72,11 @@ git status --short
 
 ## Desktop 公开发布
 
-本地技术候选仅用于人工验收，验证要求见 [Desktop 运行手册](desktop/DESKTOP_OPERATIONS.md#portable-零模型验证)。技术候选交付即停止，不进行远程写入；正式发行须另获授权并从合并后的干净 main 重建，不得直接上传技术候选。当前 alpha 13 已按本节流程完成公开发行，身份与验证记录见 [CHANGELOG](CHANGELOG.md)。
+完成代码、测试、发行文档和源码 GUI 验证后，冻结干净最终提交 C；从 C 只构建一次最终待发布 ZIP 和 `.sha256`，完成 [portable 自动验证](desktop/DESKTOP_OPERATIONS.md#portable-零模型验证) 后交给用户人工验收。交付时停止远程写入；人工验收通过并取得当次发布授权后，使用一个普通 merge commit 的 PR 合并包含 C 的代码及相关发行文档，保留 C 身份，tag 指向 C，Release 原样上传已验收文件。不因合并 main 重新构建，不追加发布状态文档 PR。alpha 13 及更早发行保留当时流程事实，见 [CHANGELOG](CHANGELOG.md)。
+
+人工验收发现问题并需要修改时，不记录批准；修复后重新完成相关测试、文档和源码 GUI 验证，冻结新 C，构建唯一待发布包并重新执行自动验证及人工验收。不增加永久拒绝状态，不借用旧批准。只要 C 和已验收 ZIP、校验文件未变，就不得重建；产物相关代码、资源、打包文件或构建规则变化时重新执行本流程。
+
+合并提交 M 可以不同于 C，但 C 必须是实时远端 main 的祖先。仅允许非打包维护文档差异，唯一名单由 `scripts/build_windows_portable.py` 的 `NON_PACKAGED_DOCUMENTS`、`PACKAGED_DOCUMENTS` 和 `non_packaged_document()` 定义：根 README、根及 Desktop AGENTS，以及 docs 下的 Markdown/文本说明，排除内置用户指南和四份实际打包公开文档；拒绝链接和其他差异。源码、测试、资源、依赖、许可和构建文件不属于文档例外。相关治理检查仍须通过；不得 squash、rebase 或修改包内 BUILD_INFO 来替换 C。
 
 当前 Desktop 仓库保存应用源码、测试、构建配置和项目文档；Windows portable ZIP 与 `.sha256` 通过本仓库 GitHub Releases 发布，不进入 Git 历史。
 
@@ -82,7 +86,7 @@ portable 根目录的 README、EULA、隐私与安全说明由 `docs/public_rele
 
 根 README 提供项目概览、源码启动和下载入口；打包 README 面向 portable 用户，分别维护。根 EULA、隐私、安全说明和第三方声明是对应维护源的同步副本；源与副本更新遵循 [文档路由](README.md#文档更新规则)，治理测试核对字节一致性。
 
-本地构建只生成项目内被忽略的 `dist/`、`release/` 和 `.desktop-build/` 产物。`dist/` 保存未压缩发行目录，`release/` 保存当前构建或发行候选的 ZIP 和 `.sha256`。正式历史版本由 GitHub Releases 保存。构建器不自动创建仓库、标签或 Release，也不上传文件。每次公开发布必须基于与最新 `origin/main` 一致的干净提交重建 ZIP，按 [公开发布检查清单](public_release/RELEASE_CHECKLIST.md) 核对文件集、构建身份、用户数据排除、portable 验证和 SHA-256。
+本地构建只生成项目内被忽略的 `dist/`、`release/` 和 `.desktop-build/` 产物。`dist/` 保存未压缩发行目录，`release/` 保存唯一待发布 ZIP 和 `.sha256`；既有其他版本只在当次明确授权范围内原样归档，构建器不会自动归档全部历史版本。正式历史版本由 GitHub Releases 保存。构建器不自动创建仓库、标签或 Release，也不上传文件。在进程锁内完整核验已有输出和构建记录，相同 C 或只有允许文档差异时原样复用，不运行 PyInstaller；文件缺失、篡改或记录不符时停止，不能用重建掩盖异常。新 C 确有其他内容变更时才构建，并保留旧完整材料。按 [公开发布检查清单](public_release/RELEASE_CHECKLIST.md) 核对文件集、构建身份、用户数据排除、portable 验证和 SHA-256。
 
 ### 本地历史 portable 收口
 
@@ -100,15 +104,15 @@ portable 根目录的 README、EULA、隐私与安全说明由 `docs/public_rele
 
 构建和发行扫描拒绝 `runtime/`、`logs/`、JSONL、SQLite、PDF、Secret 与本机路径；运行日志不得写入 `_internal/` 或用户目录。
 
-本地 portable 技术验证可以基于 `codex/` 开发分支的干净冻结提交，其基线来自已核验的 `origin/main`，不要求两个提交相等。`BUILD_INFO.json` 记录分支、基线、冻结提交和技术验证用途；正式公开 Release 仍须在合并后的 main／对应 release tag 重新构建及最终核验。本地提交、构建与外部发布的授权分别处理。
+最终待发布包可以基于 `codex/` 开发分支的干净冻结提交 C，其基线来自已核验的 `origin/main`，要求基线是 C 的祖先，不要求两个提交相等。`BUILD_INFO.json` 如实记录分支、基线、C，统一使用 `purpose=public-release` 和 `release_workflow=single-build-v1`；用途表示最终包目标，不表示已经公开。人工验收、合并和发布不修改这些字段；本地提交、构建与外部发布的授权分别处理。旧用途与旧 BUILD_INFO 兼容读取，历史成品不重写。
 
 每个新的 Desktop Release 正文必须包含 `## 本次更新`，用面向用户的 1～5 条简短要点说明该版本更新了什么。首个公开版本概括首次提供的主要功能；后续版本只概括相对于上一公开版本的主要新增、修改或修复，依据冻结构建提交、版本间 Git 差异和 `docs/CHANGELOG.md`，不得凭印象编写。平台、下载、SmartScreen、DeepSeek 数据发送与费用、SHA-256 等通用说明必须保留，但不能代替版本更新说明。发布 Draft 前检查该章节存在且非空；发布后重新读取公开 Release，核对正文、Tag、assets、digest 及其他必要说明。
 
 Git commit/push、创建标签或 Release、上传成品都是受控操作，必须在当次获得授权。既有 immutable Release 的标签、ZIP 和校验文件不得修改，修正成品时发布新版本。Release 正文在发布前完成；只有用户明确授权的文案修正任务才可单独编辑已发布正文，并在操作前后对比 Tag 目标及全部 assets 的名称、字节数与 digest，确认发行身份未变。
 
-构建和成品发布基于干净冻结提交；公开 Release 及未登录核验成功后，仍在同一发布任务中按 [文档路由](README.md#文档更新规则) 更新 `docs/CHANGELOG.md`。发布后文档收口不改变冻结成品或公开 Release，不拆成新的独立任务。尚未取得 Git commit/push 授权时，先完成本地文档修改、必要测试和 `git diff --check`，报告待提交状态，不得省略文档或宣称整个发布任务已经完成。
+发行文档和 CHANGELOG 在冻结 C 前记录已完成变化及必要的下载说明，随同一个 PR 合并。尚未公开的版本不得描述为已经发布；最终 ZIP 哈希、C 自身 SHA、实际发布状态及匿名核验结果不写入待冻结 C，而保存在 Release 正文和项目内受管审计。发布成功后无需为记录发行状态修改仓库或创建文档 PR；真实独立文档修正仍按普通任务授权，不改变已公开资产。
 
-发布前后对比既有历史 tag、Release 正文和所有资产的 id、名称、字节数与 digest，任何变化停止。源码归档须从未登录视角验证文件集及字节与冻结提交对应；新增发行记录通过文档 PR 收口后，分别记录最终 main 与发行 tag SHA，仅允许文档收口及其必要治理测试导致两者不同。
+发布前后对比既有历史 tag、Release 正文和所有资产的 id、名称、字节数与 digest，任何变化停止。发布前使用 `verify_public_release.py --preflight --review-run-id <portable-ID>` 核验本包人工批准、两个文件的字节哈希、C 已进入实时远端 main 及合规文档差异。发布后使用同一验收 ID 匿名下载成品及源码，核对 tag、BUILD_INFO 和 Git blob 全部绑定 C；在审计中分别保存 C 和 M，不能以 M 替换发行身份。
 
 ## 功能开发与验证
 
@@ -139,7 +143,7 @@ Git commit/push、创建标签或 Release、上传成品都是受控操作，必
 
 每次运行登记独立 ID、提交、类别、状态、受保护输入和准确工作路径，记录位于 `.desktop-build/managed-artifacts/<运行ID>/run.json`。工作文件位于该运行的 `work/`，测试工作文件位于 `.codex-validation/managed-artifacts/<运行ID>/`。`evidence/` 保存摘要、文件清单、SHA-256、安全诊断和必要截图；`preserved/previous-*` 保存被替换旧成品及移动前哈希。旧成品即使移入本次目录也不取得删除资格；被忽略不等于可以删除。
 
-今后构建可为 `BUILD_INFO.json` 用途明确为 `local-portable-technical-validation`、有对应完整 ZIP 和校验文件的旧 `previous-dist` 登记 `verified_candidate_copy_v1`。仅移动目录不授予资格；新登记还保存旧身份、完整文件清单及归档 SHA-256。新包 ZIP 完整性、逐文件哈希校验和完整 portable 验证全部通过后，验证记录绑定构建运行 ID、冻结 commit、ZIP SHA-256 和文件清单摘要；同一 commit 的不同包不能互用验收。验证入口正常收尾时再次校验新包并自动清理符合全部条件的旧技术副本，保留验证证据。人工验收不作为副本清理条件，仅用于决定是否进入第二阶段发布流程；用户确认后使用 `close-review --run-id <portable-ID>` 记录发布人工验收结案。结案不是 Git 推送或公开发布，也不替代相应授权。
+今后构建可为 `BUILD_INFO.json` 用途明确为 `local-portable-technical-validation`、有对应完整 ZIP 和校验文件的旧 `previous-dist` 登记 `verified_candidate_copy_v1`。仅移动目录不授予资格；新登记还保存旧身份、完整文件清单及归档 SHA-256。新包 ZIP 完整性、逐文件哈希校验和完整 portable 验证全部通过后，验证记录绑定构建运行 ID、冻结 commit、ZIP SHA-256 和文件清单摘要；同一 commit 的不同包不能互用验收。验证入口正常收尾时再次校验新包并自动清理符合全部条件的旧技术副本，保留验证证据。人工验收不作为副本清理条件，仅用于取得原包发布资格；用户确认后使用 `close-review --run-id <portable-ID>` 记录发布人工验收结案，同时绑定校验文件字节哈希。未通过时不记录批准；新 C 使用新的验收记录，旧完整待审证据不阻止新包技术验证，不增加拒绝状态。结案不是 Git 推送或公开发布，也不替代相应授权。当前输出的构建记录作为复用及验收的必要身份来源保留。
 
 清理在同一进程文件锁内进行，后续受管入口在容量检查前复核自动验证已通过但尚未清理的副本。删除前再次核验准确目录、完整文件集、旧身份、ZIP 逐文件哈希与校验文件，无 runtime、数据库、PDF、凭据、额外文件、链接、有效使用引用和未退出程序；敏感文件仅核验存在性，不读取内容。有效引用或运行程序仍在使用时保留并记录原因。完整性异常、删除失败或中断留下 `cleanup_failed`／`rotating` 停止入口，不自动重试或扩大范围。删除前登记状态，删除后记录文件数、释放容量、归档哈希和自动验证来源；对应 ZIP、SHA-256、验证证据和处置记录继续保留。
 

@@ -450,7 +450,7 @@ def sweep_candidate_copies(root, *, finishing_id=None):
 
 
 def close_review(root, run_id):
-    """仅记录第二阶段发布的人工确认，保留证据，不作为副本清理门槛。"""
+    """仅记录原包发布的人工确认，保留证据，不作为副本清理门槛。"""
     with operation_lock(root):
         entries = records(root)
         if any(r['state'] in OPEN_STATES for _, r in entries):
@@ -464,13 +464,36 @@ def close_review(root, run_id):
         digest = verify_candidate_archive(root, directory, archive, checksum, output['inventory'])
         if digest != output['sha256']:
             raise RuntimeError('portable_review_current_zip_changed')
+        if output.get('checksum_sha256') and file_hash(checksum) != output['checksum_sha256']:
+            raise RuntimeError('portable_review_current_checksum_changed')
         if any(process_alive(pid) for pid in record['children']) or candidate_process_active(checked_path(root, output['dist'])):
             raise RuntimeError('artifact_resources_still_active')
         now = datetime.now(timezone.utc).isoformat()
         record.update(state='released', review_pending=False, review_closed_utc=now,
                       release_review_approved=True, evidence_class='protected',
-                      protection_reason='reviewed_portable_validation')
+                      protection_reason='reviewed_portable_validation',
+                      review_checksum_sha256=file_hash(checksum))
         save_record(root, record)
+
+
+def approved_portable(root, run_id, commit, archive, checksum):
+    """发布资格只来自本包完整验证及人工通过，不推定旧记录已获批准。"""
+    _, review = read_record(root, run_id)
+    if (review['state'] != 'released' or review.get('review_pending') is not False
+            or review.get('release_review_approved') is not True or not review.get('review_closed_utc')
+            or not review.get('review_checksum_sha256')):
+        raise RuntimeError('release_review_not_approved')
+    build = validated_review(root, review)
+    directory, expected_archive, expected_checksum = output_paths(root, build['outputs'])
+    if (build['commit'] != commit or archive != expected_archive or checksum != expected_checksum
+            or file_hash(checksum) != review['review_checksum_sha256']):
+        raise RuntimeError('release_review_artifact_mismatch')
+    digest = verify_candidate_archive(root, directory, archive, checksum, build['outputs']['inventory'])
+    if digest != review['portable_build']['zip_sha256']:
+        raise RuntimeError('release_review_artifact_mismatch')
+    if any(process_alive(pid) for pid in review['children']) or candidate_process_active(directory):
+        raise RuntimeError('artifact_resources_still_active')
+    return dict(review_run_id=run_id, **review['portable_build'], checksum_sha256=file_hash(checksum))
 
 
 def ordinary_completion(root, path, record):
@@ -482,6 +505,12 @@ def ordinary_completion(root, path, record):
         return None
     if not legacy and record['evidence_class'] != 'ordinary':
         return None
+    # 当前输出的构建记录是复用和人工验收的身份来源，不能被空复用审计轮换掉。
+    output = record.get('outputs', {})
+    if record['kind'] == 'build' and output.get('zip'):
+        _, archive, _ = output_paths(root, output)
+        if archive.exists() and file_hash(archive) == output.get('sha256'):
+            return None
     if (record.get('review_pending') is not False or record.get('cleanup_error') is not None
             or record.get('outcome') != record['state']
             or checked_path(root, record['work']).exists()):

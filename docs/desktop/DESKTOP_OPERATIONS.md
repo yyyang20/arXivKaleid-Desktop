@@ -58,7 +58,7 @@ alpha 7 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windo
 
 构建入口按现有 spec 生成 Windows GUI one-folder；资源 allowlist 包含 `config.json`、正式 ICO、使用说明 SVG 与 Markdown、两份现行技术协议和两份默认完整研究提示词，不包含用户覆盖记录、历史提示词、领域标签模块、独立自动化策略或 Profile 文件。`BUILD_INFO.json` 的 `resource_hashes` 绑定全部允许资源，发行树检查同时复核配置内部的提示词哈希。curl `8.22.0_2` 来自 curl 官方固定 x64 归档，并核验 manifest 中的 SHA-256 后才运行。时区数据来自专用环境，不依赖系统 IANA 数据。
 
-构建前必须在已授权范围内冻结干净提交；本地技术验证使用 `codex/` 开发分支，要求其是已核验 `origin/main` 基线的后代，不要求 HEAD 等于基线。产物为根 `dist/` 下带版本目录、`release/` 下同名 ZIP 和 `.zip.sha256`。`BUILD_INFO.json` 记录分支、基线、冻结提交、验证用途和环境版本。旧干净发行物移入本次 `.desktop-build/managed-artifacts/build-<ID>/preserved/previous-*` 留存并核对移动前后逐文件哈希；已有 `runtime/` 的发行目录拒绝覆盖。stage、缓存和重复构建副本在保存审计证据后收尾，最终输出和未取得技术副本清理资格的 previous-* 不自动清理。今后明确登记的旧技术副本仅在替代新包 ZIP 完整性、逐文件哈希校验和完整 portable 验证全部通过后按根运行手册自动清理，ZIP、SHA-256 和审计继续保留。构建目录、vendor 下载和输出均被 Git 忽略。所有下载都先校验固定哈希，缓存不符即停止。
+构建前必须在已授权范围内冻结干净最终提交 C；可使用 `codex/` 开发分支，要求 C 是已核验 `origin/main` 基线的后代，不要求 HEAD 等于基线。源码 GUI 验证在冻结前完成，最终 portable 验证在构建后完成。产物为根 `dist/` 下带版本目录、`release/` 下唯一同名 ZIP 和 `.zip.sha256`。`BUILD_INFO.json` 记录实际分支、基线、C、正式用途和环境版本。进程锁内检查已有输出：相同 C 或仅有允许的非打包文档差异时原样复用，不再次执行 PyInstaller；输出和记录异常即停止。确需新内容构建时，旧干净发行物移入本次 `.desktop-build/managed-artifacts/build-<ID>/preserved/previous-*` 留存并核对移动前后逐文件哈希；已有 `runtime/` 的发行目录拒绝覆盖。stage、缓存和重复构建副本在保存审计证据后收尾，最终输出和未取得技术副本清理资格的 previous-* 不自动清理。今后明确登记的旧技术副本仅在替代新包 ZIP 完整性、逐文件哈希校验和完整 portable 验证全部通过后按根运行手册自动清理，ZIP、SHA-256 和审计继续保留。构建目录、vendor 下载和输出均被 Git 忽略。所有下载都先校验固定哈希，缓存不符即停止。
 
 当前环境原包缓存位置可能已失效，构建入口支持显式许可输入 manifest，Python 入口对应 `--license-input-manifest`。准备输入只读 Conda 元数据并复制必要许可，不修改环境或原归档。首次在现有历史来源哈希已经核验且复制范围获准后执行以下命令；目标目录存在时拒绝覆盖：
 
@@ -68,13 +68,13 @@ alpha 7 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windo
 
 manifest 记录组件 name/version/build/包归档 SHA-256、来源发行归档 SHA-256 和逐文件 SHA-256；构建重新校验来源归档、安装身份和完整许可文件集，缺失或不符即停止，不使用全局 JSON 映射。`.desktop-build/vendor/`、`.desktop-build/inputs/` 和上述 alpha 9 来源 ZIP 持续受保护。构建直接使用受跟踪入口与稳定 manifest，退役的历史包装脚本和旧许可副本不再作为构建输入。来源 ZIP 所在历史目录必须按实际文件依赖划定保留范围；其他历史内容仍须依赖复核及当次明确授权，不按目录年龄或名称自动删除。
 
-正式构建要求分支为 `main` 且 HEAD 等于已核验的 `origin/main`，`BUILD_INFO.json` 的 `purpose` 为 `public-release`；开发分支为 `local-portable-technical-validation`。旧发行物、历史材料和受保护输入在构建、验证及失败阶段不清理。正式发布及新旧远端核验成功后，按当次分别列明的授权收口 `release/` 旧 ZIP 和与对应正式 ZIP 逐文件一致、已无构建、验证或待审用途的旧版本 `dist/`；只保留当前正式版本及仍有明确必要的成品。准确路径、完整文件集、哈希、进程退出与含 `runtime/` 目录保护见 [本地历史 portable 收口](../OPERATIONS.md#本地历史-portable-收口)，该节不清理 `.desktop-build/` 或其他材料；当前自产工作文件按 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期) 收尾，两者授权范围不同。
+最终包统一记录 `purpose=public-release`、`release_workflow=single-build-v1`，实际构建分支可以是开发分支；用途不表示已公开，不在验收或合并后修改 BUILD_INFO。旧用途兼容读取，仅用于保留历史事实及原清理策略，不批量迁移。旧发行物、历史材料和受保护输入在构建、验证及失败阶段不清理。正式发布及新旧远端核验成功后，按当次分别列明的授权收口 `release/` 旧 ZIP 和与对应正式 ZIP 逐文件一致、已无构建、验证或待审用途的旧版本 `dist/`；只保留当前正式版本及仍有明确必要的成品。准确路径、完整文件集、哈希、进程退出与含 `runtime/` 目录保护见 [本地历史 portable 收口](../OPERATIONS.md#本地历史-portable-收口)，该节不清理 `.desktop-build/` 或其他材料；当前自产工作文件按 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期) 收尾，两者授权范围不同。
 
 发行物包含 GPL-3.0-only 应用 LICENSE、第三方声明、实际依赖许可证及上述八项上游源码归档，允许按 LGPL 替换动态库；这些归档用于分发材料，用户无需解包。源码 manifest 显式记录各组件许可，版本与固定运行依赖一致；gzip/xz 归档原样保留并核验 SHA-256。许可证缺失、源码入口/归档哈希不符、用户运行文件或本机个人路径进入发行树时，构建失败。ZIP 生成后逐文件重新比对哈希；构建审计目录记录模块/运行时 hook 清单及各主要组成的未压缩字节数。
 
 发行根目录另外从 `docs/public_release/` 的固定 allowlist 复制 `README.md`、`EULA.txt`、`PRIVACY.md` 和 `SECURITY.md`；根仓库 README 不作为打包 README。`RELEASE_CHECKLIST.md` 只供开发与发布核对，不进入 ZIP。第三方声明继续从 `packaging/windows/THIRD_PARTY_NOTICES.txt` 收集，不维护第二份源文本。
 
-根目录 LICENSE 是应用许可唯一源，单独复制到 portable 根目录。打包 README 的源码说明由构建器按用途填入：本地技术候选绑定本地冻结 commit，标明未公开发布；正式发行才生成同版本 tag 的免费源码链接，tag 提交必须等于 BUILD_INFO.json。第三方源码覆盖、独立执行平台/工具与系统库的排除理由见 THIRD_PARTY_NOTICES.txt。
+根目录 LICENSE 是应用许可唯一源，单独复制到 portable 根目录。最终待发布包首次构建即生成同版本 tag 的免费源码链接，并明确发布前入口尚未开放；人工验收通过后原样发布，tag 提交必须等于 BUILD_INFO.json 的 C。旧技术包的本地源码说明继续兼容核验，不重写历史包。第三方源码覆盖、独立执行平台/工具与系统库的排除理由见 THIRD_PARTY_NOTICES.txt。
 
 ## Portable 零模型验证
 
@@ -82,7 +82,7 @@ alpha 13 源码冻结前，还须运行 `scripts/validate_physics_categories.py`
 
 若前述验证在 51 类探针及 17 组完整抓取均已通过后中断，先按受管清单保留证据、获得当次授权并结案中断。可用 `--continue-evidence '<已结案运行>/evidence/physics-validation.json'` 仅补做尚未执行的真实历史关联刷新；入口核验原目录及全部前置结果，输出绑定原证据 SHA-256 的合并报告，不重跑已通过网络用例，也不将原中断记录改称成功。
 
-冻结 portable 的五组 DPI 验证包含分类窗口、选择边界、恢复确认、保存失败、坏配置修复和跨进程分类恢复；真实网络验证继续使用全新副本和现行请求／性能门槛。第一阶段全部通过后，仅将当次明确列明的旧 `release/` ZIP 与校验文件原样归档保留，交付一份 alpha 13 技术候选及校验文件；不执行 GitHub 写操作或将候选冒充正式包。
+冻结 portable 的五组 DPI 验证包含分类窗口、选择边界、恢复确认、保存失败、坏配置修复和跨进程分类恢复；真实网络验证继续使用全新副本和现行请求／性能门槛。全部自动验证通过后，仅将当次明确列明的其他旧 `release/` ZIP 与校验文件原样归档保留，交付唯一最终待发布包及校验文件供人工验收；此时不执行 GitHub 写操作，也不宣称已公开。
 
 ```powershell
 & $desktopPython -X utf8 -B scripts/validate_windows_portable.py
@@ -100,7 +100,7 @@ alpha 13 源码冻结前，还须运行 `scripts/validate_physics_categories.py`
 
 五组 DPI、恢复、普通重启和反例全部完成，所属进程退出且合成数据隐私检查通过后，将报告、必要截图及脱敏会话 JSONL 复制到本次 `evidence/` 并核对哈希，再释放九份程序副本和合成运行数据。失败保存已有安全证据；证据收集失败则保留 work 并停止后续运行。原始干净发行目录始终受保护，人工验收截图保留到明确结案，规则见根运行手册的 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期)。
 
-今后 `BUILD_INFO.json` 增加 `build_run_id`，portable 验证绑定具体构建运行 ID、冻结 commit、ZIP SHA-256 和完整文件清单摘要。新包全部自动校验通过且验证正常收尾后，自动清理符合条件的旧技术候选解压副本，无需人工确认，验证仍保留待人工验收状态及截图。人工验收仅决定是否进入第二阶段发布流程；用户检查界面与操作、确认合格并关闭程序后，执行以下仅记录发布人工验收结案的命令，它不推送 Git、不发布、不删除截图，也不解锁副本清理：
+`BUILD_INFO.json` 的 `build_run_id` 将 portable 验证绑定到具体构建运行 ID、冻结 commit、ZIP SHA-256 和完整文件清单摘要。新包全部自动校验通过且验证正常收尾后，自动清理符合条件的旧技术候选解压副本，无需人工确认，验证仍保留待人工验收状态及截图。人工验收仅用于取得原包发布资格；用户检查界面与操作、确认合格并关闭程序后，执行以下仅记录发布人工验收结案的命令，同时绑定 `.sha256` 文件的字节哈希。它不推送 Git、不发布、不删除截图，也不解锁副本清理：
 
 ```powershell
 & $desktopPython -X utf8 -B scripts/local_artifacts.py close-review --run-id '<portable-ID>'
@@ -116,7 +116,7 @@ alpha 13 源码冻结前，还须运行 `scripts/validate_physics_categories.py`
 
 Qt `QDomDocument.setContent` 弃用提示暂为非阻塞已知问题，以冻结 SVG 显示为验收依据。测试退出 GC 告警通过冻结程序重复窗口释放、私有内存采样、进程退出与锁释放验证；不为消除 warning 大范围重构，实际泄漏/崩溃/挂起时停止验收。窗口模式可能不输出 stderr，不能据日志为空宣称告警已消失。
 
-发布前在已冻结 PR 提交上完成构建和本地离线验证；合并后同步干净 main，再用相同入口重建最终本地 ZIP。当前仓库没有 GitHub workflow。构建入口只写入项目内被忽略的 `dist/`、`release/` 和 `.desktop-build/`，不自动创建仓库、Release 或上传文件。任何公开 GitHub 写操作必须另行获得授权并按 [公开发布检查清单](../public_release/RELEASE_CHECKLIST.md) 执行。
+人工验收通过后，不再构建 portable；通过一个普通 merge commit 的 PR 合并包含 C 的代码和发行文档，保留 C 的 SHA。合并提交 M 只允许根手册规定、由脚本共享名单核验的非打包维护文档差异。同步合并结果并执行 `verify_public_release.py --preflight --review-run-id <portable-ID>`，tag 指向 C，上传已验收的同一份 ZIP 和 `.sha256`。当前仓库没有 GitHub workflow。构建入口只写入项目内被忽略的 `dist/`、`release/` 和 `.desktop-build/`，不自动创建仓库、Release 或上传文件。任何公开 GitHub 写操作必须另行获得授权并按 [公开发布检查清单](../public_release/RELEASE_CHECKLIST.md) 执行。
 
 ## 运行目录与凭据
 
@@ -124,9 +124,9 @@ Qt `QDomDocument.setContent` 弃用提示暂为非阻塞已知问题，以冻结
 
 完整研究提示词变更须先通过源码离线测试、实际 GUI、请求哈希/缓存/预算与隐私边界验证，再冻结本地中文 commit。还须验证跨领域结果、可选自由评价、无固定阅读级别，以及改变第一轮研究顺序和评价不影响第二轮请求、缓存身份或 Token 并列裁决；两轮超过默认篇数仍接受全部合法结果，第二轮在冻结校验器、真实日报和历史中保持模型顺序。构建前核验已有 vendor 固定哈希，缺失或异常时停止，不安装依赖或下载替代材料。自动合成数据只写验证副本；分别验收五页、两轮查看/编辑、保存失败、恢复确认、离开保护、分析禁改、原生 DPI 与模拟 100/125/150/200%，并检查输入法提交中文、滚动及较大字体。提示词入口还须核对实际历史卡片外框、间隔与图标，执行整卡各区域点击及回车/空格进入，检查悬停/聚焦、最小窗口下实际放大文字的换行和裁切及中文“提示词”文案。此处输入法事件检查不等于所有第三方 IME 的实机兼容覆盖。
 
-干净构建目录与 ZIP 必须无 runtime、测试/个人数据和用户覆盖配置，逐文件核对资源、许可、身份和哈希。技术候选的 `BUILD_INFO.json` 使用 `local-portable-technical-validation`，README 绑定冻结 commit；正式包使用 `public-release` 并绑定正式 main 与同版 tag。构建器按准确文件名把同名旧 ZIP/校验和被替换候选原样移入被忽略的构建审计目录，核对留存哈希，不删除历史材料。第一阶段交付时 `release/` 只保留当次技术候选 ZIP 与 `.sha256`；其他既有 ZIP 必须依当次明确范围原样归档保留，不能当作正式发布后的删除收口，也不能仅凭版本号认定本地包等于远端正式包。
+干净构建目录与 ZIP 必须无 runtime、测试/个人数据和用户覆盖配置，逐文件核对资源、许可、身份和哈希。最终待发布包和正式上传包是同一份 `public-release` 成品，BUILD_INFO 及同版 tag 均绑定 C，branch 保留实际构建分支。确有新内容构建时，构建器按准确文件名把同名旧 ZIP/校验和被替换候选原样移入被忽略的构建审计目录，核对留存哈希，不删除历史材料。交付时 `release/` 只保留当次待发布 ZIP 与 `.sha256`；其他既有 ZIP 必须依当次明确范围原样归档保留，不能当作正式发布后的删除收口，也不能仅凭版本号认定本地包等于远端正式包。
 
-本地技术候选交付即停止，不 push、PR、merge、tag、GitHub Release 或上传资产。正式发布需另行授权，从合并后的干净 main 重建，技术候选不可直接发布。发布及匿名核验通过后，仅以文档 PR 收口，不重建或替换已公开资产。
+待发布包交付即停止，不 push、PR、merge、tag、GitHub Release 或上传资产。正式发布需另行授权，人工通过后按上述原包流程执行。若人工验收发现问题并需要修改，不记录批准；修复后完成相关验证和文档，冻结新 C，重新构建、自动验证并人工验收，不增加拒绝命令或永久拒绝状态。C 和验收文件未变时不得重建；发布后事实与最终哈希保存于 Release 正文及受管审计，不追加发布状态文档 PR，不重建或替换已公开资产。
 
 `.desktop-runtime/` 位于项目根目录并被 Git 忽略。源码诊断日志位于 `.desktop-runtime/logs/`；`config/secret.dat` 为当前 Windows 用户的 DPAPI 密文；`cache/arxiv/last_request_time.txt` 为请求间隔记录。成功候选先事务保存到 `metadata/arxiv_versions.sqlite`（schema v1），再在当前进程冻结；分析将快照复制到本次工作库。重复抓取仍联网刷新；未知 schema、损坏、哈希冲突及保存失败保留原库并阻止本批分析，不从旧工作库或日报导入候选。
 

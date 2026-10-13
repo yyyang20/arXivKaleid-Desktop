@@ -34,11 +34,11 @@
 | `packaging/windows/` | 正式 one-folder spec、冻结入口、零模型诊断、curl/source manifest、第三方声明源文件 |
 | `scripts/build_windows_portable.ps1` | 显式 Python 解释器的 Windows 构建入口 |
 | `docs/public_release/` | portable 打包 README、应用 EULA、隐私与安全说明的维护源及发布检查清单；不保存 ZIP |
-| `scripts/build_windows_portable.py` | 资源与公开文档 allowlist、vendor 校验、构建、发行扫描、ZIP 和 SHA-256 |
+| `scripts/build_windows_portable.py` | 最终 C 单次构建、有效原包复用、共享文档差异名单、资源与公开文档 allowlist、vendor 校验、发行扫描、ZIP 和 SHA-256 |
 | `scripts/portable_licenses.py` | 从实际分发组件及固定 gzip/xz 源码收集原许可，保留八项源码归档与哈希 |
 | `scripts/local_artifacts.py` | 构建/验证工作区、证据、受保护输入与 previous-* 的生命周期、精确计划，以及新登记技术副本的自动安全清理和独立的发布人工验收结案 |
 | `scripts/run_local_checks.py` | 受管离线测试入口，子进程使用独立项目内临时根 |
-| `scripts/verify_public_release.py` | 匿名只读发行核验及本次下载副本收尾 |
+| `scripts/verify_public_release.py` | 原包批准及合并身份的发布前核验、匿名发行核验及本次下载副本收尾 |
 | `scripts/validate_windows_portable.py` | 全新副本的脱离开发环境验证和重启，绑定构建运行、ZIP 和完整文件清单的成功证据 |
 | `scripts/visual_qa_desktop.py` | 禁止网络/模型、内存假 Key、合成业务事件驱动的真实 Qt 截图；产物仅在项目忽略目录 |
 | `scripts/generate_app_icon.py` | 使用现有 PySide6 从 A0 SVG 母版确定性生成 16～256 px Windows ICO 与可选验收预览 |
@@ -61,7 +61,7 @@
 | `tests/test_desktop_decoupling.py` | 技术门禁基线、schema v1、缓存、预算和独立源码运行 |
 | `tests/test_desktop_governance.py` | 根与局部治理、文档路由、当前身份、链接、发行资料副本与发布清单的只读检查 |
 
-portable 根目录包含直接来自仓库根的 GPLv3 `LICENSE`。应用源码说明按用途绑定 `BUILD_INFO.json`：技术候选引用本地冻结 commit，正式发行引用同提交的版本 tag；第三方源码归档位于 `licenses/sources/`，身份和 SHA-256 由 `packaging/windows/source-manifest.json` 固定，原许可不改写。
+portable 根目录包含直接来自仓库根的 GPLv3 `LICENSE`。最终待发布包首次构建即绑定 `BUILD_INFO.json` 的 C 和同提交版本 tag，原包人工通过后正式上传；实际构建分支保持原样。旧技术包的本地冻结 commit 说明兼容读取，不修改历史包。第三方源码归档位于 `licenses/sources/`，身份和 SHA-256 由 `packaging/windows/source-manifest.json` 固定，原许可不改写。
 
 ## 当前运行数据
 

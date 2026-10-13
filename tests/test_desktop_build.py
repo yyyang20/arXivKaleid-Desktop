@@ -9,6 +9,7 @@ import io
 import json
 from pathlib import Path
 import struct
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -166,7 +167,7 @@ class DesktopBuildTests(unittest.TestCase):
                 (ROOT / 'docs/public_release' / name).read_bytes() if name != 'README.md' else
                 (ROOT / 'docs/public_release' / name).read_text(encoding='utf-8').replace(
                     '{{APPLICATION_SOURCE_NOTICE}}',
-                    f"本版[对应源码下载]({builder.SOURCE_URL})固定到 `v{builder.__version__}`，包含应用源码、配置、提示词、测试、构建脚本及说明，对应 `BUILD_INFO.json` 中的提交。"
+                    f"本版[对应源码下载]({builder.SOURCE_URL})固定到 `v{builder.__version__}`，包含应用源码、配置、提示词、测试、构建脚本及说明，对应 `BUILD_INFO.json` 中的提交。发布前该 tag 下载入口尚未开放；人工验收通过后原包用于正式发布，以 GitHub Releases 的公开状态为准。"
                 ).encode('utf-8'),
             )
         self.assertFalse((self.root / 'RELEASE_CHECKLIST.md').exists())
@@ -300,25 +301,89 @@ class DesktopBuildTests(unittest.TestCase):
             identity = builder.frozen_identity()
             self.assertEqual(identity['commit'], 'feature')
             self.assertEqual(identity['baseline_commit'], 'baseline')
-            self.assertEqual(identity['purpose'], 'local-portable-technical-validation')
+            self.assertEqual(identity['purpose'], 'public-release')
+            self.assertEqual(identity['branch'], 'codex/test')
+            self.assertEqual(identity['release_workflow'], builder.RELEASE_WORKFLOW)
         with patch.object(builder.subprocess, 'check_output', return_value=' M tracked.py'):
             with self.assertRaisesRegex(RuntimeError, 'clean_frozen'):
                 builder.frozen_identity()
 
-    def test_public_release_identity_requires_main_equal_verified_origin(self):
-        for commit, expected in (('baseline', 'public-release'), ('ahead', None)):
+    def test_public_release_identity_is_independent_of_branch_and_equal_baseline(self):
+        for commit in ('baseline', 'ahead'):
             with self.subTest(commit=commit), \
                     patch.object(builder.subprocess, 'check_output',
                                  side_effect=['', 'baseline', commit, 'main']), \
                     patch.object(builder.subprocess, 'run') as run:
                 run.return_value.returncode = 0
-                if expected:
-                    identity = builder.frozen_identity()
-                    self.assertEqual(identity['purpose'], expected)
-                    self.assertEqual(identity['commit'], identity['baseline_commit'])
-                else:
-                    with self.assertRaisesRegex(RuntimeError, 'release_main_not_equal_origin'):
-                        builder.frozen_identity()
+                identity = builder.frozen_identity()
+                self.assertEqual(identity['purpose'], 'public-release')
+                self.assertEqual(identity['commit'], commit)
+
+    def test_frozen_identity_rejects_wrong_baseline_and_detached_head(self):
+        with patch.object(builder.subprocess, 'check_output', side_effect=['', 'base']), \
+                patch.object(builder.subprocess, 'run') as run:
+            run.return_value.returncode = 1
+            with self.assertRaisesRegex(RuntimeError, 'baseline_not_ancestor'):
+                builder.frozen_identity()
+        with patch.object(builder.subprocess, 'check_output', side_effect=['', 'base', 'head', '']), \
+                patch.object(builder.subprocess, 'run') as run:
+            run.return_value.returncode = 0
+            with self.assertRaisesRegex(RuntimeError, 'named_build_branch'):
+                builder.frozen_identity()
+
+    def test_document_exception_excludes_every_packaged_input_and_code(self):
+        for name in ('README.md', 'AGENTS.md', 'desktop/AGENTS.md', 'docs/CHANGELOG.md',
+                     'docs/public_release/RELEASE_CHECKLIST.md', 'docs/说明.txt'):
+            self.assertTrue(builder.non_packaged_document(name), name)
+        for name in (*builder.PACKAGED_DOCUMENTS, 'LICENSE', 'assets/icon.svg',
+                     'scripts/build_windows_portable.py', 'tests/test_desktop_governance.py',
+                     'docs/manifest.json', 'packaging/windows/THIRD_PARTY_NOTICES.txt'):
+            self.assertFalse(builder.non_packaged_document(name), name)
+
+    def test_real_git_merge_preserves_c_and_checks_document_differences(self):
+        # Git 只写本测试的项目内隔离仓库；禁用 hooks 和签名，不修改真实仓库。
+        hooks = self.root / 'empty-hooks'
+        hooks.mkdir()
+        def git(*args):
+            return subprocess.check_output(['git', '-c', 'user.name=Offline Test',
+                '-c', 'user.email=offline@example.invalid', '-c', 'commit.gpgsign=false',
+                '-c', 'core.hooksPath=' + str(hooks), *args], cwd=self.root,
+                stderr=subprocess.DEVNULL).decode('utf-8').strip()
+        git('init', '--initial-branch=main')
+        (self.root / 'README.md').write_text('base', encoding='utf-8')
+        git('add', 'README.md')
+        git('commit', '-m', 'base')
+        base = git('rev-parse', 'HEAD')
+        git('checkout', '-b', 'codex/release')
+        (self.root / 'app.py').write_text('value = 1', encoding='utf-8')
+        git('add', 'app.py')
+        git('commit', '-m', 'frozen')
+        commit = git('rev-parse', 'HEAD')
+        git('checkout', 'main')
+        git('merge', '--no-ff', 'codex/release', '-m', 'merge')
+        merged = git('rev-parse', 'HEAD')
+        self.assertNotEqual(commit, merged)
+        self.assertEqual(builder.verify_merge_identity(self.root, commit, merged), [])
+        (self.root / 'README.md').write_text('maintenance', encoding='utf-8')
+        git('add', 'README.md')
+        git('commit', '-m', 'docs')
+        self.assertEqual(builder.verify_merge_identity(self.root, commit, git('rev-parse', 'HEAD')), ['README.md'])
+        with self.assertRaisesRegex(RuntimeError, 'not_in_main'):
+            builder.verify_merge_identity(self.root, commit, base)
+        (self.root / 'app.py').write_text('value = 2', encoding='utf-8')
+        git('add', 'app.py')
+        git('commit', '-m', 'content')
+        with self.assertRaisesRegex(RuntimeError, 'content_changed'):
+            builder.verify_merge_identity(self.root, commit, git('rev-parse', 'HEAD'))
+        # 仅在 Git 对象中构造链接，不创建 Windows 文件系统链接。
+        (self.root / 'app.py').write_text('value = 1', encoding='utf-8')
+        git('add', 'app.py')
+        blob = subprocess.check_output(['git', 'hash-object', '-w', '--stdin'], cwd=self.root,
+                                        input=b'../outside-not-existing').decode().strip()
+        git('update-index', '--cacheinfo', '120000,' + blob + ',README.md')
+        git('commit', '-m', 'linked-doc')
+        with self.assertRaisesRegex(RuntimeError, 'document_link'):
+            builder.verify_merge_identity(self.root, commit, git('rev-parse', 'HEAD'))
 
     def test_dpi_audit_rejects_cross_monitor_and_wrong_scale_captures(self):
         def report(dpr, screen='primary'):
