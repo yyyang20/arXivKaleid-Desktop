@@ -458,7 +458,8 @@ class ArtifactTests(ArtifactFixture):
                     self.write(copy_root / 'runtime/work/recovery-check.json', json.dumps({
                         'synthetic_dpapi_recovered': True, 'version_metadata_restored_exactly': True,
                         'user_guide_restored': True, 'history_restored_exactly': True,
-                        'deleted_history_stays_deleted': True, 'research_requirements_restored_exactly': True}).encode())
+                        'deleted_history_stays_deleted': True, 'research_requirements_restored_exactly': True,
+                        'categories_restored_exactly': True}).encode())
                     code = 0
                 elif '--visual-qa' in command:
                     mode = copy_root.name.split(' ')[-1]
@@ -468,6 +469,7 @@ class ArtifactTests(ArtifactFixture):
                         'round2_user_count_and_model_ranking': True,
                         'user_guide_loaded': True,
                         'visual_qa': {'user_guide': {'keyboard_link': True},
+                                      'categories': {'count': 51, 'snapshot_frozen': True},
                                       'screen': 'primary', 'captures': [{'screen': 'primary', 'dpr': dpr}]}}).encode())
                     code = 0
                 else:

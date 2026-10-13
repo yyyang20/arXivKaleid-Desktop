@@ -1,6 +1,6 @@
 # 隐私说明
 
-更新日期：2026-10-11
+更新日期：2026-10-13
 
 arXivKaleid Desktop 是在用户 Windows 电脑上运行的 portable 工具。应用没有维护者服务器中转、用户账户系统、广告或遥测。
 
@@ -21,6 +21,7 @@ arXivKaleid Desktop 是在用户 Windows 电脑上运行的 portable 工具。�
 portable 模式的数据位于 `arXivKaleid.exe` 同级 `runtime/` 目录，包括：
 
 - 经 Windows DPAPI 绑定当前 Windows 用户和电脑加密的 `runtime/config/secret.dat`；
+- UTF-8 明文分类选择 `runtime/config/category_selection.json`，仅保存 1–3 个合法 Physics 分类 ID；保存后下次启动继续使用，确认恢复默认替换该选择；
 - 两轮独立 UTF-8 明文完整研究 Prompt 记录 `runtime/config/round1_research_prompt.json` 和 `round2_research_prompt.json`；不加密、不跨目录迁移，确认恢复默认替换对应覆盖记录；
 - 候选请求间隔缓存；独立 `runtime/metadata/arxiv_versions.sqlite` 以明文保存成功候选的完整版本元数据、内容 SHA-256、查询日期/分类/策略/时间/状态/计数及关联，不保存模型凭据、Prompt 或其他日期辅助版本；不建立全站索引、不后台同步；
 - 当前分析使用的 SQLite 工作库；

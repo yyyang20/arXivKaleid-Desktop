@@ -7,6 +7,7 @@
 | `desktop/AGENTS.md` | Desktop 局部协作规则 |
 | `desktop/__init__.py` | 包入口和 Desktop 版本 |
 | `desktop/config.py` | Desktop 只读配置契约、预算和 Prompt 资源哈希校验 |
+| `desktop/categories.py`、`desktop/category_selection.py`、`desktop/category_dialog.py` | Physics canonical 目录、运行根选择保存与分组选择窗口；不改变 bundled 配置 |
 | `desktop/research_requirements.py` | 无 Qt 的两轮保存记录、文本校验、原子替换、默认资源及不可变分析快照 |
 | `desktop/prompt_page.py` | 两轮统一详情、只读 Markdown 渲染与源文本编辑切换、保存/取消/恢复默认和未保存保护 |
 | `desktop/user_guide.py` | 用户指南安全读取、冻结哈希校验、只读 Markdown；内部跳转复用主窗口切页保护 |
@@ -71,7 +72,8 @@ portable 根目录包含直接来自仓库根的 GPLv3 `LICENSE`。应用源码�
 ├─ config/
 │  ├─ secret.dat
 │  ├─ round1_research_prompt.json
-│  └─ round2_research_prompt.json
+│  ├─ round2_research_prompt.json
+│  └─ category_selection.json
 ├─ cache/
 │  └─ arxiv/
 │     └─ last_request_time.txt

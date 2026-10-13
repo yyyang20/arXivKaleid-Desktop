@@ -155,6 +155,10 @@ _ISSUE_TEXT: dict[str, tuple[str, str, str, str]] = {
         "fetch", "arXiv Atom XML 无法安全解析。", "本次没有生成候选快照。",
         "请稍后重新获取；若持续出现，请提供诊断日志。",
     ),
+    "AKD-FETCH-CATEGORIES_INVALID": (
+        "fetch", "抓取分类无效。", "本次未访问 arXiv，也没有生成候选快照。",
+        "请选择 1–3 个不重复的 Physics 具体分类。",
+    ),
     "AKD-FETCH-UNEXPECTED": (
         "fetch", "候选抓取出现未预见错误。", "本次没有生成候选快照。",
         "请保留诊断日志并重新启动应用。",

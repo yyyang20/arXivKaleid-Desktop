@@ -142,6 +142,7 @@ def validate_portable(run, source, identity, args):
             raise RuntimeError('portable_validation_failed:' + mode + ':' + str(report.get('failure_type')))
         assert report.get('round2_user_count_and_model_ranking') is True
         assert report.get('user_guide_loaded') is True and report['visual_qa']['user_guide']['keyboard_link']
+        assert report['visual_qa']['categories']['count'] == 51 and report['visual_qa']['categories']['snapshot_frozen']
         # 各模式及全部截图必须来自同一主屏，不能将跨屏变化误当作模拟倍率。
         actual_screen, actual_dpr = verify_capture_display(
             report['visual_qa'], native_screen=None if native_dpr is None else native_screen,
@@ -159,6 +160,7 @@ def validate_portable(run, source, identity, args):
         assert restored['user_guide_restored']
         assert restored['history_restored_exactly'] and restored['deleted_history_stays_deleted']
         assert restored['research_requirements_restored_exactly']
+        assert restored['categories_restored_exactly']
         for _ in range(3):
             process = subprocess.Popen([str(copy / 'arXivKaleid.exe')], cwd=work, env=env, creationflags=0x08000000)
             run.children.append(process)

@@ -4,7 +4,7 @@ arXivKaleid Desktop 是按用户两轮完整研究 Prompt 筛选 arXiv 论文的
 
 本仓库包含 Desktop 应用源码、测试、构建配置和项目文档；Windows portable 成品通过 GitHub Releases 提供。
 
-当前公开版本为 `0.1.0-alpha.12`：按首次／当前最新版的北京时间提交日发现论文，利用已存日期关联补查，统一读取当前最新版，只持久保存成功候选。两轮研究提示词、筛选与预算保持 alpha 11 规则。最新下载为 [alpha 12 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.12)，是预发布测试版。
+当前开发版本为 `0.1.0-alpha.13`，尚未公开发布，仅用于本地技术候选验收：支持从 Physics 的 51 个 canonical 分类中保存选择 1–3 类，默认仍为 `gr-qc`、`astro-ph.HE`、`astro-ph.GA`；日期发现、历史补查、最新版刷新和两轮预算保持 alpha 12 规则。已公开下载仍为 [alpha 12 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.12)，本地技术候选不作为正式 Release。
 
 ## 开发方式
 

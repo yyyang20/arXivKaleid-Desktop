@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QSizePolicy, QVBoxLayout, QWidget
 from qfluentwidgets import FluentIcon, PushButton, ScrollArea, ToolButton
 
 from desktop.progress import ProgressEvent
@@ -34,6 +34,8 @@ def wrapping_label(text="", parent=None):
 class TaskPanel(SurfaceCard):
     def __init__(self, parent=None):
         super().__init__(parent)
+        # 收缩后的摘要只占自身内容高度，避免空白状态卡把首页分成大块。
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.running = False
         self.kind = "fetch"
         self.events: dict[str, ProgressEvent] = {}
@@ -122,7 +124,7 @@ class TaskPanel(SurfaceCard):
         height = 80 if self.running else min(240, max(40, self.window().height() - 690))
         self.details_scroll.setFixedHeight(height)
         self.layout().invalidate()
-        self.setMinimumHeight(self.layout().minimumSize().height())
+        self.setFixedHeight(self.layout().minimumSize().height())
         self.updateGeometry()
 
     def begin(self, kind: str):
