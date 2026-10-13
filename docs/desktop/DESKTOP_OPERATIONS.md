@@ -1,6 +1,6 @@
 # Desktop 运行与验证
 
-当前开发版本为 `0.1.0-alpha.13`，第一阶段仅生成绑定本地冻结 commit 的技术候选。已公开下载仍为 alpha 12 Windows x64 portable，下载与运行方式见下文。
+当前开发版本为 `0.1.0-alpha.13`，正在准备正式发行，正式成品须从合并后的干净 main 重建并验证。已公开下载仍为 alpha 12 Windows x64 portable，下载与运行方式见下文。
 
 本文档维护源码启动、依赖、本机构建、portable 验证及运行排错细节。开发与公开发布流程见根 [运行手册](../OPERATIONS.md)，安全、授权和完成要求以根 [AGENTS.md](../../AGENTS.md) 为准，阅读与更新路由见 [文档索引](../README.md)。
 
