@@ -1,5 +1,11 @@
 # 功能变更记录
 
+## 2026-10-13：Desktop 单次构建发布流程
+
+- 完成开发、发行文档和源码 GUI 验证后冻结 C，只构建一次最终待发布包；自动验证及人工验收通过后，通过一个普通合并 PR 保留 C，tag 指向 C，Release 使用同一份 ZIP 和校验文件，不追加发布状态文档 PR。
+- 构建用途与分支解耦，有效原包在重复入口或允许文档合并后复用；发布前核验完整批准、两个文件字节哈希及 C 已进入 main。人工未通过时不记录批准，修复后以新 C 重新构建和验收，不增加永久拒绝状态。
+- 历史发行记录与资产保持原样；实际发布事实、最终哈希和匿名核验结果保存于 Release 正文及受管审计。已检查用户指南，本次没有 GUI 或业务变化，不改操作正文；未重建或替换既有成品。
+
 ## 2026-10-13：Desktop alpha 13 公开发行
 
 - 已公开 [v0.1.0-alpha.13 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.13)，不标为稳定 latest。[功能 PR #26](https://github.com/yyyang20/arXivKaleid-Desktop/pull/26) 和[发行准备 PR #27](https://github.com/yyyang20/arXivKaleid-Desktop/pull/27) 合并后，从干净 main 提交 `b62f0238670b54c8e1e3929a4160da3fac5a1b3a` 重新构建；tag 与 BUILD_INFO 均绑定该提交，用途为 `public-release`，第一阶段技术候选未上传。

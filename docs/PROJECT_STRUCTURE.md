@@ -34,7 +34,7 @@
 | `scripts/run_local_checks.py` | 独立 TEMP/TMP 与测试根目录的离线 unittest 薄入口 |
 | `scripts/validate_arxiv_history.py` | 获准后在独立 runtime 通过真实 GUI/QThread 验收多版本论文、无更新日、旧日回抓、快照和指定版本 PDF；硬禁止模型 |
 | `scripts/validate_physics_categories.py` | 获准后核对官方 51 类、逐类真实查询与分类匹配，再验收隔离 GUI 的多 Archive 完整抓取、组合、历史刷新与快照冻结；硬禁止模型 |
-| `scripts/verify_public_release.py` | 匿名只读核验发行资产、冻结源码与历史基线；不执行远端写入 |
+| `scripts/verify_public_release.py` | 核验原包人工批准及 C 已合并、匿名核验发行资产、冻结源码与历史基线；不执行远端写入 |
 
 根目录保留核心函数模块供 Desktop 调用；应用启动入口为 `python -B -m desktop.app`。当前仓库没有 Online 自动化、云端状态、恢复、错误样本或 Issue 日报发布模块，也没有 GitHub workflow。
 

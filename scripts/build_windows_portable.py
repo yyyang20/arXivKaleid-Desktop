@@ -26,7 +26,9 @@ sys.path.insert(0, str(ROOT))
 from desktop import __version__
 from desktop.paths import checked_path
 from desktop.config import load_config
-from scripts.local_artifacts import ArtifactRun, register_candidate_copy
+from scripts.local_artifacts import (ArtifactRun, register_candidate_copy, operation_lock,
+                                     records, OPEN_STATES, candidate_files, bind_portable_build,
+                                     read_record, output_paths, approved_portable, file_hash)
 
 NAME = f'arXivKaleid-{__version__}-windows-x64'
 SOURCE_URL = f'https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v{__version__}.zip'
@@ -41,6 +43,10 @@ RESOURCES = (
     'docs/desktop/USER_GUIDE.md',
 )
 PUBLIC_DOCUMENTS = ('README.md', 'EULA.txt', 'PRIVACY.md', 'SECURITY.md')
+RELEASE_WORKFLOW = 'single-build-v1'
+NON_PACKAGED_DOCUMENTS = ('README.md', 'AGENTS.md', 'desktop/AGENTS.md')
+PACKAGED_DOCUMENTS = ('docs/desktop/USER_GUIDE.md',
+                      *('docs/public_release/' + name for name in PUBLIC_DOCUMENTS))
 REQUIRED_RELEASE_FILES = (
     'arXivKaleid.exe', '_internal/python313.dll',
     '_internal/vendor/curl/bin/curl.exe', '_internal/zoneinfo/Asia/Shanghai',
@@ -183,7 +189,8 @@ def copy_public_documents(folder: Path, frozen: dict | None = None) -> None:
                       "构建身份以 `BUILD_INFO.json` 为准。")
         else:
             notice = (f"本版[对应源码下载]({SOURCE_URL})固定到 `v{__version__}`，"
-                      "包含应用源码、配置、提示词、测试、构建脚本及说明，对应 `BUILD_INFO.json` 中的提交。")
+                      "包含应用源码、配置、提示词、测试、构建脚本及说明，对应 `BUILD_INFO.json` 中的提交。"
+                      "发布前该 tag 下载入口尚未开放；人工验收通过后原包用于正式发布，以 GitHub Releases 的公开状态为准。")
         readme.write_text(text.replace('{{APPLICATION_SOURCE_NOTICE}}', notice), encoding='utf-8', newline='\n')
     # 应用许可证只有根目录这一份维护源，不从第三方目录或副本推断。
     license_source = checked_path(ROOT, 'LICENSE')
@@ -225,7 +232,7 @@ def source_archives(root: Path = ROOT) -> list[dict[str, str]]:
 
 
 def frozen_identity() -> dict:
-    """区分正式 main 构建与开发验证；两者均要求干净冻结身份。"""
+    """最终待发布包绑定干净 C；用途不由实际构建分支决定。"""
     def git(*args):
         return subprocess.check_output(['git', *args], cwd=ROOT, text=True).strip()
     if git('status', '--porcelain'):
@@ -235,12 +242,85 @@ def frozen_identity() -> dict:
         raise RuntimeError('build_baseline_not_ancestor')
     commit = git('rev-parse', 'HEAD')
     branch = git('branch', '--show-current')
-    # main 不能沿用开发分支的宽松后代条件，正式成品必须等于已核验基线。
-    if branch == 'main' and commit != baseline:
-        raise RuntimeError('release_main_not_equal_origin')
+    if not branch:
+        raise RuntimeError('named_build_branch_required')
     return {'commit': commit, 'branch': branch,
             'baseline_commit': baseline, 'working_tree_clean': True,
-            'purpose': 'public-release' if branch == 'main' else 'local-portable-technical-validation'}
+            'purpose': 'public-release', 'release_workflow': RELEASE_WORKFLOW}
+
+
+def non_packaged_document(name: str) -> bool:
+    """合并差异名单唯一来源；指南与四份打包文档不能取得例外。"""
+    return (name in NON_PACKAGED_DOCUMENTS or name.startswith('docs/')
+            and name not in PACKAGED_DOCUMENTS
+            and Path(name).suffix in ('.md', '.txt', '.rst', '.adoc'))
+
+
+def verify_merge_identity(root: Path, commit: str, merged: str) -> list[str]:
+    """保留 C 的 Git 身份，仅放行非打包维护文档；不执行 fetch/merge。"""
+    if not all(re.fullmatch(r'[0-9a-f]{40}', value) for value in (commit, merged)):
+        raise RuntimeError('release_commit_invalid')
+    if subprocess.run(['git', 'merge-base', '--is-ancestor', commit, merged], cwd=root,
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
+        raise RuntimeError('release_commit_not_in_main')
+    data = subprocess.check_output(['git', 'diff', '--name-only', '--no-renames', '-z', commit, merged], cwd=root)
+    changed = [name.decode('utf-8') for name in data.split(b'\0') if name]
+    if any(not non_packaged_document(name) for name in changed):
+        raise RuntimeError('release_content_changed')
+    # 文档例外不能容纳符号链接或子模块，旧侧和新侧都须核验。
+    for revision in (commit, merged):
+        if changed:
+            entries = subprocess.check_output(['git', 'ls-tree', '-r', '-z', revision, '--', *changed], cwd=root)
+            if any(entry.split(b' ', 1)[0] not in (b'100644', b'100755')
+                   for entry in entries.split(b'\0') if entry):
+                raise RuntimeError('release_document_link')
+    return changed
+
+
+def reusable_output(frozen: dict) -> dict | None:
+    """调用者持有产物锁；同一 C 或仅文档合并后的有效成品原样复用。"""
+    entries = records(ROOT)
+    source = checked_path(ROOT, 'dist', NAME)
+    archive = checked_path(ROOT, 'release', NAME + '.zip')
+    checksum = checked_path(ROOT, 'release', NAME + '.zip.sha256')
+    present = [p.exists() for p in (source, archive, checksum)]
+    if not any(present):
+        if any(r.get('commit') == frozen['commit'] and r.get('outputs', {}).get('dist') == f'dist/{NAME}'
+               for _, r in entries):
+            raise RuntimeError('existing_build_output_missing')
+        return None
+    if not all(present):
+        raise RuntimeError('existing_build_output_incomplete')
+    files = candidate_files(ROOT, source)
+    binding = bind_portable_build(ROOT, source, files)
+    if not binding:
+        raise RuntimeError('existing_build_record_mismatch')
+    _, build = read_record(ROOT, binding['build_id'])
+    if output_paths(ROOT, build['outputs']) != (source, archive, checksum):
+        raise RuntimeError('existing_build_output_mismatch')
+    identity = json.loads((source / 'BUILD_INFO.json').read_text(encoding='utf-8'))
+    if identity.get('commit') != binding['commit']:
+        raise RuntimeError('existing_build_record_mismatch')
+    if (build['outputs'].get('checksum_sha256')
+            and file_hash(checksum) != build['outputs']['checksum_sha256']):
+        raise RuntimeError('existing_build_checksum_changed')
+    try:
+        verify_merge_identity(ROOT, binding['commit'], frozen['commit'])
+    except RuntimeError as error:
+        if str(error) in ('release_commit_not_in_main', 'release_content_changed'):
+            return None  # 新内容冻结为新 C 后才构建；旧完整材料由原留存规则保护。
+        raise
+    if identity.get('purpose') != 'public-release':
+        raise RuntimeError('existing_build_requires_new_commit')
+    approvals = [r for _, r in entries if r.get('release_review_approved') is True
+                 and r.get('portable_build', {}).get('build_id') == binding['build_id']]
+    for review in approvals:
+        approved_portable(ROOT, review['id'], binding['commit'], archive, checksum)
+    if binding['commit'] != frozen['commit'] and not approvals:
+        return None  # 未通过人工验收而修改为新 C，重新执行首次构建和验收。
+    verify_tree(source)
+    return dict(build_id=build['id'], commit=binding['commit'], reused=True,
+                zip=str(archive), checksum=str(checksum), sha256=binding['zip_sha256'])
 
 
 def inspect_python_archive(executable: Path) -> dict:
@@ -347,6 +427,14 @@ def main(argv=None) -> None:
             if importlib.metadata.version(name) != version:
                 raise RuntimeError('build_dependency_version_mismatch:' + name)
     manifest = checked_path(ROOT, args.license_input_manifest) if args.license_input_manifest else None
+    # 重复入口先在同一进程锁内核验，不创建新的构建记录或重新运行 PyInstaller。
+    with operation_lock(ROOT):
+        if any(r['state'] in OPEN_STATES for _, r in records(ROOT)):
+            raise RuntimeError('unfinished_artifact_run')
+        reused = reusable_output(frozen)
+        if reused:
+            print(json.dumps(reused, ensure_ascii=False))
+            return
     with ArtifactRun('build', root=ROOT) as run:
         run.record['commit'] = frozen['commit']
         run.protect(checked_path(ROOT, '.desktop-build/vendor'))
@@ -365,6 +453,13 @@ def main(argv=None) -> None:
 
 def build_portable(frozen, run, license_manifest=None):
     """工作文件只放本次 work；输出与旧成品不属于自动删除范围。"""
+    # 两次取锁之间若另一入口已完成相同构建，也只能复用原输出。
+    reused = reusable_output(frozen)
+    if reused:
+        run.record['reused_build_id'] = reused['build_id']
+        run.save()
+        print(json.dumps(reused, ensure_ascii=False))
+        return
     build = checked_path(ROOT, '.desktop-build')
     job = run.work
     stage = job / 'stage'
@@ -454,7 +549,8 @@ def build_portable(frozen, run, license_manifest=None):
     run.record['outputs'] = {'zip': zip_path.relative_to(ROOT).as_posix(), 'sha256': digest,
                               'bytes': zip_path.stat().st_size, 'files': len(inventory),
                               'dist': dist.relative_to(ROOT).as_posix(),
-                              'checksum': checksum.relative_to(ROOT).as_posix(), 'inventory': inventory}
+                               'checksum': checksum.relative_to(ROOT).as_posix(),
+                               'checksum_sha256': file_hash(checksum), 'inventory': inventory}
     run.save()
     register_candidate_copy(run)
     print(json.dumps({'zip': str(zip_path), 'sha256': digest, 'bytes': zip_path.stat().st_size, 'files': len(inventory)}, ensure_ascii=False))

@@ -4,7 +4,7 @@
 
 ## 冻结开发版本
 
-- [ ] 本地分支为 `main`，HEAD 与最新 `origin/main` 一致，工作树干净。
+- [ ] 完成代码、测试、发行文档和源码 GUI 验证，冻结干净最终提交 C；已核验的 `origin/main` 是 C 的祖先，可在开发分支构建。
 - [ ] Desktop 版本号、README、Desktop 文档和 CHANGELOG 一致。
 - [ ] 完整离线测试、Desktop 测试、Python AST 检查和 `git diff --check` 通过。
 - [ ] 已核对测试跳过原因和未覆盖范围；GUI、Windows DPAPI 测试在具备依赖的 Windows 环境实际执行，治理静态检查不代替成品验证。
@@ -15,10 +15,10 @@
 - [ ] 当前 Fluent 1.11.3 许可原文、版权、wheel/sdist 元数据和上游说明已核对，商业用途措辞歧义已记录；不因商业许可或措辞本身推定必须购买许可或改变应用 GPL-3.0-only。仅发现与本次实际分发直接相关且现有 LICENSE/NOTICE/对应源码方案无法解决的具体发行权利缺口时停止 Release；新增组件的原许可、版权、版本和源码哈希已核验。
 - [ ] 冻结程序实际显示 Fluent SVG 图标、五个导航页面、运行/收缩/失败详情和 Markdown；验证 DPI/缩放、DPAPI 假值与 pywin32 DLL/hooks，并记录包体积变化。
 - [ ] 使用说明正文和书本图标与源码资源一致；只读复制、滚动、大字体、四个内部链接、未保存保护及重启验证通过，缺失或篡改资源安全拒绝。
-- [ ] 已移除 portable README 的发行准备提示；本版 tag/源码与实际发布身份一致，不能把未发布入口当作可用下载。
+- [ ] 首次构建已写入本版 tag 源码入口，并明确发布前尚未开放；不能把未发布入口当作可用下载，正式发布后入口与 C 一致，无需改包。
 
 - [ ] 仅在已授权的 `arxivkaleid-desktop` 专用 Conda 环境中执行构建。
-- [ ] 重新生成 `release/arXivKaleid-<version>-windows-x64.zip` 和对应 `.zip.sha256`。
+- [ ] 从 C 只构建一次 `release/arXivKaleid-<version>-windows-x64.zip` 和对应 `.zip.sha256`；重复入口只复用完整有效成品，不执行 PyInstaller。
 - [ ] `BUILD_INFO.json` 记录预期版本、冻结提交、x64 架构且 `working_tree_clean` 为 `true`。
 - [ ] ZIP 根目录包含 `LICENSE`、`README.md`、`EULA.txt`、`PRIVACY.md`、`SECURITY.md` 和 `THIRD_PARTY_NOTICES.txt`，完整第三方许可仍在 `licenses/`。
 - [ ] 应用许可为 `GPL-3.0-only`；LICENSE 与根维护源字节一致，EULA 不增加额外限制。
@@ -29,6 +29,9 @@
 - [ ] source `.desktop-runtime/logs/` 由 Git ignore 覆盖，`git status --short --ignored` 只把它显示为 ignored。
 - [ ] 执行 portable 零模型验证；只在另行授权后才执行真实 arXiv 网络验证。
 - [ ] 本地重新计算 ZIP SHA-256，与 `.zip.sha256` 完全一致。
+- [ ] BUILD_INFO 保留实际构建分支，记录 `purpose=public-release`、`release_workflow=single-build-v1` 和 `build_run_id`；用途不表示已公开，也不限定 `branch=main`。
+- [ ] 自动验证绑定构建 ID、C、ZIP SHA-256 和文件清单；用户人工验收通过并关闭程序后执行 `close-review --run-id <portable-ID>`，批准同时绑定校验文件字节哈希。
+- [ ] 未通过时不记录批准；需要修改则修复后冻结新 C，重新构建、验证和人工验收，不增加永久拒绝状态，不借用旧批准。
 
 ## 发行文档核对
 
@@ -42,6 +45,9 @@
 
 - [ ] 本次发行说明已按根目录 [公开维护文本语言](../../AGENTS.md#公开维护文本语言) 核对。
 - [ ] 已获得当次 GitHub 写操作授权，并重新只读核对目标仓库、标签和现有 Release。
+- [ ] 使用一个普通 merge commit 的 PR 合并包含 C 的代码和发行文档，保留 C 身份；不 squash 或 rebase，不因合并 main 重新构建。
+- [ ] C 已进入实时远端 main；与合并提交 M 的差异仅限构建与核验脚本共享名单中的非打包维护文档，指南、打包公开文档及其他代码/资源/依赖/许可/构建文件变化均停止发布。
+- [ ] 执行 `--preflight --review-run-id <portable-ID>` 核验本包批准和两个文件未变；tag 精确指向 C，原样上传人工验收过的同一份 ZIP 和 `.sha256`。
 - [ ] 保存并对比全部既有历史 tag、Release 正文、资产 id/名称/字节数/digest 基线，既有历史发行保持不变。
 - [ ] 目标公开仓库已启用 immutable releases 和 private vulnerability reporting。
 - [ ] 先创建 Draft Release，alpha/beta 版本标记为 prerelease。
@@ -54,13 +60,12 @@
 - [ ] 发布后重新读取公开 Release，从未登录视角核对正文、“本次更新”、公开可见性、下载链接、Tag 和资产摘要。
 - [ ] 未登录下载源码并逐文件与发行冻结提交核对，同时重新计算公开 ZIP SHA-256，不能仅凭页面或静态测试宣称源码和成品一致。
 
-## 发布后文档收口
+## 发行事实与审计
 
-- [ ] 公开 Release 及未登录核验成功后，继续在同一公开发布任务中按文档路由更新 `docs/CHANGELOG.md`；只有首次发布或稳定下载入口变化时才同时更新根目录 `README.md`。
-- [ ] 发布后文档收口发生在冻结成品之后，不重建或替换已发布资产，不改写既有 immutable Release，也不拆成新的独立任务。
-- [ ] Git commit/push 必须获得相应授权；尚未取得授权时，先完成本地文档修改和验证，明确报告待提交状态，不得因此省略文档或宣称整个公开发布任务已经完成。
-- [ ] 对文档变更执行适用的离线测试和 `git diff --check`，并确认 ZIP、`.sha256`、测试或审计产物没有进入 Git。
-- [ ] 分别记录最终 main 与发行 tag SHA；两者的差异只包含发布后文档收口及其必要治理测试，已发布资产保持不变。
+- [ ] 冻结前完成发行文档和 `docs/CHANGELOG.md` 的已完成变化记录，随同一个 PR 合并；未公开版本不提前描述为已发布。
+- [ ] 最终哈希、C 自身 SHA、实际发布状态和匿名核验事实保存于 Release 正文及受管审计，不写入待冻结 C，不追加发布状态文档 PR。
+- [ ] 在审计中分别记录 C 与 M；已发布资产保持不变，不重建或替换已发布资产，历史发行记录保持原样。
+- [ ] Git commit/push 必须获得相应授权；对发行文档执行适用离线测试和 `git diff --check`，确认 ZIP、`.sha256`、测试或审计产物没有进入 Git。
 
 ## 本地历史 portable 收口
 
@@ -85,15 +90,16 @@
 - [ ] 失败后不自动重跑网络验证、不上传部分成品、不调用 DeepSeek。
 - [ ] 使用受管构建和验证入口；受保护 vendor、稳定许可 manifest、来源归档和旧成品哈希已登记，许可输入缺失或不匹配即停止。
 - [ ] 按 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期) 保存摘要、清单、哈希和截图后，所属进程退出再收尾本次自产工作副本；人工验收证据保留到明确结案，清理失败单独报告并停止后续生成。
-- [ ] 新登记 `verified_candidate_copy_v1` 的旧技术候选解压副本，仅在替代新包 ZIP 完整性、逐文件哈希校验和完整 portable 验证全部通过后，逐文件核对保留 ZIP 并自动清理；验证证据继续保留，人工验收仅决定是否进入第二阶段发布流程，使用 `close-review` 单独记录。不扩展到正式发行、历史未标记记录或其他 previous-*，不改变上述正式发布收口的授权门槛。
+- [ ] 新登记 `verified_candidate_copy_v1` 的旧技术候选解压副本，仅在替代新包 ZIP 完整性、逐文件哈希校验和完整 portable 验证全部通过后，逐文件核对保留 ZIP 并自动清理；验证证据继续保留，人工验收仅用于取得原包发布资格，使用 `close-review` 单独记录。不扩展到正式发行、历史未标记记录或其他 previous-*，不改变上述正式发布收口的授权门槛。
 - [ ] 普通证据按生命周期自动轮换每类最近两次成功和最近一次普通失败诊断；历史、未结案故障及待审材料继续保护，普通失败不授予自动重跑网络或业务的权限。
 
 ## 匿名只读核验入口
 
-`scripts/verify_public_release.py` 参数指定 `--repo`、`--tag`、`--commit`、`--zip`、`--checksum` 和 `--history-baseline`。只在当次授权的公开核验范围内访问 GitHub；不使用登录凭据、不上传、不发布、不删除远端资产、不自动重试。运行登记并保护本地资产和基线，保存 `evidence/release.json` 与发行身份摘要，收尾本次下载副本。该入口不授予本地历史 portable 删除权限，也不代替上述人工检查。
+`scripts/verify_public_release.py` 参数指定 `--repo`、`--tag`、`--commit`、`--zip`、`--checksum`、`--history-baseline` 和 `--review-run-id`。发布前增加 `--preflight`，要求完整人工批准并保存 `evidence/preflight.json`；发布后省略该开关，保存 `evidence/release.json` 与发行身份摘要。新标识包必须指定验收 ID；无新标识的历史包保留原参数只读核验能力，不能据此推定新流程发布资格。只在当次授权的公开核验范围内访问 GitHub；不使用登录凭据、不上传、不发布、不删除远端资产、不自动重试。运行登记并保护本地资产和基线，收尾本次下载副本。该入口不授予本地历史 portable 删除权限，也不代替上述人工检查。
 
 基线为 `history_snapshot(repo, tag)` 的 JSON：`releases` 保存排除目标 tag 后各 Release 的 id、tag_name、name、body、draft、prerelease、immutable 及全部 assets 的 id/name/size/digest；`tags` 保存排除目标 tag 的 refs/tags/ 到对象 SHA 映射。发布前取得并保存在项目内忽略目录；核验前后都必须与该基线一致。旧审计基线格式不自动转换，原历史脚本和记录保持原样。
 
 ```powershell
-& $desktopPython -X utf8 -B scripts/verify_public_release.py --repo 'yyyang20/arXivKaleid-Desktop' --tag 'v<version>' --commit '<冻结提交40位SHA>' --zip 'release/arXivKaleid-<version>-windows-x64.zip' --checksum 'release/arXivKaleid-<version>-windows-x64.zip.sha256' --history-baseline '.desktop-build/<本次审计>/history-baseline.json'
+# 发布前；发布后用同一组参数省略 --preflight，再核验公开资产和源码。
+& $desktopPython -X utf8 -B scripts/verify_public_release.py --preflight --review-run-id '<portable-ID>' --repo 'yyyang20/arXivKaleid-Desktop' --tag 'v<version>' --commit '<C 的40位SHA>' --zip 'release/arXivKaleid-<version>-windows-x64.zip' --checksum 'release/arXivKaleid-<version>-windows-x64.zip.sha256' --history-baseline '.desktop-build/<本次审计>/history-baseline.json'
 ```

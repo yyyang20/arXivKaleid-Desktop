@@ -61,7 +61,7 @@ Copyright (c) 2026 yyyang20. 应用采用 **GPL-3.0-only**，完整许可文本�
 
 {{APPLICATION_SOURCE_NOTICE}}
 
-构建器按用途填入对应源码说明；本地技术候选不生成虚假的公开下载链接。源码归档用于研究、修改和构建，不是可直接运行的 Windows 成品；已公开成品下载见 [Releases](https://github.com/yyyang20/arXivKaleid-Desktop/releases)。
+构建器为最终待发布包填入同版本 tag 的对应源码说明，并明确发布前入口尚未开放；人工验收通过后原样发布，不重新构建或修改包内身份。旧本地技术候选的历史源码说明不改写。源码归档用于研究、修改和构建，不是可直接运行的 Windows 成品；已公开成品下载见 [Releases](https://github.com/yyyang20/arXivKaleid-Desktop/releases)。
 
 第三方组件保留各自许可；声明见 `THIRD_PARTY_NOTICES.txt`，许可文本位于 `licenses/`，QtBase、QtSvg、PySide/Shiboken、pypdf、Fluent、frameless、darkdetect 和 pywin32 固定源码位于 `licenses/sources/`。来源、版本与哈希见 `licenses/components.json`；Fluent GPLv3 元数据与上游商业用途措辞的歧义，以及通用执行平台、独立工具和系统库的范围说明见第三方声明。既有历史发行资料不变。
 

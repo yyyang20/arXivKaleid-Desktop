@@ -65,6 +65,8 @@ Copyright (c) 2026 yyyang20. 自有应用源码、测试、构建脚本、配置
 
 第三方组件保留各自许可，声明见 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)。完整许可文本及实际分发库的固定对应源码随 portable ZIP 提供，清单见 `licenses/components.json`。本版许可不改写既有历史发行资料。
 
+上述 alpha 13 发行说明保留当时的历史事实。后续版本按[现行发布流程](docs/OPERATIONS.md#desktop-公开发布)从最终 C 单次构建，人工验收通过后原包发布，不追加发布状态文档 PR。
+
 alpha 6 新增 Fluent、frameless、darkdetect 和 pywin32。Fluent 1.11.3 的 wheel/sdist 原许可及元数据声明 GPLv3，上游另有商业用途措辞；歧义记录在第三方声明，不因此推定本项目必须购买商业许可或改变 GPL-3.0-only。第三方原许可、版权及固定对应源码随包保留，自有应用许可不代替第三方许可。
 
 安全问题报告方式见 [SECURITY.md](SECURITY.md)。不要在公开 Issue 中张贴 API Key、`secret.dat`、SQLite、PDF 或整个 `runtime/` 目录。

@@ -273,7 +273,7 @@ def artifact_contract_errors(agents, operations, desktop, checklist):
             'vendor 归档', '稳定许可输入', 'alpha 9 来源 ZIP',
             '退役的历史包装脚本和旧许可副本不再作为构建输入', '当次明确授权才能精确清理')),
         'desktop': (desktop, ('--license-input-manifest', 'run_local_checks.py', 'managed-artifacts',
-            '干净提交', 'previous-*', '缺失或不符即停止',
+            '干净最终提交 C', 'previous-*', '缺失或不符即停止',
             '退役的历史包装脚本和旧许可副本不再作为构建输入', '当次明确授权', 'close-review',
             'ZIP SHA-256', '未标记历史记录及其他 previous-* 不自动删除')),
         'checklist': (checklist, ('本节的不得清理要求限定旧发行物和历史材料', 'verify_public_release.py',
@@ -468,7 +468,7 @@ class DesktopGovernanceTests(unittest.TestCase):
             'Windows portable 打包说明、EULA、隐私或安全政策': (
                 'public_release/', 'EULA.txt', 'PRIVACY.md', 'SECURITY.md', 'README 分别维护'),
             '第三方声明': ('packaging/windows/THIRD_PARTY_NOTICES.txt', '同名副本'),
-            '实际 GitHub Release 发布': ('CHANGELOG.md',),
+            'Desktop 发行准备与实际发布核验': ('CHANGELOG.md', '冻结前', '同一个 PR', 'Release 正文', '受管审计'),
             '提示词、模板、策略或 schema 身份变化': ('兼容校验', '发行校验', '测试'),
         }
         for label, fragments in expected.items():
@@ -636,7 +636,7 @@ class DesktopGovernanceTests(unittest.TestCase):
     def test_release_checklist_preserves_identity_and_public_readback(self):
         checklist = read_utf8('docs/public_release/RELEASE_CHECKLIST.md')
         self.assert_fragments(section(checklist, '冻结开发版本'), (
-            '`main`', '`origin/main`', '工作树干净', '完整离线测试',
+            '最终提交 C', '`origin/main`', '祖先', '干净', '完整离线测试',
             'GUI、Windows DPAPI 测试', '实际执行',
         ))
         self.assert_fragments(section(checklist, '构建与验证'), (
@@ -652,10 +652,42 @@ class DesktopGovernanceTests(unittest.TestCase):
             '发布 Draft 前重新读取', '存在且非空', '发布后重新读取公开 Release',
             '未登录视角', 'Tag', '资产摘要',
         ))
-        self.assert_fragments(section(checklist, '发布后文档收口'), (
-            '同一公开发布任务', '`docs/CHANGELOG.md`', '不重建或替换已发布资产',
+        self.assert_fragments(section(checklist, '发行事实与审计'), (
+            '同一个 PR', '`docs/CHANGELOG.md`', '不重建或替换已发布资产',
             'Git commit/push 必须获得相应授权',
         ))
+
+    def test_single_build_release_contract_and_old_rule_regressions(self):
+        contracts = (
+            section(read_utf8('AGENTS.md'), '文档与完成要求'),
+            section(read_utf8('docs/OPERATIONS.md'), 'Desktop 公开发布'),
+            '\n'.join(section(read_utf8('docs/desktop/DESKTOP_OPERATIONS.md'), title)
+                      for title in ('本机构建', 'Portable 零模型验证', '运行目录与凭据')),
+            read_utf8('docs/public_release/RELEASE_CHECKLIST.md'),
+        )
+        forbidden = ('不得直接上传技术候选', '技术候选不可直接发布',
+                     '从合并后的干净 main 重建', '再用相同入口重建最终本地 ZIP',
+                     '正式构建要求分支为 `main`', '仅以文档 PR 收口',
+                     '## 发布后文档收口')
+        def errors(text):
+            return [rule for rule in forbidden if rule in text]
+        for text in contracts:
+            self.assertEqual(errors(text), [])
+            self.assert_fragments(text, ('人工验收', '新 C', '不增加'))
+            self.assertTrue(any(word in text for word in ('同一份', '原包', '原样')))
+        for old_rule in forbidden:
+            self.assertTrue(errors(contracts[1] + '\n' + old_rule))
+        self.assert_fragments(contracts[1], ('普通 merge commit', '保留 C 身份', 'tag 指向 C',
+            '非打包维护文档', '不运行 PyInstaller'))
+        self.assert_fragments(contracts[3], ('--preflight', '--review-run-id', '校验文件字节哈希',
+            'single-build-v1', '源码', 'C 自身 SHA', '不追加发布状态文档 PR'))
+        builder = read_utf8('scripts/build_windows_portable.py')
+        verifier = read_utf8('scripts/verify_public_release.py')
+        self.assert_fragments(builder, ('RELEASE_WORKFLOW', 'NON_PACKAGED_DOCUMENTS', 'PACKAGED_DOCUMENTS',
+            'non_packaged_document', 'reusable_output', 'operation_lock'))
+        self.assert_fragments(verifier, ('approved_portable', 'verify_merge_identity', '--preflight', '--review-run-id'))
+        self.assertNotIn("'public-release' if branch == 'main'", builder)
+        self.assertNotIn("info.get('branch') != 'main'", verifier)
 
     def test_changelog_remains_history_and_records_code_decoupling(self):
         changelog = read_utf8('docs/CHANGELOG.md')
