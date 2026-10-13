@@ -4,7 +4,7 @@ arXivKaleid Desktop 是按用户两轮完整研究 Prompt 筛选 arXiv 论文的
 
 本仓库包含 Desktop 应用源码、测试、构建配置和项目文档；Windows portable 成品通过 GitHub Releases 提供。
 
-当前开发版本为 `0.1.0-alpha.13`，尚未公开发布，正在准备正式发行：支持从 Physics 的 51 个 canonical 分类中保存选择 1–3 类，默认仍为 `gr-qc`、`astro-ph.HE`、`astro-ph.GA`；日期发现、历史补查、最新版刷新和两轮预算保持 alpha 12 规则。已公开下载仍为 [alpha 12 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.12)。正式成品须从合并后的干净 main 重建并验证，本地技术候选不作为正式 Release。
+当前公开版本为 `0.1.0-alpha.13`：支持从 Physics 的 51 个 canonical 分类中保存选择 1–3 类，默认仍为 `gr-qc`、`astro-ph.HE`、`astro-ph.GA`；日期发现、历史补查、最新版刷新和两轮预算保持 alpha 12 规则。下载 [alpha 13 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.13)。正式成品从合并后的干净 main 重建并验证，本地技术候选未用于正式 Release。
 
 ## 开发方式
 
@@ -61,7 +61,7 @@ alpha 9 的历史保存当次完整原始 Markdown，重启后无需 Key 即可�
 
 Copyright (c) 2026 yyyang20. 自有应用源码、测试、构建脚本、配置、提示词和项目文档采用 **GPL-3.0-only**，完整文本见 [LICENSE](LICENSE)，许可说明见 [EULA.txt](EULA.txt)。本软件无保证；允许使用、研究、修改和分发，包括商业使用。分发受 GPL 覆盖的衍生版本须继续按 GPLv3 提供相应源码，私人修改不要求公开。
 
-公开 alpha 12 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.12.zip)包含源码、资源、测试及构建说明；对应 [Windows portable Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.12) 的 `BUILD_INFO.json` 与 tag 均指向发行提交 `e8887a7e4b58da671b51503fa62950f3f8a85205`，用途为 `public-release`。正式成品从合并后的干净 main 重建，未使用第一阶段技术候选；匿名下载成品及源码已核验。不要用浮动 main 代替已发行版本源码；发布后的 main 可以包含文档收口提交。
+公开 alpha 13 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.13.zip)包含源码、资源、测试及构建说明；对应 [Windows portable Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.13) 的 `BUILD_INFO.json` 与 tag 均指向发行提交 `b62f0238670b54c8e1e3929a4160da3fac5a1b3a`，用途为 `public-release`。正式成品从合并后的干净 main 重建，未使用第一阶段技术候选；匿名下载成品及源码已核验。不要用浮动 main 代替已发行版本源码；发布后的 main 可以包含文档收口提交。
 
 第三方组件保留各自许可，声明见 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)。完整许可文本及实际分发库的固定对应源码随 portable ZIP 提供，清单见 `licenses/components.json`。本版许可不改写既有历史发行资料。
 

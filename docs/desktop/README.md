@@ -1,6 +1,6 @@
 # Desktop 文档入口
 
-当前开发版本为 `0.1.0-alpha.13`，正在准备正式发行。首页保存 Physics 51 类中的 1–3 类选择；北京时间日期、最新版发现与历史补查、两轮研究判断和资源安全规则保持 alpha 12 行为。已公开下载仍为 [alpha 12 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.12)，正式成品从合并后的干净 main 重建并验证，运行与验证方式见运行手册。
+当前公开版本为 `0.1.0-alpha.13`。首页保存 Physics 51 类中的 1–3 类选择；北京时间日期、最新版发现与历史补查、两轮研究判断和资源安全规则保持 alpha 12 行为。下载 [alpha 13 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.13)，正式成品从合并后的干净 main 重建并验证，运行与验证方式见运行手册。
 
 每次启动后首次开始分析前必须显示模型数据发送、费用、DPAPI 凭据与本地运行数据告知；用户拒绝时不消费快照、不调用模型。
 
