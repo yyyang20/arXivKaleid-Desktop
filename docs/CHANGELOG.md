@@ -1,5 +1,14 @@
 # 功能变更记录
 
+## 2026-10-13：Desktop alpha 13 公开发行
+
+- 已公开 [v0.1.0-alpha.13 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.13)，不标为稳定 latest。[功能 PR #26](https://github.com/yyyang20/arXivKaleid-Desktop/pull/26) 和[发行准备 PR #27](https://github.com/yyyang20/arXivKaleid-Desktop/pull/27) 合并后，从干净 main 提交 `b62f0238670b54c8e1e3929a4160da3fac5a1b3a` 重新构建；tag 与 BUILD_INFO 均绑定该提交，用途为 `public-release`，第一阶段技术候选未上传。
+- 本版提供 Physics 51 个 canonical 分类中的 1–3 类选择、原子保存、重启恢复及抓取分类冻结；日期、历史关联、最新版、分页、去重、SQLite schema、Prompt 和预算保持不变。正式 ZIP 为 118,728,350 字节、470 个文件，SHA-256 为 `3d584232783da4858a20277ad8a13c945ba5f461d46a75792f4c98c753fac4c1`。
+- 发行提交通过 323 项完整离线测试、零跳过、67 个 Python AST 和差异检查；复用源码身份一致的全 51 类真实查询及 18 组 GUI 抓取证据。正式 portable 完成原生 DPR 1.5、模拟 100／125／150／200% 及真实网络六组，每组 52 个状态，覆盖分类、快照、恢复、合成 DPAPI、窗口生命周期、资源反例和隐私。人工切屏产生的无效 150% 记录保留，前三组成功证据按同一构建及 ZIP 哈希复用，仅补验剩余组。
+- 正式 main 的六次隔离真实 GUI 验收耗时 14.7–41.1 秒；首次提交日取得当前 v6，旧 v5 日期关联刷新为 `2506.15886v6`，旧记录和快照保持不变。发布验收对 429 按当次授权低频退避，限流及等待单独记账，应用单次请求和失败策略未变。正式 EXE 回抓 `2026-10-10` 得到 10 篇、其中 5 篇更新版本，耗时 21.1 秒，分类及计数匹配，精确版本 PDF 校验通过；全程零模型。
+- 匿名下载 ZIP 和校验文件与本地逐字节一致，120 个 tag 源码文件与发行 Git blob 一致；全部既有历史 tag、Release 正文及资产身份保持不变。下载入口和本条为发布后文档收口，不重建或替换已发布资产。
+- 已检查用户指南，本轮不改变操作行为，无需改写正文。未覆盖第二台干净 Windows 和所有第三方输入法；既有 Qt 弃用及测试退出 GC 告警保留，冻结生命周期与退出检查通过。
+
 ## 2026-10-13：Desktop alpha 13 Physics 分类选择
 
 - 首页支持从官方 Physics 51 个 canonical Category 中保存选择 1–3 类，默认三类不变；新增分组窗口、恢复确认和坏配置修复，选择在同一运行根重启恢复。
