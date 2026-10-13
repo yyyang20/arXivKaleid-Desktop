@@ -4,7 +4,7 @@ arXivKaleid Desktop 是按用户两轮完整研究 Prompt 筛选 arXiv 论文的
 
 本文档说明 Windows portable 的下载和使用方式。
 
-当前版本为 `0.1.0-alpha.13`，支持从 Physics 的 51 个 canonical 分类中保存选择 1–3 类，默认仍为 `gr-qc`、`astro-ph.HE`、`astro-ph.GA`。首次／当前最新版提交日发现、历史关联补查、最新版刷新和两轮预算保持原规则。构建用途及提交以 `BUILD_INFO.json` 为准；本地技术候选不作为正式 Release，第三方原许可及固定对应源码随包提供。
+当前版本为 `0.1.0-alpha.13`，支持从 Physics 的 51 个 canonical 分类中保存选择 1–3 类，默认仍为 `gr-qc`、`astro-ph.HE`、`astro-ph.GA`。首次／当前最新版提交日发现、历史关联补查、最新版刷新和两轮预算保持原规则。构建用途及提交以 `BUILD_INFO.json` 为准，第三方原许可及固定对应源码随包提供。
 
 ## 开发方式
 
