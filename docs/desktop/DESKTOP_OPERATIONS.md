@@ -33,7 +33,7 @@ Windows 环境缺少时区数据时会安全停止抓取，不自动安装额外
 
 ## Portable 用户
 
-解压 `arXivKaleid-<version>-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。当前公开成品为 [alpha 13](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.13)，从合并后的干净 main 重建，tag 与 `BUILD_INFO.json` 的发行提交一致，已完成零模型 portable 验证及匿名成品、源码核验。具体发行身份与验证记录见 [CHANGELOG](../CHANGELOG.md)。在设置页输入自己的 DeepSeek API Key，按“使用说明”设置并保存两轮提示词，首页先获取候选，再执行分析。
+解压 `arXivKaleid-<version>-windows-x64.zip` 到当前用户可写目录，双击 `arXivKaleid.exe`；不需要 Python、Conda、PySide6、pypdf 或 Git。当前公开成品为 [alpha 13](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.13)，从合并后的干净 main 重建，tag 与 `BUILD_INFO.json` 的发行提交一致，已完成零模型 portable 验证。具体历史发行身份与验证记录见 [CHANGELOG](../CHANGELOG.md)，不作为今后发布流程要求。在设置页输入自己的 DeepSeek API Key，按“使用说明”设置并保存两轮提示词，首页先获取候选，再执行分析。
 
 所有用户数据都在 EXE 同级 `runtime/`，诊断日志位于 `runtime/logs/`。删除整个 portable 目录相当于卸载并删除运行数据；当前版本不自动轮换或删除旧日志。不要把包含个人 `runtime/` 的已使用目录重新发给其他人，应发送构建生成的干净 ZIP。DPAPI 绑定 Windows 用户与电脑，复制文件夹给另一个用户/电脑后，旧 `secret.dat` 通常无法解密，需要重新输入 Key。
 
@@ -68,7 +68,7 @@ alpha 7 收集 Qt Core/Gui/Widgets/Svg/SvgWidgets/Xml 和 Windows 平台、Windo
 
 manifest 记录组件 name/version/build/包归档 SHA-256、来源发行归档 SHA-256 和逐文件 SHA-256；构建重新校验来源归档、安装身份和完整许可文件集，缺失或不符即停止，不使用全局 JSON 映射。`.desktop-build/vendor/`、`.desktop-build/inputs/` 和上述 alpha 9 来源 ZIP 持续受保护。构建直接使用受跟踪入口与稳定 manifest，退役的历史包装脚本和旧许可副本不再作为构建输入。来源 ZIP 所在历史目录必须按实际文件依赖划定保留范围；其他历史内容仍须依赖复核及当次明确授权，不按目录年龄或名称自动删除。
 
-最终包统一记录 `purpose=public-release`、`release_workflow=single-build-v1`，实际构建分支可以是开发分支；用途不表示已公开，不在验收或合并后修改 BUILD_INFO。旧用途兼容读取，仅用于保留历史事实及原清理策略，不批量迁移。旧发行物、历史材料和受保护输入在构建、验证及失败阶段不清理。正式发布及新旧远端核验成功后，按当次分别列明的授权收口 `release/` 旧 ZIP 和与对应正式 ZIP 逐文件一致、已无构建、验证或待审用途的旧版本 `dist/`；只保留当前正式版本及仍有明确必要的成品。准确路径、完整文件集、哈希、进程退出与含 `runtime/` 目录保护见 [本地历史 portable 收口](../OPERATIONS.md#本地历史-portable-收口)，该节不清理 `.desktop-build/` 或其他材料；当前自产工作文件按 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期) 收尾，两者授权范围不同。
+最终包统一记录 `purpose=public-release`、`release_workflow=single-build-v1`，实际构建分支可以是开发分支；用途不表示已公开，不在验收或合并后修改 BUILD_INFO。旧用途兼容读取，仅用于保留历史事实及原清理策略，不批量迁移。旧发行物、历史材料和受保护输入在构建、验证及失败阶段不清理。正式发布及新旧远端元数据核验成功后，按当次分别列明的授权收口 `release/` 旧 ZIP 和与已通过远端 digest 核验的本地历史 ZIP 逐文件一致、已无构建、验证或待审用途的旧版本 `dist/`；只保留当前正式版本及仍有明确必要的成品。不重新下载历史发行物，缺少对应本地 ZIP 或有效 digest 时保留并停止。准确路径、完整文件集、哈希、进程退出与含 `runtime/` 目录保护见 [本地历史 portable 收口](../OPERATIONS.md#本地历史-portable-收口)，该节不清理 `.desktop-build/` 或其他材料；当前自产工作文件按 [临时产物生命周期](../OPERATIONS.md#临时产物生命周期) 收尾，两者授权范围不同。
 
 发行物包含 GPL-3.0-only 应用 LICENSE、第三方声明、实际依赖许可证及上述八项上游源码归档，允许按 LGPL 替换动态库；这些归档用于分发材料，用户无需解包。源码 manifest 显式记录各组件许可，版本与固定运行依赖一致；gzip/xz 归档原样保留并核验 SHA-256。许可证缺失、源码入口/归档哈希不符、用户运行文件或本机个人路径进入发行树时，构建失败。ZIP 生成后逐文件重新比对哈希；构建审计目录记录模块/运行时 hook 清单及各主要组成的未压缩字节数。
 
@@ -117,6 +117,8 @@ alpha 13 源码冻结前，还须运行 `scripts/validate_physics_categories.py`
 Qt `QDomDocument.setContent` 弃用提示暂为非阻塞已知问题，以冻结 SVG 显示为验收依据。测试退出 GC 告警通过冻结程序重复窗口释放、私有内存采样、进程退出与锁释放验证；不为消除 warning 大范围重构，实际泄漏/崩溃/挂起时停止验收。窗口模式可能不输出 stderr，不能据日志为空宣称告警已消失。
 
 人工验收通过后，不再构建 portable；通过一个普通 merge commit 的 PR 合并包含 C 的代码和发行文档，保留 C 的 SHA。合并提交 M 只允许根手册规定、由脚本共享名单核验的非打包维护文档差异。同步合并结果并执行 `verify_public_release.py --preflight --review-run-id <portable-ID>`，tag 指向 C，上传已验收的同一份 ZIP 和 `.sha256`。当前仓库没有 GitHub workflow。构建入口只写入项目内被忽略的 `dist/`、`release/` 和 `.desktop-build/`，不自动创建仓库、Release 或上传文件。任何公开 GitHub 写操作必须另行获得授权并按 [公开发布检查清单](../public_release/RELEASE_CHECKLIST.md) 执行。
+
+发布后使用同一验收 ID，仅通过 GitHub API 元数据核验公开仓库中的 Release 已发布、tag 指向冻结 commit、两份资产名称和 GitHub SHA-256 digest 与已人工验收的本地文件一致；不重新下载 ZIP、`.sha256` 或源码，不产生下载副本。digest 缺失、格式错误或不一致时停止，不回退到下载验证。正文及源码链接在发布前检查，发布前批准与合并身份、历史元数据基线保护继续按根运行手册执行。
 
 ## 运行目录与凭据
 

@@ -57,13 +57,13 @@
 - [ ] Release notes 另行保留平台、下载、未签名/SmartScreen 限制、DeepSeek 数据发送、SHA-256 等适用的通用说明；这些说明不能代替“本次更新”。
 - [ ] Release notes 包含 GPL-3.0-only 及精确 tag 对应源码下载入口；免费源码包含应用、配置、Prompt、测试、构建脚本及说明。
 - [ ] 发布 Draft 前重新读取其 Release notes，确认“本次更新”存在且非空，再发布。
-- [ ] 发布后重新读取公开 Release，从未登录视角核对正文、“本次更新”、公开可见性、下载链接、Tag 和资产摘要。
-- [ ] 未登录下载源码并逐文件与发行冻结提交核对，同时重新计算公开 ZIP SHA-256，不能仅凭页面或静态测试宣称源码和成品一致。
+- [ ] 发布后重新读取公开 Release，仅通过 GitHub API 元数据核验：公开仓库中的 Release 已发布、tag 指向冻结 commit C、两份资产名称正确、GitHub SHA-256 digest 分别与已人工验收的本地 ZIP 和 `.sha256` 文件哈希一致。
+- [ ] 永久取消匿名／未登录下载验证；不重新下载 ZIP、`.sha256` 或源码。digest 缺失、格式错误或不一致时停止，不回退到下载验证；正文及对应源码链接在发布前检查，不声称已验证实际下载字节或源码归档。
 
 ## 发行事实与审计
 
 - [ ] 冻结前完成发行文档和 `docs/CHANGELOG.md` 的已完成变化记录，随同一个 PR 合并；未公开版本不提前描述为已发布。
-- [ ] 最终哈希、C 自身 SHA、实际发布状态和匿名核验事实保存于 Release 正文及受管审计，不写入待冻结 C，不追加发布状态文档 PR。
+- [ ] 最终哈希、C 自身 SHA、实际发布状态和 GitHub 元数据核验事实保存于 Release 正文及受管审计，不写入待冻结 C，不追加发布状态文档 PR。
 - [ ] 在审计中分别记录 C 与 M；已发布资产保持不变，不重建或替换已发布资产，历史发行记录保持原样。
 - [ ] Git commit/push 必须获得相应授权；对发行文档执行适用离线测试和 `git diff --check`，确认 ZIP、`.sha256`、测试或审计产物没有进入 Git。
 
@@ -71,13 +71,13 @@
 
 - [ ] 本节的不得清理要求限定旧发行物和历史材料；本次登记工作文件的收尾按生命周期执行，不改变本节授权及正式发布后远端核验门槛。
 - [ ] 已按 [运行手册](../OPERATIONS.md#本地历史-portable-收口) 将精确旧文件删除纳入当次授权，分别列明旧 ZIP、校验文件和旧版本 `dist/` 成品目录；仅授权清理 `release/` 不包含 `dist/`。构建、验证和失败阶段不得提前清理，已授权时不重复确认。
-- [ ] 正式新版本 Release 成功发布，新资产、tag、BUILD_INFO、公开源码及远端资产核验全部通过。
-- [ ] 从未登录视角下载全部待清理版本的正式 ZIP 和 `.sha256`，核对名称、字节数、GitHub digest、实际 SHA-256、校验内容及 tag/BUILD_INFO，确认历史资产完整且历史发行保持不变。
+- [ ] 正式新版本 Release 成功发布，四项发布后元数据核验、本地包身份及远端资产核验全部通过。
+- [ ] 仅通过 GitHub API 元数据核对全部待清理版本的公开发行状态、tag、资产名称及 GitHub SHA-256 digest，分别对比本地文件的 SHA-256，检查本地校验内容及 tag/BUILD_INFO；确认历史资产完整且历史发行保持不变。不重新下载历史发行物，缺少对应本地 ZIP 或有效 digest 时保留并停止，不回退到下载验证。
 - [ ] 明确列出准确文件名，核验绝对路径、目录链接与项目边界，逐文件删除，不使用通配符或递归删除；未知版本、非 portable 文件和未明确确认的本地技术构建均保留并停止清理。
 - [ ] 本地 `release/` 只保留当前最新正式版本的 ZIP 和 `.sha256`；旧正式版本由 GitHub Releases 作为历史存档。记录最终文件列表。
 - [ ] 旧版本 `dist/` 仅在新旧远端核验全部通过后收口，不由构建器或临时产物轮换自动删除；确认是早于当前正式版本的已发布成品、不再用于构建、验证或待审，所属进程、线程及数据库连接退出。
 - [ ] 检查旧目录完整路径和文件名；含 `runtime/`、Secret、数据库、PDF 或日志的目录保留，不读取这些用户数据。未知版本、技术候选、链接、越界或归属不明均保留并停止清理，技术构建例外不适用于 `dist/`。
-- [ ] 旧目录名、BUILD_INFO 的版本与提交和对应历史 tag 一致；完整文件集和逐文件 SHA-256 与已核验的对应远端正式 ZIP 一致，遗漏文件、额外文件或目录、哈希及身份不符均停止。
+- [ ] 旧目录名、BUILD_INFO 的版本与提交和对应历史 tag 一致；完整文件集和逐文件 SHA-256 与已通过远端 digest 核验的本地历史 ZIP 一致，该 ZIP 已通过本地完整性及校验文件检查；遗漏文件、额外文件或目录、哈希及身份不符均停止。缺少对应本地 ZIP 或有效 digest 时保留并停止，不通过重新下载补齐。
 - [ ] 授权清单保存准确绝对路径、完整文件与目录清单、逐文件哈希、对应资产摘要和保留理由，执行前重新核验，任何变化都停止；只逐文件删除，再由深到浅移除已核验的空目录，禁止删除 `dist/` 父目录或使用通配符、`Remove-Item -Recurse`。删除失败立即停止，保存已删除与残留清单，不自动重试。
 - [ ] `dist/` 只保留当前最新正式版本及仍有明确必要的成品；逐项记录额外保留目录的用途和待完成事项，后续发布再次复核，并记录最终文件及目录列表。
 - [ ] 不删除或修改 GitHub 历史 Release、tag、源码或资产，不清理 `.desktop-build/`、源码材料、审计材料、运行数据；`preserved/previous-*`、vendor、许可输入与来源归档均不在本步骤范围。
@@ -93,13 +93,13 @@
 - [ ] 新登记 `verified_candidate_copy_v1` 的旧技术候选解压副本，仅在替代新包 ZIP 完整性、逐文件哈希校验和完整 portable 验证全部通过后，逐文件核对保留 ZIP 并自动清理；验证证据继续保留，人工验收仅用于取得原包发布资格，使用 `close-review` 单独记录。不扩展到正式发行、历史未标记记录或其他 previous-*，不改变上述正式发布收口的授权门槛。
 - [ ] 普通证据按生命周期自动轮换每类最近两次成功和最近一次普通失败诊断；历史、未结案故障及待审材料继续保护，普通失败不授予自动重跑网络或业务的权限。
 
-## 匿名只读核验入口
+## GitHub 元数据只读核验入口
 
-`scripts/verify_public_release.py` 参数指定 `--repo`、`--tag`、`--commit`、`--zip`、`--checksum`、`--history-baseline` 和 `--review-run-id`。发布前增加 `--preflight`，要求完整人工批准并保存 `evidence/preflight.json`；发布后省略该开关，保存 `evidence/release.json` 与发行身份摘要。新标识包必须指定验收 ID；无新标识的历史包保留原参数只读核验能力，不能据此推定新流程发布资格。只在当次授权的公开核验范围内访问 GitHub；不使用登录凭据、不上传、不发布、不删除远端资产、不自动重试。运行登记并保护本地资产和基线，收尾本次下载副本。该入口不授予本地历史 portable 删除权限，也不代替上述人工检查。
+`scripts/verify_public_release.py` 参数指定 `--repo`、`--tag`、`--commit`、`--zip`、`--checksum`、`--history-baseline` 和 `--review-run-id`。发布前增加 `--preflight`，要求完整人工批准并保存 `evidence/preflight.json`；发布后省略该开关，保存 `evidence/release.json` 与发行身份摘要。新标识包必须指定验收 ID；无新标识的历史包保留原参数只读核验能力，不能据此推定新流程发布资格。只在当次授权范围内读取公开仓库的 GitHub API JSON 元数据，不读取登录凭据、不上传、不发布、不删除远端资产、不自动重试；非 API URL 及转向下载地址的重定向均拒绝。运行登记并保护本地资产和基线，不产生发行物或源码下载副本。审计使用 `verification=github-metadata`，分别保存两份资产名称、本地 SHA-256 和 GitHub digest，不再写入匿名下载或源码归档核验字段；旧审计保持原样。该入口不授予本地历史 portable 删除权限，也不代替上述人工检查。
 
-基线为 `history_snapshot(repo, tag)` 的 JSON：`releases` 保存排除目标 tag 后各 Release 的 id、tag_name、name、body、draft、prerelease、immutable 及全部 assets 的 id/name/size/digest；`tags` 保存排除目标 tag 的 refs/tags/ 到对象 SHA 映射。发布前取得并保存在项目内忽略目录；核验前后都必须与该基线一致。旧审计基线格式不自动转换，原历史脚本和记录保持原样。
+基线为 `history_snapshot(repo, tag)` 的 JSON：`releases` 保存排除目标 tag 后各 Release 的 id、tag_name、name、body、draft、prerelease、immutable 及全部 assets 的 id/name/size/digest；`tags` 保存排除目标 tag 的 refs/tags/ 到对象 SHA 映射。发布前取得并保存在项目内忽略目录；核验前后都必须与该基线一致。旧审计基线格式不自动转换，既有历史记录保持原样。
 
 ```powershell
-# 发布前；发布后用同一组参数省略 --preflight，再核验公开资产和源码。
+# 发布前；发布后用同一组参数省略 --preflight，仅核验公开发行元数据与本地文件哈希。
 & $desktopPython -X utf8 -B scripts/verify_public_release.py --preflight --review-run-id '<portable-ID>' --repo 'yyyang20/arXivKaleid-Desktop' --tag 'v<version>' --commit '<C 的40位SHA>' --zip 'release/arXivKaleid-<version>-windows-x64.zip' --checksum 'release/arXivKaleid-<version>-windows-x64.zip.sha256' --history-baseline '.desktop-build/<本次审计>/history-baseline.json'
 ```

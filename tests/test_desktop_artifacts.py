@@ -3,7 +3,6 @@
 """只在自产隔离根中注入故障；不读取用户数据、不构建、不联网。"""
 import copy
 import hashlib
-import io
 import json
 import os
 from pathlib import Path
@@ -847,6 +846,8 @@ class CandidateCopyTests(ArtifactFixture):
         calls = []
         def get(url):
             calls.append(url)
+            if url == f'https://api.github.com/repos/{repo}':
+                return b'{"private": false, "visibility": "public"}'
             return json.dumps({'object': ref} if url.endswith('/git/ref/heads/main') else []).encode()
         args = ['--repo', repo, '--tag', tag, '--commit', commit, '--zip', output['zip'],
                 '--checksum', output['checksum'], '--history-baseline', baseline.name,
@@ -857,20 +858,17 @@ class CandidateCopyTests(ArtifactFixture):
         merged.assert_called_once_with(self.root, commit, ref['sha'])
         self.assertFalse(any('/releases/tags/' in url for url in calls))
         release = dict(assets=[])
-        downloads = {}
         for path in (archive, checksum):
-            url = f'https://github.com/{repo}/releases/download/{tag}/{path.name}'
-            downloads[url] = path.read_bytes()
             release['assets'].append(dict(name=path.name, size=path.stat().st_size,
-                digest='sha256:' + artifacts.file_hash(path), state='uploaded', browser_download_url=url))
+                digest='sha256:' + artifacts.file_hash(path)))
         with self.assertRaisesRegex(RuntimeError, 'review_required'):
-            release_check.verify_assets(release, repo, tag, commit, archive, checksum, get=downloads.__getitem__)
-        result = release_check.verify_assets(release, repo, tag, commit, archive, checksum,
-            get=downloads.__getitem__, review_run_id=review.record['id'], root=self.root)
-        self.assertTrue(result['assets_equal_local'])
+            release_check.verify_assets(release, tag, commit, archive, checksum)
+        result = release_check.verify_assets(release, tag, commit, archive, checksum,
+            review_run_id=review.record['id'], root=self.root)
+        self.assertTrue(result['asset_digests_match_local'])
         with self.assertRaisesRegex(RuntimeError, 'not_approved'):
-            release_check.verify_assets(release, repo, tag, commit, archive, checksum,
-                get=downloads.__getitem__, review_run_id=build_run.record['id'], root=self.root)
+            release_check.verify_assets(release, tag, commit, archive, checksum,
+                review_run_id=build_run.record['id'], root=self.root)
 
     def test_preflight_rejects_unapproved_or_changed_merge_and_remote_main(self):
         parent = self.root
@@ -889,6 +887,8 @@ class CandidateCopyTests(ArtifactFixture):
                     '--history-baseline', baseline.name, '--preflight', '--review-run-id', review.record['id']]
                 main_calls = []
                 def get(url):
+                    if url == 'https://api.github.com/repos/owner/project':
+                        return b'{"private": false, "visibility": "public"}'
                     if url.endswith('/git/ref/heads/main'):
                         main_calls.append(url)
                         return json.dumps({'object': dict(type='commit',
@@ -1322,79 +1322,200 @@ class LicenseAndReleaseTests(ArtifactFixture):
         checksum.write_text(artifacts.file_hash(zip_path) + '  ' + zip_path.name + '\n', encoding='ascii')
         release = dict(id=1, tag_name=tag, name='test', body='## 本次更新\n- 合成验证\nGPL-3.0-only\n' +
             f'https://github.com/{repo}/archive/refs/tags/{tag}.zip', draft=False, prerelease=True, immutable=True, assets=[])
-        downloads = {}
         for index, path in enumerate((zip_path, checksum)):
-            url = f'https://github.com/{repo}/releases/download/{tag}/{path.name}'
-            downloads[url] = path.read_bytes()
             release['assets'].append(dict(id=index, name=path.name, size=path.stat().st_size,
-                digest='sha256:' + artifacts.file_hash(path), state='uploaded', browser_download_url=url))
-        return repo, tag, commit, zip_path, checksum, release, downloads
+                digest='sha256:' + artifacts.file_hash(path)))
+        return repo, tag, commit, zip_path, checksum, release
 
-    def test_public_assets_mock_network_and_mismatch(self):
-        repo, tag, commit, zip_path, checksum, release, downloads = self.release_fixture()
-        result = release_check.verify_assets(release, repo, tag, commit, zip_path, checksum, get=downloads.__getitem__)
-        self.assertTrue(result['assets_equal_local'])
-        calls = []
-        def wrong(url):
-            calls.append(url)
-            return b'bad'
-        with self.assertRaisesRegex(RuntimeError, 'bytes_mismatch'):
-            release_check.verify_assets(release, repo, tag, commit, zip_path, checksum, get=wrong)
-        self.assertEqual(len(calls), 1)
+    def test_public_assets_compare_both_local_hashes_without_network(self):
+        repo, tag, commit, zip_path, checksum, release = self.release_fixture()
+        with patch.object(release_check, 'github_metadata_get', side_effect=AssertionError('unexpected network')):
+            result = release_check.verify_assets(release, tag, commit, zip_path, checksum)
+        self.assertTrue(result['asset_digests_match_local'])
+        self.assertEqual({a['name']: a['local_sha256'] for a in result['assets']},
+                         {p.name: artifacts.file_hash(p) for p in (zip_path, checksum)})
         with self.assertRaisesRegex(RuntimeError, 'build_identity_mismatch'):
-            release_check.verify_assets(release, repo, tag, 'b' * 40, zip_path, checksum, get=downloads.__getitem__)
+            release_check.verify_assets(release, tag, 'b' * 40, zip_path, checksum)
 
-    def test_public_source_exact_bytes_and_inventory(self):
-        data = io.BytesIO()
-        with zipfile.ZipFile(data, 'w') as stream:
-            stream.writestr('project-tag/file.txt', b'content')
-        with patch.object(release_check.subprocess, 'check_output', side_effect=[b'file.txt\n', b'content']):
-            self.assertEqual(release_check.verify_source(data.getvalue(), self.root, 'a' * 40)['source_files'], 1)
-        with patch.object(release_check.subprocess, 'check_output', side_effect=[b'file.txt\n', b'changed']):
-            with self.assertRaisesRegex(RuntimeError, 'source_bytes_mismatch'):
-                release_check.verify_source(data.getvalue(), self.root, 'a' * 40)
+    def test_public_assets_reject_missing_invalid_or_mismatched_digests(self):
+        for index in (0, 1):
+            for digest in (None, '', 1, 'md5:' + 'a' * 32, 'sha256:' + 'a' * 63,
+                           'sha256:' + 'A' * 64, 'sha256:' + '0' * 64):
+                with self.subTest(asset=index, digest=digest):
+                    repo, tag, commit, zip_path, checksum, release = self.release_fixture()
+                    release['assets'][index]['digest'] = digest
+                    error = 'digest_mismatch' if digest == 'sha256:' + '0' * 64 else 'digest_invalid'
+                    with self.assertRaisesRegex(RuntimeError, error):
+                        release_check.verify_assets(release, tag, commit, zip_path, checksum)
+            release['assets'][index].pop('digest')
+            with self.assertRaisesRegex(RuntimeError, 'digest_invalid'):
+                release_check.verify_assets(release, tag, commit, zip_path, checksum)
 
-    def test_complete_public_check_mock_preserves_inputs_and_cleans_downloads(self):
-        repo, tag, commit, zip_path, checksum, release, downloads = self.release_fixture()
+    def test_public_assets_reject_missing_extra_duplicate_or_wrong_names(self):
+        for scenario in ('missing', 'extra', 'duplicate', 'wrong'):
+            with self.subTest(scenario=scenario):
+                repo, tag, commit, zip_path, checksum, release = self.release_fixture()
+                if scenario == 'missing':
+                    release['assets'].pop()
+                elif scenario == 'extra':
+                    release['assets'].append(dict(release['assets'][0], name='extra.zip'))
+                else:
+                    release['assets'][1]['name'] = zip_path.name if scenario == 'duplicate' else 'wrong.sha256'
+                with self.assertRaisesRegex(RuntimeError, 'assets_invalid'):
+                    release_check.verify_assets(release, tag, commit, zip_path, checksum)
+
+    def metadata_fixture(self):
+        repo, tag, commit, zip_path, checksum, release = self.release_fixture()
         baseline = self.write(self.root / 'history.json', b'{"releases": [], "tags": {}}')
-        source = io.BytesIO()
-        with zipfile.ZipFile(source, 'w') as stream:
-            stream.writestr('project-tag/file.txt', b'content')
-        downloads[f'https://github.com/{repo}/archive/refs/tags/{tag}.zip'] = source.getvalue()
+        api = f'https://api.github.com/repos/{repo}'
+        responses = {api: {'private': False, 'visibility': 'public'},
+                     api + '/releases/tags/' + tag: release,
+                     api + '/git/ref/tags/' + tag: {'object': {'type': 'commit', 'sha': commit}},
+                     api + '/releases?per_page=100&page=1': [],
+                     api + '/git/matching-refs/tags/?per_page=100&page=1': []}
+        args = ['--repo', repo, '--tag', tag, '--commit', commit, '--zip', zip_path.name,
+                '--checksum', checksum.name, '--history-baseline', baseline.name]
+        return api, args, responses
+
+    def test_complete_public_check_only_requests_metadata_and_preserves_inputs(self):
+        api, args, responses = self.metadata_fixture()
+        # 正文要求在发布前检查，发布后不以正文或 immutable 作为额外门槛。
+        release = responses[api + '/releases/tags/v1']
+        release.update(body='', immutable=False)
         calls = []
         def get(url):
             calls.append(url)
-            if url in downloads:
-                return downloads[url]
-            if '/releases/tags/' in url:
-                return json.dumps(release).encode()
-            if '/git/ref/tags/' in url:
-                return json.dumps({'object': {'type': 'commit', 'sha': commit}}).encode()
-            return b'[]'
-        with patch.object(release_check, 'ROOT', self.root), \
-                patch.object(release_check, 'verify_source', return_value={'source_files': 1}):
-            release_check.main(['--repo', repo, '--tag', tag, '--commit', commit, '--zip', zip_path.name,
-                '--checksum', checksum.name, '--history-baseline', baseline.name], get=get)
+            self.assertTrue(url.startswith(api))
+            return json.dumps(responses[url]).encode()
+        with patch.object(release_check, 'ROOT', self.root):
+            release_check.main(args, get=get)
         path, record = artifacts.records(self.root)[0]
         self.assertEqual(record['state'], 'succeeded')
         self.assertFalse((path / 'work').exists())
-        self.assertEqual(len(record['downloads']), 3)
-        self.assertTrue((path / 'evidence/release.json').exists())
-        self.assertEqual(artifacts.file_hash(zip_path), record['protected_hashes'][zip_path.name])
-        self.assertEqual(calls.count(f'https://api.github.com/repos/{repo}/releases/tags/{tag}'), 2)
+        self.assertNotIn('downloads', record)
+        self.assertFalse(list(self.root.rglob('*.download')))
+        result = json.loads((path / 'evidence/release.json').read_text(encoding='utf-8'))
+        self.assertEqual(result['verification'], 'github-metadata')
+        self.assertTrue(result['release_public'])
+        for obsolete in ('anonymous', 'source_files', 'source_sha256', 'assets_equal_local'):
+            self.assertNotIn(obsolete, result)
+        for name, digest in record['protected_hashes'].items():
+            self.assertEqual(artifacts.file_hash(self.root / name), digest)
+        self.assertEqual(calls.count(api + '/releases/tags/v1'), 2)
 
-    def test_history_baseline_change_stops_before_download(self):
-        repo, tag, commit, zip_path, checksum, release, downloads = self.release_fixture()
+    def test_public_check_rejects_private_repository_draft_and_wrong_tag(self):
+        for scenario in ('private', 'draft', 'tag-name', 'tag-target'):
+            root = self.root / scenario
+            root.mkdir()
+            with self.subTest(scenario=scenario), patch.object(self, 'root', root):
+                api, args, responses = self.metadata_fixture()
+                if scenario == 'private':
+                    responses[api].update(private=True, visibility='private')
+                elif scenario == 'draft':
+                    responses[api + '/releases/tags/v1']['draft'] = True
+                elif scenario == 'tag-name':
+                    responses[api + '/releases/tags/v1']['tag_name'] = 'v2'
+                else:
+                    responses[api + '/git/ref/tags/v1']['object']['sha'] = 'b' * 40
+                calls = []
+                def get(url):
+                    calls.append(url)
+                    return json.dumps(responses[url]).encode()
+                error = ('repository_not_public' if scenario == 'private' else
+                         'tag_mismatch' if scenario == 'tag-target' else 'state_invalid')
+                with patch.object(release_check, 'ROOT', root), self.assertRaisesRegex(RuntimeError, error):
+                    release_check.main(args, get=get)
+                if scenario == 'private':
+                    self.assertEqual(calls, [api])
+
+    def test_tag_resolution_supports_annotations_and_rejects_cycles(self):
+        api = 'https://api.github.com/repos/owner/project'
+        responses = {api + '/git/ref/tags/v1': {'object': {'type': 'tag', 'sha': 'b' * 40}},
+                     api + '/git/tags/' + 'b' * 40: {'object': {'type': 'commit', 'sha': 'a' * 40}}}
+        get = lambda url: json.dumps(responses[url]).encode()
+        self.assertEqual(release_check.tag_commit(api, 'v1', get), 'a' * 40)
+        responses[api + '/git/tags/' + 'b' * 40]['object'] = {'type': 'tag', 'sha': 'b' * 40}
+        with self.assertRaisesRegex(RuntimeError, 'tag_mismatch'):
+            release_check.tag_commit(api, 'v1', get)
+
+    def test_public_check_detects_metadata_changes_during_check(self):
+        for scenario in ('release', 'tag', 'repository', 'history'):
+            root = self.root / scenario
+            root.mkdir()
+            with self.subTest(scenario=scenario), patch.object(self, 'root', root):
+                api, args, responses = self.metadata_fixture()
+                counts = {}
+                target = {'release': api + '/releases/tags/v1',
+                          'tag': api + '/git/ref/tags/v1', 'repository': api,
+                          'history': api + '/git/matching-refs/tags/?per_page=100&page=1'}[scenario]
+                def get(url):
+                    counts[url] = counts.get(url, 0) + 1
+                    value = copy.deepcopy(responses[url])
+                    if url == target and counts[url] == 2:
+                        if scenario == 'release':
+                            value['assets'][0]['digest'] = 'sha256:' + '0' * 64
+                        elif scenario == 'tag':
+                            value['object']['sha'] = 'b' * 40
+                        elif scenario == 'repository':
+                            value.update(private=True, visibility='private')
+                        else:
+                            value = [{'ref': 'refs/tags/v0', 'object': {'sha': 'b' * 40}}]
+                    return json.dumps(value).encode()
+                error = 'historical_release_changed' if scenario == 'history' else 'changed_during_check'
+                with patch.object(release_check, 'ROOT', root), self.assertRaisesRegex(RuntimeError, error):
+                    release_check.main(args, get=get)
+                path, record = artifacts.records(root)[0]
+                self.assertEqual(record['state'], 'failed')
+                self.assertFalse((path / 'evidence/release.json').exists())
+
+    def test_metadata_transport_requests_json_once_without_credentials(self):
+        url = 'https://api.github.com/repos/owner/project'
+        for status in (200, 503):
+            with self.subTest(status=status), patch.object(release_check.urllib.request, 'build_opener') as factory:
+                opener = factory.return_value
+                response = opener.open.return_value.__enter__.return_value
+                response.status = status
+                response.read.return_value = b'{}'
+                if status == 200:
+                    self.assertEqual(release_check.github_metadata_get(url), b'{}')
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'http_failed'):
+                        release_check.github_metadata_get(url)
+                opener.open.assert_called_once()
+                request = opener.open.call_args.args[0]
+                self.assertEqual(request.get_header('Accept'), 'application/vnd.github+json')
+                self.assertIsNone(request.get_header('Authorization'))
+                self.assertIsNone(request.get_header('Cookie'))
+
+    def test_metadata_transport_rejects_download_urls_and_redirects(self):
+        for url in ('https://github.com/owner/project/releases/download/v1/file.zip',
+                    'https://github.com/owner/project/archive/refs/tags/v1.zip',
+                    'https://api.github.com/repos/owner/project/zipball/v1',
+                    'https://api.github.com/repos/owner/project/tarball/v1',
+                    'https://api.github.com/repos/owner/project/releases/assets/123',
+                    'https://api.github.com.evil.invalid/repos/owner/project',
+                    'http://api.github.com/repos/owner/project'):
+            with self.subTest(url=url), patch.object(release_check.urllib.request, 'build_opener') as opener:
+                with self.assertRaisesRegex(RuntimeError, 'metadata_url_invalid'):
+                    release_check.github_metadata_get(url)
+                opener.assert_not_called()
+                with self.assertRaisesRegex(RuntimeError, 'metadata_url_invalid'):
+                    release_check.MetadataRedirectHandler().redirect_request(None, None, 302, '', {}, url)
+
+    def test_history_baseline_change_stops_before_target_release(self):
+        repo, tag, commit, zip_path, checksum, release = self.release_fixture()
         baseline = self.write(self.root / 'history.json', b'{"releases": [], "tags": {"old": "different"}}')
         calls = []
         def get(url):
             calls.append(url)
+            if url == f'https://api.github.com/repos/{repo}':
+                return b'{"private": false, "visibility": "public"}'
             return b'[]'
         with patch.object(release_check, 'ROOT', self.root):
             with self.assertRaisesRegex(RuntimeError, 'historical_release_changed'):
                 release_check.main(['--repo', repo, '--tag', tag, '--commit', commit, '--zip', zip_path.name,
                     '--checksum', checksum.name, '--history-baseline', baseline.name], get=get)
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 3)
         self.assertTrue(all(url.startswith('https://api.github.com/') for url in calls))
         path, record = artifacts.records(self.root)[0]
         self.assertEqual(record['state'], 'failed')

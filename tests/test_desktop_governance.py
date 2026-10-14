@@ -186,8 +186,9 @@ def portable_cleanup_errors(operations: str, checklist: str, agents: str) -> lis
         'operations': (operations, {
             'stage': ('构建、验证和失败阶段不得清理',),
             'authorization': ('对应删除授权', '已明确授权时不重复确认'),
-            'remote': ('正式新版本 Release 成功发布', '未登录视角下载',
-                       'GitHub digest', '实际 SHA-256', 'tag/BUILD_INFO',
+            'remote': ('正式新版本 Release 成功发布', '仅通过 GitHub API 元数据',
+                       'GitHub SHA-256 digest', '本地文件的 SHA-256', 'tag/BUILD_INFO',
+                       '缺少对应本地 ZIP 或有效 digest 时保留并停止',
                        '历史版本资产完整且与发布前基线一致'),
             'scope': ('`release/` 只保留当前最新正式版本的 ZIP 和 `.sha256`',
                       '逐文件删除，不使用通配符或递归删除', '技术构建例外'),
@@ -201,7 +202,8 @@ def portable_cleanup_errors(operations: str, checklist: str, agents: str) -> lis
                            '不由构建器或临时产物轮换自动删除'),
             'dist_integrity': ('准确目录', '早于当前正式版本的已发布成品',
                                'BUILD_INFO 的版本与提交和对应历史 tag',
-                               '完整文件集和逐文件 SHA-256', '对应远端正式 ZIP',
+                               '完整文件集和逐文件 SHA-256', '已通过远端 digest 核验的本地历史 ZIP',
+                               '缺少对应本地 ZIP 或有效 digest 时保留并停止',
                                '遗漏文件、额外文件或目录、哈希及身份不符均停止'),
             'dist_preserve': ('含 `runtime/`、Secret、数据库、PDF 或日志的目录保留',
                               '不读取这些用户数据', '未知版本、技术候选、链接、越界或归属不明',
@@ -219,7 +221,9 @@ def portable_cleanup_errors(operations: str, checklist: str, agents: str) -> lis
             'stage': ('构建、验证和失败阶段不得提前清理',),
             'authorization': ('纳入当次授权',),
             'remote': ('Release 成功发布', '远端资产核验全部通过',
-                       '未登录视角下载', '历史资产完整', 'GitHub digest', 'tag/BUILD_INFO'),
+                       '仅通过 GitHub API 元数据', '历史资产完整', 'GitHub SHA-256 digest',
+                       '本地文件的 SHA-256', 'tag/BUILD_INFO',
+                       '缺少对应本地 ZIP 或有效 digest 时保留并停止'),
             'scope': ('`release/` 只保留当前最新正式版本的 ZIP 和 `.sha256`',
                       '逐文件删除，不使用通配符或递归删除'),
             'preserve': ('不删除或修改 GitHub 历史 Release、tag、源码或资产',
@@ -232,7 +236,9 @@ def portable_cleanup_errors(operations: str, checklist: str, agents: str) -> lis
                            '不由构建器或临时产物轮换自动删除'),
             'dist_integrity': ('旧目录名、BUILD_INFO 的版本与提交和对应历史 tag 一致',
                                '早于当前正式版本的已发布成品', '完整文件集和逐文件 SHA-256',
-                               '对应远端正式 ZIP', '遗漏文件、额外文件或目录、哈希及身份不符均停止'),
+                               '已通过远端 digest 核验的本地历史 ZIP',
+                               '缺少对应本地 ZIP 或有效 digest 时保留并停止',
+                               '遗漏文件、额外文件或目录、哈希及身份不符均停止'),
             'dist_preserve': ('含 `runtime/`、Secret、数据库、PDF 或日志的目录保留',
                               '不读取这些用户数据', '未知版本、技术候选、链接、越界或归属不明',
                               '技术构建例外不适用于 `dist/`',
@@ -249,9 +255,10 @@ def portable_cleanup_errors(operations: str, checklist: str, agents: str) -> lis
             'entry': ('已授权的本地历史 portable 收口', '新旧远端资产核验通过后',
                       '`docs/OPERATIONS.md`', '构建和验证阶段不得提前清理',
                        '例外只覆盖 `release/`', '不扩大到其他运行或审计材料'),
-            'dist_entry': ('以及当次明确授权、与对应远端正式 ZIP 逐文件一致',
+            'dist_entry': ('以及当次明确授权、与已通过远端 digest 核验的本地历史 ZIP 逐文件一致',
                            '不再用于构建、验证或待审的旧版本 `dist/` 成品目录',
-                           '含 `runtime/` 的目录继续保护'),
+                           '含 `runtime/` 的目录继续保护',
+                           '缺少对应本地 ZIP 或有效 digest 时保留并停止'),
         }),
     }
     return [f'{document}:{rule}' for document, (text, rules) in contracts.items()
@@ -629,7 +636,7 @@ class DesktopGovernanceTests(unittest.TestCase):
         for restriction in ('不可转让', '不得出售', '不授予应用源码', '使用本软件表示你接受本协议'):
             self.assertNotIn(restriction, eula)
         self.assert_fragments(read_utf8('docs/public_release/RELEASE_CHECKLIST.md'),
-                              ('GPL-3.0-only', '对应源码', '未登录下载源码', '历史发行保持不变'))
+                              ('GPL-3.0-only', '对应源码', '正文及对应源码链接在发布前检查', '历史发行保持不变'))
         self.assert_fragments(read_utf8('packaging/windows/THIRD_PARTY_NOTICES.txt'),
                               ('Corresponding Source scope', 'pypdf 6.14.2', 'System Libraries'))
 
@@ -650,7 +657,8 @@ class DesktopGovernanceTests(unittest.TestCase):
         self.assert_fragments(section(checklist, '发布 GitHub Release'), (
             'GitHub 写操作授权', 'Release notes 包含非空的 `## 本次更新`',
             '发布 Draft 前重新读取', '存在且非空', '发布后重新读取公开 Release',
-            '未登录视角', 'Tag', '资产摘要',
+            '仅通过 GitHub API 元数据', 'tag 指向冻结 commit C', '两份资产名称正确',
+            'GitHub SHA-256 digest', '已人工验收的本地 ZIP 和 `.sha256` 文件哈希一致',
         ))
         self.assert_fragments(section(checklist, '发行事实与审计'), (
             '同一个 PR', '`docs/CHANGELOG.md`', '不重建或替换已发布资产',
@@ -689,6 +697,27 @@ class DesktopGovernanceTests(unittest.TestCase):
         self.assertNotIn("'public-release' if branch == 'main'", builder)
         self.assertNotIn("info.get('branch') != 'main'", verifier)
 
+    def test_release_metadata_policy_rejects_download_regressions(self):
+        paths = ('AGENTS.md', 'docs/OPERATIONS.md', 'docs/public_release/RELEASE_CHECKLIST.md',
+                 'docs/desktop/DESKTOP_OPERATIONS.md')
+        required = ('GitHub API 元数据', '公开仓库中的 Release 已发布', 'tag 指向冻结 commit',
+                    '两份资产名称', 'GitHub SHA-256 digest', '已人工验收',
+                    '不重新下载 ZIP、`.sha256` 或源码', '不回退到下载验证')
+        forbidden = ('从未登录视角下载', '未登录下载源码并逐文件', '匿名下载成品及源码',
+                     '收尾本次下载副本', '已核验的对应远端正式 ZIP')
+        for path in paths:
+            text = read_utf8(path)
+            with self.subTest(path=path):
+                self.assert_fragments(text, required)
+                for old_rule in forbidden:
+                    self.assertNotIn(old_rule, text)
+        # 仓库概览和模块职责也不能继续描述已删除的核验入口。
+        for path in ('README.md', 'docs/README.md', 'docs/PROJECT_STRUCTURE.md',
+                     'docs/desktop/DESKTOP_STRUCTURE.md'):
+            text = read_utf8(path)
+            for old_rule in ('匿名核验', '匿名下载', '下载副本收尾', '冻结源码与历史基线'):
+                self.assertNotIn(old_rule, text)
+
     def test_changelog_remains_history_and_records_code_decoupling(self):
         changelog = read_utf8('docs/CHANGELOG.md')
         self.assert_fragments(changelog, (
@@ -718,6 +747,8 @@ class DesktopGovernanceTests(unittest.TestCase):
         mutations = (
             (0, '构建、验证和失败阶段不得清理', 'operations:stage'),
             (0, '历史版本资产完整且与发布前基线一致', 'operations:remote'),
+            (0, '缺少对应本地 ZIP 或有效 digest 时保留并停止', 'operations:remote'),
+            (1, '缺少对应本地 ZIP 或有效 digest 时保留并停止', 'checklist:remote'),
             (1, '纳入当次授权', 'checklist:authorization'),
             (1, '异常时停止后续发布或删除', 'checklist:failure'),
             (1, '不清理 `.desktop-build/`、源码材料、审计材料、运行数据', 'checklist:preserve'),
@@ -767,6 +798,8 @@ class DesktopGovernanceTests(unittest.TestCase):
                     ('dist_stage', '所属进程、线程及数据库连接退出'),
                     ('dist_stage', '不由构建器或临时产物轮换自动删除'),
                     ('dist_integrity', '早于当前正式版本的已发布成品'),
+                    ('dist_integrity', '已通过远端 digest 核验的本地历史 ZIP'),
+                    ('dist_integrity', '缺少对应本地 ZIP 或有效 digest 时保留并停止'),
                     ('dist_integrity', '遗漏文件、额外文件或目录、哈希及身份不符均停止'),
                     ('dist_preserve', '技术构建例外不适用于 `dist/`'),
                     ('dist_preserve', '`preserved/previous-*`、vendor、许可输入与来源归档均不在本步骤范围'),
@@ -777,9 +810,10 @@ class DesktopGovernanceTests(unittest.TestCase):
                 changed[index] = changed[index].replace(fragment, '错误规则')
                 with self.subTest(document=document, fragment=fragment):
                     self.assertIn(f'{document}:{rule}', portable_cleanup_errors(*changed))
-        for fragment in ('以及当次明确授权、与对应远端正式 ZIP 逐文件一致',
+        for fragment in ('以及当次明确授权、与已通过远端 digest 核验的本地历史 ZIP 逐文件一致',
                          '不再用于构建、验证或待审的旧版本 `dist/` 成品目录',
-                         '含 `runtime/` 的目录继续保护'):
+                         '含 `runtime/` 的目录继续保护',
+                         '缺少对应本地 ZIP 或有效 digest 时保留并停止'):
             changed = documents.copy()
             changed[2] = changed[2].replace(fragment, '错误规则')
             with self.subTest(fragment=fragment):
