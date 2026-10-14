@@ -66,6 +66,7 @@ class DesktopAnalysisTests(unittest.TestCase):
         self.fail_stage = None
         self.invalid_stage = None
         self.missing_usage = False
+        self.extra_input_tokens = 0
         self.extra_output_tokens = 0
 
     def snapshot(self, count=4):
@@ -84,8 +85,8 @@ class DesktopAnalysisTests(unittest.TestCase):
         if stage == "round1":
             data = self.round1_payload()
             result = dict(model="deepseek-flash", choices=[dict(message=dict(content=json.dumps(data)), finish_reason="stop")],
-                          usage=dict(prompt_tokens=100, completion_tokens=20 + self.extra_output_tokens,
-                                     total_tokens=120 + self.extra_output_tokens, prompt_cache_hit_tokens=0, prompt_cache_miss_tokens=100))
+                          usage=dict(prompt_tokens=100 + self.extra_input_tokens, completion_tokens=20 + self.extra_output_tokens,
+                                     total_tokens=120 + self.extra_input_tokens + self.extra_output_tokens, prompt_cache_hit_tokens=0, prompt_cache_miss_tokens=100 + self.extra_input_tokens))
         else:
             # 从真正构造的全文消息中读取输入身份，覆盖工具传输和共享校验器。
             task = json.loads(payload["input"][1]["content"])
@@ -227,12 +228,12 @@ class DesktopAnalysisTests(unittest.TestCase):
         usage = model_usage.load_run_usage_summary(conn, result.run_id)
         self.assertEqual(usage.api_attempt_count, 2)
         self.assertEqual(usage.known_total_tokens, 350)
-        self.assertTrue(usage.cost_complete)
+        self.assertTrue(usage.token_complete)
         self.assertIn("Round 1 输入数量：57", result.markdown)
         self.assertIn("Round 2 最终推荐数量：3", result.markdown)
         self.assertIn("PDF 实际页数：2", result.markdown)
-        self.assertIn(format(usage.known_cost, "f"), result.markdown)
-        for forbidden in ("fake-desktop-key", "private-fulltext-marker", "generation", "GitHub Issue", "automatic"):
+        self.assertIn("Token 使用量：输入 300 / 输出 50 / 合计 350", result.markdown)
+        for forbidden in ("fake-desktop-key", "private-fulltext-marker", "generation", "GitHub Issue", "automatic", "费用", "¥"):
             self.assertNotIn(forbidden, result.markdown)
         dump = "\n".join(conn.iterdump())
         self.assertNotIn("fake-desktop-key", dump)
@@ -474,20 +475,14 @@ class DesktopAnalysisTests(unittest.TestCase):
             self.run_snapshot()
         self.assertEqual(len(self.requests), 1)
 
-    def test_cost_and_token_preflight_stop_before_http(self):
+    def test_token_preflight_stops_before_http(self):
         config = main.load_config(self.root / "config.json")
-        for change in ("tokens", "cost"):
-            modified = copy.deepcopy(config)
-            if change == "tokens":
-                modified["limits"]["max_round1_request_tokens"] = 1
-            else:
-                modified["deepseek"]["round1_pricing"]["rate_schedule"]["peak_rates"]["output_price_per_million"] = "100"
-            with patch("main.load_config", return_value=modified):
-                with self.assertRaises(analysis.AnalysisError) as caught:
-                    self.run_snapshot()
-            self.assertEqual(caught.exception.issue.code, "AKD-R1-INPUT_LIMIT" if change == "tokens" else "AKD-R1-COST_LIMIT")
-            self.assertFalse(caught.exception.issue.details["model_request_sent"])
-            self.assertEqual(self.requests, [])
+        config["limits"]["max_round1_request_tokens"] = 1
+        with patch("main.load_config", return_value=config), self.assertRaises(analysis.AnalysisError) as caught:
+            self.run_snapshot()
+        self.assertEqual(caught.exception.issue.code, "AKD-R1-INPUT_LIMIT")
+        self.assertFalse(caught.exception.issue.details["model_request_sent"])
+        self.assertEqual(self.requests, [])
 
     def test_all_38_127_240_candidates_enter_one_round1_and_late_index_is_valid(self):
         hashes = []
@@ -509,7 +504,7 @@ class DesktopAnalysisTests(unittest.TestCase):
             connection.close()
         self.assertEqual(len(set(hashes)), 3)
 
-    def test_budget_exact_input_context_and_price_boundaries(self):
+    def test_budget_exact_input_output_and_context_boundaries(self):
         config = main.load_config(self.root / "config.json")
         with patch("round2_fulltext_state.conservative_request_token_estimate", return_value=800000), patch("desktop.analysis.checked_usage", return_value=None):
             analysis.validate_budget(None, 1, config, "round1", [])
@@ -524,27 +519,18 @@ class DesktopAnalysisTests(unittest.TestCase):
                 analysis.validate_budget(None, 1, changed, stage, [])
             self.assertEqual(caught.exception.issue.code, f"AKD-{'R1' if stage == 'round1' else 'R2'}-{code}")
             self.assertFalse(caught.exception.issue.details["model_request_sent"])
-        with patch("model_usage.price_snapshot_from_config", return_value=None), self.assertRaises(analysis.DesktopOperationError) as caught:
-            analysis.validate_budget(None, 1, config, "round1", [])
-        self.assertEqual(caught.exception.issue.code, "AKD-R1-PRICE_UNAVAILABLE")
         self.assertFalse(self.requests)
 
-    def test_round2_budget_includes_actual_round1_cost(self):
-        self.extra_output_tokens = 500000
-        original_price = model_usage.price_snapshot_from_config
-        # 固定谷时实际费用为约 2 元；下一次峰值上界约 1 元，累计必须拒绝。
-        def price(config, **kwargs):
-            return original_price(config, at=datetime(2026, 9, 25, 0, tzinfo=timezone.utc), **kwargs)
-        with patch("model_usage.price_snapshot_from_config", side_effect=price):
-            with self.assertRaises(analysis.AnalysisError) as caught:
-                self.run_snapshot()
-        self.assertEqual(caught.exception.issue.code, "AKD-R2-COST_LIMIT")
-        self.assertIn("Round 1", caught.exception.issue.impact)
-        connection = self.connect()
-        usage = model_usage.load_run_usage_summary(connection, 1)
-        self.assertEqual(usage.api_attempt_count, 1)
-        self.assertGreater(usage.known_cost, 0)
-        self.assertEqual(len(self.requests), 1)
+    def test_two_rounds_preserve_large_complete_token_usage(self):
+        # 合法的大用量不阻止下一轮；发送前仍按现有 Token 和上下文规则预检。
+        self.extra_input_tokens = 699900
+        self.extra_output_tokens = 127980
+        result = self.run_snapshot()
+        usage = model_usage.load_run_usage_summary(self.connect(), result.run_id)
+        self.assertEqual([stage for stage, _ in self.requests], ["round1", "round2"])
+        self.assertTrue(usage.token_complete)
+        self.assertEqual(usage.known_total_tokens, 828230)
+        self.assertIn("Token 使用量：输入 700200 / 输出 128030 / 合计 828230", result.markdown)
 
     def test_round2_context_stop_keeps_round1_results_and_usage(self):
         original = analysis.validate_budget

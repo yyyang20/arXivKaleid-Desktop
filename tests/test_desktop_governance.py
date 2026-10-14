@@ -361,9 +361,9 @@ class DesktopGovernanceTests(unittest.TestCase):
         self.assert_fragments(section(agents, '需求确认与必要授权'), (
             '普通、可逆且位于项目范围内', '可直接执行，无需额外确认',
             '会实质影响实现结果的歧义', '需要用户明确授权的受控操作',
-            '实际费用', 'Git 提交、推送', '第三方依赖', '可能造成数据丢失',
+            '模型调用、外部 API', 'Git 提交、推送', '第三方依赖', '可能造成数据丢失',
             '不要求固定关键词', '该指令本身可以视为授权',
-            '入口、次数、费用上限', '用户授权不能突破',
+            '入口、次数、数据发送范围', '用户授权不能突破',
             '未经用户明确授权，不得在 Codex 中',
             '创建、修改、启用、禁用或删除 Automation',
             '定时监控、周期性检查或其他持续后台任务',
@@ -381,11 +381,11 @@ class DesktopGovernanceTests(unittest.TestCase):
             '直接相关的配置、提示词、源码、测试', '动态扩展',
             '实时外部状态', '只读 GitHub API', '明确无关的改动必须保留',
         ))
-        self.assert_fragments(section(agents, '外部操作与费用'), (
-            '入口、次数和费用上限', '失败后不得自动重试或重跑',
+        self.assert_fragments(section(agents, '外部操作与模型调用'), (
+            '入口、次数和数据发送范围', '失败后不得自动重试或重跑',
             '候选抓取、一次性快照分析、本机构建和 portable 验证',
             '`docs/PROJECT_SPEC.md`', '`docs/OPERATIONS.md`',
-            '身份、授权、费用和停止条件', '授权分别处理',
+            '身份、授权和停止条件', '授权分别处理',
         ))
 
     def test_public_maintenance_language_has_one_root_contract(self):
@@ -457,7 +457,7 @@ class DesktopGovernanceTests(unittest.TestCase):
         expected = {
             'Codex 协作、安全、授权或完成规则': ('AGENTS.md', 'desktop/AGENTS.md'),
             '文档职责、阅读路线或更新路由': ('本文档', 'desktop/README.md'),
-            '候选、筛选、PDF、标签、日报、数据库或费用规则': ('PROJECT_SPEC.md',),
+            '候选、筛选、PDF、标签、日报、数据库规则': ('PROJECT_SPEC.md',),
             '开发、验证与公开发布流程': ('OPERATIONS.md', 'public_release/RELEASE_CHECKLIST.md'),
             '文件新增、删除、移动或职责改变': ('PROJECT_STRUCTURE.md',),
             'Desktop GUI、凭据或候选快照行为': ('desktop/DESKTOP_SPEC.md',),
@@ -479,9 +479,9 @@ class DesktopGovernanceTests(unittest.TestCase):
     def test_user_guide_is_part_of_existing_update_and_resource_contract(self):
         guide = read_utf8('docs/desktop/USER_GUIDE.md')
         self.assert_fragments(guide, ('## 开始使用', '## 两轮筛选有什么区别',
-            '## 如何设置提示词', '## 如何阅读日报', '## 资源与费用',
+            '## 如何设置提示词', '## 如何阅读日报', '## 资源限制',
             '10／5 篇额外截取', '**60 页**', 'pypdf', 'Rank 1', '不继承第一轮',
-            '不会改写已有历史内容', '分析会产生模型调用费用'))
+            '不会改写已有历史内容', '实际 Token 用量可在日报中查看'))
         self.assert_fragments(section(read_utf8('AGENTS.md'), '文档与完成要求'), (
             '每个功能任务必须主动检查', 'docs/desktop/USER_GUIDE.md',
             '无需用户另行提醒', '纯内部实现变化无影响', '完成报告中说明检查结果'))

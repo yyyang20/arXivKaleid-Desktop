@@ -9,7 +9,6 @@ import os
 import sqlite3
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from decimal import Decimal
 from threading import Lock
 from typing import Callable
 
@@ -21,7 +20,6 @@ import round2_fulltext_state
 import run_round2
 from desktop import pipeline
 from desktop import paths as desktop_paths
-from desktop.config import batch_cost_limit
 from desktop.diagnostics import DesktopDiagnostics, StageTimer, new_id
 from desktop.errors import (
     DesktopIssue,
@@ -120,7 +118,7 @@ def _analysis_issue(stage: str, exc: BaseException) -> DesktopIssue:
     if isinstance(exc, DesktopOperationError):
         return exc.issue
     code = str(exc).split(":", 1)[0]
-    if stage in {"round1", "round2"} and code == "desktop_usage_or_cost_unconfirmed":
+    if stage in {"round1", "round2"} and code == "desktop_usage_unconfirmed":
         return make_issue(f"AKD-{'R1' if stage == 'round1' else 'R2'}-USAGE_UNCONFIRMED")
     if stage == "prepare":
         if code == "desktop_missing_key":
@@ -192,7 +190,7 @@ def initialize_work_paths():
 
 
 def validate_budget(connection, run_id, config, stage, messages):
-    """沿用保守估算和峰值价格，并把前一轮实际费用计入同批上限。"""
+    """保留每轮输入、输出、上下文和已有 Token usage 的安全检查。"""
     stage_config = main.deepseek_stage_config(config, stage)
     tokens = round2_fulltext_state.conservative_request_token_estimate(messages)
     if stage == "round2":
@@ -212,31 +210,16 @@ def validate_budget(connection, run_id, config, stage, messages):
         stop("CONTEXT_LIMIT")
     if stage_config["max_retries"] != 0 or output > config["limits"]["model_max_output_tokens"]:
         stop("CONFIG_INVALID")
-    price = model_usage.price_snapshot_from_config(config, stage=stage, conservative=True)
-    if price is None or price.currency != "CNY":
-        stop("PRICE_UNAVAILABLE")
     try:
-        usage = checked_usage(connection, run_id, config)
+        checked_usage(connection, run_id, config)
     except RuntimeError:
         stop("USAGE_UNCONFIRMED")
-    spent = usage.known_cost if usage else Decimal(0)
-    worst = (
-        Decimal(tokens) * price.cache_miss_input_price_per_million
-        + Decimal(output) * price.output_price_per_million
-    ) / Decimal(1_000_000)
-    cap = batch_cost_limit(config)
-    if not worst.is_finite() or spent + worst > cap:
-        stop("COST_LIMIT")
 
 
 def checked_usage(connection, run_id, config):
     usage = model_usage.load_run_usage_summary(connection, run_id)
-    if usage is not None and (
-        not usage.token_complete or not usage.cost_complete
-        or usage.currency != "CNY" or not usage.known_cost.is_finite()
-        or usage.known_cost > batch_cost_limit(config)
-    ):
-        raise RuntimeError("desktop_usage_or_cost_unconfirmed")
+    if usage is not None and not usage.token_complete:
+        raise RuntimeError("desktop_usage_unconfirmed")
     return usage
 
 
@@ -258,7 +241,6 @@ def run_round1(
         timeout_seconds=float(stage["timeout_seconds"]), max_retries=0,
         thinking_mode=stage["thinking_mode"], reasoning_effort=stage["reasoning_effort"],
     )
-    price = model_usage.price_snapshot_from_config(config, stage="round1")
     result = client.request_json(messages, max_tokens=stage["max_output_tokens"])
     if diagnostic_observer is not None:
         try:
@@ -272,7 +254,7 @@ def run_round1(
         research_profile_version=config["versions"]["research_profile_version"],
         selection_policy_version=config["round1_selection_policy_version"],
         request_hash=main.stable_json_hash(messages), local_cache_status="miss",
-        call_result=result, price_snapshot=price,
+        call_result=result,
     )
     if not result.ok or result.data is None:
         raise DesktopOperationError(_model_issue("round1", result))

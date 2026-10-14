@@ -30,6 +30,12 @@ import run_round2
 import round2_fulltext_state as fulltext
 
 
+def validation_screen(application):
+    """隔离验证优先使用物理分辨率较低的屏幕，DPI 换算不影响选择。"""
+    return min(application.screens(), key=lambda screen:
+               screen.size().width() * screen.size().height() * screen.devicePixelRatio() ** 2)
+
+
 def synthetic_snapshot(day, *, categories=pipeline.CATEGORIES):
     """完整元数据只用于隔离诊断，不通过任何网络入口取得。"""
     papers = tuple(dict(
@@ -659,9 +665,9 @@ def exercise(application, window, root, synthetic_key):
     output.mkdir()
     gate = threading.Event()
     captures = []
-    # 多显示器原生 DPI 不同；诊断窗口固定到主屏，避免启动位置改变倍率基线。
+    # 多显示器原生 DPI 不同；诊断窗口固定到低分辨率屏，保持倍率基线。
     # 只移动本次隔离窗口，不修改 Windows 显示设置或正式应用的窗口行为。
-    screen = application.primaryScreen()
+    screen = validation_screen(application)
     window.windowHandle().setScreen(screen)
     origin = screen.availableGeometry().topLeft()
     window.move(origin.x() + 40, origin.y() + 40)
@@ -819,12 +825,12 @@ def exercise(application, window, root, synthetic_key):
                                ('fulltext', '全文提取完成 · 已处理 9 / 9')]:
             window.handle_progress(ProgressEvent(task_type='analysis', stage=stage,
                                                  state='completed', message=message))
-        window.show_issue(make_issue('AKD-R2-COST_LIMIT'))
-        window.status.setText(make_issue('AKD-R2-COST_LIMIT').reason)
+        window.show_issue(make_issue('AKD-R2-CONTEXT_LIMIT'))
+        window.status.setText(make_issue('AKD-R2-CONTEXT_LIMIT').reason)
         window.task_panel.finish(failed=True)
         assert window.analysis_steps['round1'].text().startswith('✓')
         assert window.analysis_steps['round2'].text().startswith('✕')
-        assert 'Round 1 已发生的结果与费用仍保留' in window.diagnostic_text.text()
+        assert 'Round 1 已发生的结果与 Token 记录仍保留' in window.diagnostic_text.text()
         capture('12c-round2-safety-stop')
         # 保存失败使用隔离的代理，不更改 Windows ACL 或系统配置。
         store = window.secret_store

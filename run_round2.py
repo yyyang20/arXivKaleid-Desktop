@@ -932,9 +932,6 @@ def run_round2_model_and_save(
 
     local_cache_status = "miss"
     try:
-        price_snapshot = model_usage.price_snapshot_from_config(
-            config, stage="round2"
-        )
         client = create_deepseek_client(
             project_root=project_root,
             config=config,
@@ -958,7 +955,6 @@ def run_round2_model_and_save(
         **usage_identity,
         local_cache_status=local_cache_status,
         call_result=call_result,
-        price_snapshot=price_snapshot,
     )
     if not call_result.ok or call_result.data is None:
         raise RuntimeError(f"round2_deepseek_call_failed:{call_result.error_type}")

@@ -2,10 +2,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # See LICENSE in the project root for the full license text.
 
-"""Desktop 的只读配置契约；预算和资源身份不依赖在线自动化策略。"""
+"""Desktop 的只读配置契约；Token 限制和资源身份不依赖在线自动化策略。"""
 from __future__ import annotations
 
-from decimal import Decimal, InvalidOperation
 import hashlib
 import json
 from pathlib import Path
@@ -15,28 +14,13 @@ from typing import Any
 from desktop.paths import checked_path
 
 
-CONFIG_VERSION = "desktop_config_v6"
-MAX_BATCH_COST_CNY = Decimal("3.00")
+CONFIG_VERSION = "desktop_config_v7"
 PROMPTS = {
     "round1_prompt": "prompts/relevance_round1_v23.txt",
     "round2_prompt": "prompts/relevance_round2_v18.txt",
     "round1_research_prompt": "prompts/research_prompt_round1_v2.txt",
     "round2_research_prompt": "prompts/research_prompt_round2_v2.txt",
 }
-
-
-def batch_cost_limit(config: dict[str, Any]) -> Decimal:
-    """配置可以收紧预算，但永远不能突破 alpha.4 的单批硬上限。"""
-    try:
-        value = config["budget"]["max_batch_cost_cny"]
-        if not isinstance(value, str):
-            raise ValueError
-        cap = Decimal(value)
-        if not cap.is_finite() or not Decimal(0) < cap <= MAX_BATCH_COST_CNY:
-            raise ValueError
-    except (KeyError, TypeError, ValueError, InvalidOperation):
-        raise RuntimeError("desktop_cost_limit_invalid") from None
-    return cap
 
 
 def load_config(config_path: Path) -> dict[str, Any]:
@@ -55,7 +39,7 @@ def load_config(config_path: Path) -> dict[str, Any]:
         "config_version", "project_name",
         "round1_selection_policy", "round1_selection_policy_version",
         "request_timeout_seconds", "deepseek",
-        "versions", "limits", "budget", "paths", "resource_integrity",
+        "versions", "limits", "paths", "resource_integrity",
         "fetch_policy",
     }:
         raise RuntimeError("desktop_config_fields_invalid")
@@ -91,15 +75,12 @@ def load_config(config_path: Path) -> dict[str, Any]:
         limits["context_safety_margin_tokens"] >= limits["model_context_tokens"]
     ):
         raise RuntimeError("desktop_token_limits_invalid")
-    if not isinstance(config.get("budget"), dict) or set(config["budget"]) != {"max_batch_cost_cny"}:
-        raise RuntimeError("desktop_cost_limit_invalid")
-    batch_cost_limit(config)
 
     deepseek = config.get("deepseek")
     fields = {"round1_model", "round2_model", "base_url", "timeout_seconds", "max_retries",
               "round1_max_output_tokens", "round2_max_output_tokens", "round1_thinking_mode",
               "round2_thinking_mode", "round1_reasoning_effort", "round2_reasoning_effort",
-              "round2_output_transport", "round1_pricing", "round2_pricing"}
+              "round2_output_transport"}
     if not isinstance(deepseek, dict) or set(deepseek) != fields:
         raise RuntimeError("desktop_model_config_invalid")
     if deepseek["base_url"] != "https://api.deepseek.com/chat/completions" or (
@@ -116,8 +97,6 @@ def load_config(config_path: Path) -> dict[str, Any]:
         if deepseek[f"{stage}_model"] != "deepseek-flash" or (
             deepseek[f"{stage}_thinking_mode"] != "enabled"
         ) or deepseek[f"{stage}_reasoning_effort"] != "high":
-            raise RuntimeError("desktop_model_config_invalid")
-        if not isinstance(deepseek[f"{stage}_pricing"], dict):
             raise RuntimeError("desktop_model_config_invalid")
 
     if config.get("paths") != PROMPTS:

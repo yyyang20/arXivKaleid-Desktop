@@ -47,7 +47,7 @@ def round2_selection_policy_for_prompt(prompt_version: str) -> str:
     return ROUND2_SELECTION_POLICY
 
 
-DESKTOP_SCHEMA_VERSION = 1
+DESKTOP_SCHEMA_VERSION = 2
 
 ATOM_NS = {
     "atom": "http://www.w3.org/2005/Atom",
@@ -76,7 +76,6 @@ def deepseek_stage_config(
         "max_retries": deepseek["max_retries"],
         "thinking_mode": deepseek[f"{stage}_thinking_mode"],
         "reasoning_effort": deepseek[f"{stage}_reasoning_effort"],
-        "pricing": deepseek.get(f"{stage}_pricing"),
     }
     if stage == "round1":
         stage_config["max_output_tokens"] = deepseek["round1_max_output_tokens"]
@@ -148,7 +147,7 @@ def load_prompt(prompt_path: Path) -> str:
 def initialize_database_schema(connection: sqlite3.Connection) -> None:
     """初始化 Desktop 当前工作库，不迁移或读取在线历史数据库。"""
     version = connection.execute("PRAGMA user_version").fetchone()[0]
-    if version not in (0, DESKTOP_SCHEMA_VERSION):
+    if version not in (0, 1, DESKTOP_SCHEMA_VERSION):
         raise RuntimeError("desktop_database_schema_version_invalid")
     statements = [
         """
