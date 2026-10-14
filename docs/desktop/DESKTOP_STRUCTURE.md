@@ -38,7 +38,7 @@
 | `scripts/portable_licenses.py` | 从实际分发组件及固定 gzip/xz 源码收集原许可，保留八项源码归档与哈希 |
 | `scripts/local_artifacts.py` | 构建/验证工作区、证据、受保护输入与 previous-* 的生命周期、精确计划，以及新登记技术副本的自动安全清理和独立的发布人工验收结案 |
 | `scripts/run_local_checks.py` | 受管离线测试入口，子进程使用独立项目内临时根 |
-| `scripts/verify_public_release.py` | 原包批准及合并身份的发布前核验、匿名发行核验及本次下载副本收尾 |
+| `scripts/verify_public_release.py` | 原包批准及合并身份的发布前核验、公开发行元数据与本地资产哈希及历史基线核验；不下载发行物或源码 |
 | `scripts/validate_windows_portable.py` | 全新副本的脱离开发环境验证和重启，绑定构建运行、ZIP 和完整文件清单的成功证据 |
 | `scripts/visual_qa_desktop.py` | 禁止网络/模型、内存假 Key、合成业务事件驱动的真实 Qt 截图；产物仅在项目忽略目录 |
 | `scripts/generate_app_icon.py` | 使用现有 PySide6 从 A0 SVG 母版确定性生成 16～256 px Windows ICO 与可选验收预览 |

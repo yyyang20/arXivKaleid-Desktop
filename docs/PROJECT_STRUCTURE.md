@@ -34,7 +34,7 @@
 | `scripts/run_local_checks.py` | 独立 TEMP/TMP 与测试根目录的离线 unittest 薄入口 |
 | `scripts/validate_arxiv_history.py` | 获准后在独立 runtime 通过真实 GUI/QThread 验收多版本论文、无更新日、旧日回抓、快照和指定版本 PDF；硬禁止模型 |
 | `scripts/validate_physics_categories.py` | 获准后核对官方 51 类、逐类真实查询与分类匹配，再验收隔离 GUI 的多 Archive 完整抓取、组合、历史刷新与快照冻结；硬禁止模型 |
-| `scripts/verify_public_release.py` | 核验原包人工批准及 C 已合并、匿名核验发行资产、冻结源码与历史基线；不执行远端写入 |
+| `scripts/verify_public_release.py` | 核验原包人工批准及 C 已合并、公开发行元数据与本地资产哈希及历史基线；不下载发行物或源码、不执行远端写入 |
 
 根目录保留核心函数模块供 Desktop 调用；应用启动入口为 `python -B -m desktop.app`。当前仓库没有 Online 自动化、云端状态、恢复、错误样本或 Issue 日报发布模块，也没有 GitHub workflow。
 
@@ -119,7 +119,7 @@ docs/
 - 工作库、锁、PDF、DPAPI 密文、请求缓存和会话日志的具体路径及职责见 [Desktop 当前运行数据](desktop/DESKTOP_STRUCTURE.md#当前运行数据)；SQLite 数据边界见 [当前业务规范](PROJECT_SPEC.md#sqlite-工作数据)。
 - 成功候选保存至独立 `metadata/arxiv_versions.sqlite`，分析只消费内存冻结快照；原始日报与计数保存到独立 `history/history.sqlite`，不写根 `reports/`，不参与候选选择或工作库重置。
 - `build/`、`dist/`、`release/`、`.desktop-build/`、`.codex-validation/`、`.codex-audit-*/`、Python 缓存及运行数据被 Git 忽略。
-- `release/` 和 `dist/` 在构建和验证期间保留候选及旧成品；正式发布和新旧远端核验成功后，按分别列明的当次授权精确收口，`release/` 只保留最新正式 ZIP 与 `.sha256`，`dist/` 只保留当前正式版本及仍有明确必要的成品。旧 `dist/` 必须与对应远端正式 ZIP 逐文件一致且已无构建、验证或待审用途，含 `runtime/` 的目录继续保护。历史正式版本存于 GitHub Releases；授权、核验和精确清理边界见 [本地历史 portable 收口](OPERATIONS.md#本地历史-portable-收口)，不清理其他忽略材料。
+- `release/` 和 `dist/` 在构建和验证期间保留候选及旧成品；正式发布和新旧远端元数据核验成功后，按分别列明的当次授权精确收口，`release/` 只保留最新正式 ZIP 与 `.sha256`，`dist/` 只保留当前正式版本及仍有明确必要的成品。旧 `dist/` 必须与已通过远端 digest 核验的本地历史 ZIP 逐文件一致且已无构建、验证或待审用途，含 `runtime/` 的目录继续保护。不重新下载历史发行物；缺少对应本地 ZIP 或有效 digest 时保留并停止。历史正式版本存于 GitHub Releases；授权、核验和精确清理边界见 [本地历史 portable 收口](OPERATIONS.md#本地历史-portable-收口)，不清理其他忽略材料。
 - `.gitignore` 仍保护旧 `config/local_secret.json`、`data/` 数据库、PDF、`reports/` 和日志等路径；这些忽略规则不表示旧运行入口仍然存在。
 
 SQLite、PDF、报告、日志、缓存、审计目录和未跟踪文件不得因普通代码或文档任务被删除。当前任务自产合成数据及可重建工作文件仅按 [临时产物生命周期](OPERATIONS.md#临时产物生命周期) 收尾，不涉及用户或历史数据。`.desktop-build/managed-artifacts/` 保存登记、证据和受保护 previous-*；测试 work 独立位于 `.codex-validation/managed-artifacts/`。`.desktop-build/inputs/conda-licenses/` 是稳定、被忽略的构建输入，不是临时清理目标；来源发行 ZIP 和 vendor 继续保留。退役的历史包装脚本及旧许可映射目录不是当前依赖，须经依赖复核及当次明确授权后才能清理。下载或生成临时审计内容只能使用项目内明确的忽略目录。路径配置使用相对路径，代码写入前验证解析后的目标仍在规定根目录内。

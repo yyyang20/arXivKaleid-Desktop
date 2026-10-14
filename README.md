@@ -61,7 +61,7 @@ alpha 9 的历史保存当次完整原始 Markdown，重启后无需 Key 即可�
 
 Copyright (c) 2026 yyyang20. 自有应用源码、测试、构建脚本、配置、提示词和项目文档采用 **GPL-3.0-only**，完整文本见 [LICENSE](LICENSE)，许可说明见 [EULA.txt](EULA.txt)。本软件无保证；允许使用、研究、修改和分发，包括商业使用。分发受 GPL 覆盖的衍生版本须继续按 GPLv3 提供相应源码，私人修改不要求公开。
 
-公开 alpha 13 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.13.zip)包含源码、资源、测试及构建说明；对应 [Windows portable Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.13) 的 `BUILD_INFO.json` 与 tag 均指向发行提交 `b62f0238670b54c8e1e3929a4160da3fac5a1b3a`，用途为 `public-release`。正式成品从合并后的干净 main 重建，未使用第一阶段技术候选；匿名下载成品及源码已核验。不要用浮动 main 代替已发行版本源码；发布后的 main 可以包含文档收口提交。
+公开 alpha 13 的[对应源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.13.zip)包含源码、资源、测试及构建说明；对应 [Windows portable Release](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.13) 的 `BUILD_INFO.json` 与 tag 均指向发行提交 `b62f0238670b54c8e1e3929a4160da3fac5a1b3a`，用途为 `public-release`。正式成品从合并后的干净 main 重建，未使用第一阶段技术候选；当时的验证事实见 CHANGELOG，不作为今后发布流程要求。不要用浮动 main 代替已发行版本源码；发布后的 main 可以包含文档收口提交。
 
 第三方组件保留各自许可，声明见 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)。完整许可文本及实际分发库的固定对应源码随 portable ZIP 提供，清单见 `licenses/components.json`。本版许可不改写既有历史发行资料。
 

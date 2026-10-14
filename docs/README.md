@@ -51,7 +51,7 @@ Windows portable 的打包 README、用户协议、隐私和安全说明集中�
 | Desktop 版本 | `PROJECT_SPEC.md` 当前身份表、根目录 `README.md`、`desktop/README.md`、`desktop/DESKTOP_SPEC.md` 和含版本化运行示例的 `desktop/DESKTOP_OPERATIONS.md` |
 | Windows portable 构建依赖或基线 | `desktop/DESKTOP_OPERATIONS.md`；分发组件或许可变化时同时检查 `public_release/` 和第三方声明 |
 | 仓库身份或发行资料职责 | 根目录 `README.md`、`OPERATIONS.md`、`PROJECT_STRUCTURE.md` 和 `public_release/RELEASE_CHECKLIST.md` |
-| Desktop 发行准备与实际发布核验 | 冻结前更新 `CHANGELOG.md` 的已完成变化及必要下载说明，随同一个 PR 合并；实际发布状态、最终哈希和匿名核验事实保存于 Release 正文与受管审计，不追加发布状态文档 PR |
+| Desktop 发行准备与实际发布核验 | 冻结前更新 `CHANGELOG.md` 的已完成变化及必要下载说明，随同一个 PR 合并；实际发布状态、最终哈希和 GitHub 元数据核验事实保存于 Release 正文与受管审计，不追加发布状态文档 PR |
 | Windows portable 打包说明、EULA、隐私或安全政策 | `public_release/` 维护源；同步根目录 `EULA.txt`、`PRIVACY.md`、`SECURITY.md`，并检查相关 Desktop 运行文档；两份 README 分别维护 |
 | 第三方声明 | `packaging/windows/THIRD_PARTY_NOTICES.txt` 维护源与根目录同名副本；分发组件改变时检查公开发布资料 |
 | 应用许可证或对应源码分发 | 根 `LICENSE`、两份 README、EULA、第三方声明、构建/源码 manifest 与 `public_release/RELEASE_CHECKLIST.md`；检查运行和结构文档 |

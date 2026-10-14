@@ -1,14 +1,12 @@
 # Copyright (c) 2026 yyyang20
 # SPDX-License-Identifier: GPL-3.0-only
-"""匿名只读核验公开发行及历史基线；不发布、不上传、不自动重试。"""
+"""通过 GitHub 元数据核验公开发行及历史基线；不下载发行物、不写入远端、不自动重试。"""
 import argparse
-import hashlib
-import io
 import json
 from pathlib import Path
 import re
-import subprocess
 import sys
+import urllib.parse
 import urllib.request
 import zipfile
 
@@ -18,10 +16,32 @@ from scripts.local_artifacts import ArtifactRun, checked_path, file_hash, approv
 from scripts.build_windows_portable import RELEASE_WORKFLOW, verify_merge_identity
 
 
-def public_get(url):
-    # 不加载 Cookie、CLI 登录或 Authorization；每个请求只有一次 attempt。
-    request = urllib.request.Request(url, headers={'User-Agent': 'arXivKaleid-release-check', 'Accept': '*/*'})
-    with urllib.request.build_opener(urllib.request.ProxyHandler()).open(request, timeout=180) as response:
+def require_metadata_url(url):
+    parsed = urllib.parse.urlsplit(url)
+    # 只允许本入口实际使用的元数据资源；GitHub API 也存在归档下载端点。
+    path = re.fullmatch(r'/repos/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(.*)', parsed.path)
+    resources = (r'', r'/releases', r'/releases/tags/v[0-9A-Za-z.+-]+',
+                 r'/git/matching-refs/tags/', r'/git/ref/heads/main',
+                 r'/git/ref/tags/v[0-9A-Za-z.+-]+', r'/git/tags/[0-9a-f]{40}')
+    if (parsed.scheme != 'https' or parsed.netloc != 'api.github.com'
+            or path is None or not any(re.fullmatch(resource, path[1]) for resource in resources)):
+        raise RuntimeError('public_release_metadata_url_invalid')
+
+
+class MetadataRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # 即使服务返回重定向，也不能转去下载资产或源码。
+        require_metadata_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def github_metadata_get(url):
+    require_metadata_url(url)
+    # 不读取本地凭据；仅请求 JSON 元数据，每个请求只有一次 attempt。
+    request = urllib.request.Request(url, headers={'User-Agent': 'arXivKaleid-release-check',
+                                                 'Accept': 'application/vnd.github+json'})
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler(), MetadataRedirectHandler())
+    with opener.open(request, timeout=180) as response:
         if response.status != 200:
             raise RuntimeError('public_release_http_failed')
         return response.read()
@@ -44,7 +64,7 @@ def paginated(repo, resource, get):
     raise RuntimeError('public_release_inventory_too_large')
 
 
-def history_snapshot(repo, exclude_tag, get=public_get):
+def history_snapshot(repo, exclude_tag, get=github_metadata_get):
     releases = paginated(repo, 'releases', get)
     refs = paginated(repo, 'git/matching-refs/tags/', get)
     return {'releases': sorted([release_identity(r) for r in releases if r['tag_name'] != exclude_tag], key=lambda r: r['id']),
@@ -73,9 +93,9 @@ def archive_identity(tag, commit, zip_path, checksum):
     return info
 
 
-def verify_assets(release, repo, tag, commit, zip_path, checksum, *, get=public_get,
+def verify_assets(release, tag, commit, zip_path, checksum, *,
                   review_run_id=None, root=None):
-    """资产名称、digest、实际字节、校验内容和 BUILD_INFO 必须同时匹配。"""
+    """仅将两份资产的 GitHub digest 与通过本地身份检查的文件哈希对比。"""
     info = archive_identity(tag, commit, zip_path, checksum)
     # 新流程包必须带人工批准；无新标识的历史包仍可单独只读核验。
     if info.get('release_workflow') == RELEASE_WORKFLOW and not review_run_id:
@@ -86,36 +106,33 @@ def verify_assets(release, repo, tag, commit, zip_path, checksum, *, get=public_
     assets = release['assets']
     if len(assets) != 2 or {a['name'] for a in assets} != names:
         raise RuntimeError('public_release_assets_invalid')
+    verified = []
     for asset in assets:
         local = zip_path if asset['name'] == zip_path.name else checksum
-        url = f'https://github.com/{repo}/releases/download/{tag}/{local.name}'
-        if asset['browser_download_url'] != url or asset.get('state') != 'uploaded':
-            raise RuntimeError('public_release_asset_url_invalid')
-        data = get(url)
-        if (len(data) != asset['size'] or 'sha256:' + hashlib.sha256(data).hexdigest() != asset['digest']
-                or data != local.read_bytes()):
-            raise RuntimeError('public_release_asset_bytes_mismatch')
+        digest = asset.get('digest')
+        if not isinstance(digest, str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
+            raise RuntimeError('public_release_asset_digest_invalid')
+        local_digest = file_hash(local)
+        if digest != 'sha256:' + local_digest:
+            raise RuntimeError('public_release_asset_digest_mismatch')
+        verified.append(dict(name=local.name, local_sha256=local_digest, github_digest=digest))
     digest = file_hash(zip_path)
-    return {'zip_sha256': digest, 'zip_bytes': zip_path.stat().st_size, 'assets_equal_local': True}
+    return {'zip_sha256': digest, 'zip_bytes': zip_path.stat().st_size,
+            'asset_digests_match_local': True, 'assets': verified}
 
 
-def verify_source(data, root, commit):
-    def git(*args):
-        return subprocess.check_output(['git', *args], cwd=root)
-    names = git('ls-tree', '-r', '--name-only', commit).decode('utf-8').splitlines()
-    if any(Path(n).name.lower() in ('secret.dat', 'local_secret.json', '.env') for n in names):
-        raise RuntimeError('sensitive_file_in_release_source')
-    with zipfile.ZipFile(io.BytesIO(data)) as archive:
-        files = [n for n in archive.namelist() if not n.endswith('/')]
-        if not files or len(files) != len(set(files)):
-            raise RuntimeError('public_source_inventory_invalid')
-        prefix = files[0].split('/')[0] + '/'
-        if set(files) != {prefix + n for n in names}:
-            raise RuntimeError('public_source_inventory_mismatch')
-        for name in names:
-            if archive.read(prefix + name) != git('show', commit + ':' + name):
-                raise RuntimeError('public_source_bytes_mismatch')
-    return {'source_files': len(names), 'source_sha256': hashlib.sha256(data).hexdigest()}
+def tag_commit(api, tag, get):
+    ref = json.loads(get(api + '/git/ref/tags/' + tag))['object']
+    seen = set()
+    # 轻量和 annotated tag 均解析到提交，拒绝循环或非提交对象。
+    while ref['type'] == 'tag':
+        if ref['sha'] in seen:
+            raise RuntimeError('public_release_tag_mismatch')
+        seen.add(ref['sha'])
+        ref = json.loads(get(api + '/git/tags/' + ref['sha']))['object']
+    if ref['type'] != 'commit':
+        raise RuntimeError('public_release_tag_mismatch')
+    return ref['sha']
 
 
 def main(argv=None, *, get=None):
@@ -131,7 +148,7 @@ def main(argv=None, *, get=None):
     args = parser.parse_args(argv)
     if args.preflight and not args.review_run_id:
         parser.error('--preflight requires --review-run-id')
-    get = get or public_get
+    get = get or github_metadata_get
     if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', args.repo) or not re.fullmatch(r'v[0-9A-Za-z.+-]+', args.tag) or not re.fullmatch(r'[0-9a-f]{40}', args.commit):
         parser.error('仓库、tag 或冻结提交格式无效')
     zip_path = checked_path(ROOT, args.zip)
@@ -143,16 +160,15 @@ def main(argv=None, *, get=None):
             run.protect(path)
         run.record['commit'] = args.commit
         def managed_get(url):
+            require_metadata_url(url)
             run.checkpoint()
             data = get(url)
-            if url.startswith('https://github.com/'):
-                target = run.work / (hashlib.sha256(url.encode()).hexdigest() + '.download')
-                target.write_bytes(data)
-                run.record.setdefault('downloads', {})[target.name] = {'bytes': len(data), 'sha256': file_hash(target)}
-                run.save()
             run.checkpoint()
             return data
         api = f'https://api.github.com/repos/{args.repo}'
+        repository = json.loads(managed_get(api))
+        if repository.get('private') is not False or repository.get('visibility') != 'public':
+            raise RuntimeError('public_release_repository_not_public')
         before = history_snapshot(args.repo, args.tag, managed_get)
         if before != baseline:
             raise RuntimeError('historical_release_changed')
@@ -178,28 +194,25 @@ def main(argv=None, *, get=None):
             print(json.dumps(result, ensure_ascii=False))
             return
         release = json.loads(managed_get(api + '/releases/tags/' + args.tag))
-        source_url = f'https://github.com/{args.repo}/archive/refs/tags/{args.tag}.zip'
-        if (release['tag_name'] != args.tag or release['draft'] or not release['immutable']
-                or not re.search(r'^## 本次更新\s*\n\s*\S', release['body'], re.MULTILINE)
-                or source_url not in release['body'] or 'GPL-3.0-only' not in release['body']):
-            raise RuntimeError('public_release_body_or_state_invalid')
-        ref = json.loads(managed_get(api + '/git/ref/tags/' + args.tag))['object']
-        # 同时支持轻量 tag 和 annotated tag，不使用浮动 main 替代冻结提交。
-        if ref['type'] == 'tag':
-            ref = json.loads(managed_get(api + '/git/tags/' + ref['sha']))['object']
-        if ref['type'] != 'commit' or ref['sha'] != args.commit:
+        if release['tag_name'] != args.tag or release['draft'] is not False:
+            raise RuntimeError('public_release_state_invalid')
+        if tag_commit(api, args.tag, managed_get) != args.commit:
             raise RuntimeError('public_release_tag_mismatch')
-        result = verify_assets(release, args.repo, args.tag, args.commit, zip_path, checksum,
-                               get=managed_get, review_run_id=args.review_run_id, root=ROOT)
-        result.update(verify_source(managed_get(source_url), ROOT, args.commit))
+        result = verify_assets(release, args.tag, args.commit, zip_path, checksum,
+                               review_run_id=args.review_run_id, root=ROOT)
         if history_snapshot(args.repo, args.tag, managed_get) != before:
             raise RuntimeError('historical_release_changed')
         final_release = json.loads(managed_get(api + '/releases/tags/' + args.tag))
-        if release_identity(final_release) != release_identity(release):
+        final_repository = json.loads(managed_get(api))
+        if (release_identity(final_release) != release_identity(release)
+                or tag_commit(api, args.tag, managed_get) != args.commit
+                or final_repository.get('visibility') != 'public'
+                or final_repository.get('private') is not False):
             raise RuntimeError('public_release_changed_during_check')
         if args.review_run_id:
             result['approval'] = approved_portable(ROOT, args.review_run_id, args.commit, zip_path, checksum)
-        result.update(commit=args.commit, anonymous=True, history_unchanged=True)
+        result.update(commit=args.commit, release_public=True,
+                      verification='github-metadata', history_unchanged=True)
         (run.evidence / 'release.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
         (run.evidence / 'public-release.json').write_text(json.dumps(release_identity(release), ensure_ascii=False, indent=2), encoding='utf-8')
         print(json.dumps(result))
