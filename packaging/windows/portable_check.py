@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # See LICENSE in the project root for the full license text.
 
-"""仅用于全新发行副本的零模型费用诊断，不接受用户 Key。"""
+"""仅用于全新发行副本的零模型诊断，不接受用户 Key。"""
 import io
 import ctypes
 import json
@@ -57,6 +57,11 @@ def run_recovery():
         application = QApplication([])
         window = desktop_app.DesktopWindow()
         assert window.api_key.text() == SYNTHETIC_KEY and not window.api_key.isModified()
+        from portable_visual import validation_screen
+        screen = validation_screen(application)
+        window.winId()
+        window.windowHandle().setScreen(screen)
+        window.move(screen.availableGeometry().topLeft())
         window.show()
         application.processEvents()
         assert window.isVisible()
@@ -125,7 +130,7 @@ def run(*, network=False, visual=False, target_date=None):
     if not paths.frozen() or runtime.exists():
         return 2
     paths.prepare_runtime(pipeline.PROJECT_ROOT)
-    report = {'ok': False, 'model_http_attempts': 0, 'model_cost_cny': '0'}
+    report = {'ok': False, 'model_http_attempts': 0}
     try:
         disable_diagnostic_ime()
         report['diagnostic_ime_thread_only'] = True
@@ -332,6 +337,11 @@ def run(*, network=False, visual=False, target_date=None):
             QMessageBox.question = original_question
             desktop_app.AnalysisAttempt = original_attempt
             window.api_key.setModified(False)
+        from portable_visual import validation_screen
+        screen = validation_screen(application)
+        window.winId()
+        window.windowHandle().setScreen(screen)
+        window.move(screen.availableGeometry().topLeft())
         window.show()
         if visual:
             from portable_visual import exercise

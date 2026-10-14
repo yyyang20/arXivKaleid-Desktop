@@ -41,7 +41,7 @@ from desktop.category_dialog import CategoryDialog
 
 ANALYSIS_NOTICE = (
     "开始分析会将论文标题、摘要、通过门控后的 PDF 提取全文和已保存的完整研究提示词"
-    " 发送到你自己的 DeepSeek API，并可能产生费用。\n\n"
+    " 发送到你自己的 DeepSeek API。\n\n"
     "API Key 仅在本机使用 Windows DPAPI 加密保存；PDF、SQLite 和缓存保存在本机。"
     "应用没有维护者服务器中转或遥测。\n\n"
     "是否同意并继续？详情见随附 PRIVACY.md。"

@@ -1,5 +1,12 @@
 # 功能变更记录
 
+## 2026-10-14：Desktop alpha 14
+
+- 日报、GUI、配置及两轮预检只保留 Token、上下文、PDF 和其他现有安全规则；调用审计保留输入、输出、总量及缓存 Token，其他筛选行为不变。
+- 配置升级为 `desktop_config_v7`，主工作库 schema v2 兼容 v1；旧表额外列原样保留，不执行破坏性迁移。同步使用说明、公开文档及离线回归。
+- 隔离 GUI 与 portable 视觉验证优先使用物理分辨率较低的显示器；正式应用启动行为不变。
+- 按单次构建流程准备 Windows portable 人工验收；尚未公开发布，公开下载仍为 alpha 13。实际构建身份、哈希及验证结果保存在受管审计中，不提前记录人工批准。
+
 ## 2026-10-13：Desktop 单次构建发布流程
 
 - 完成开发、发行文档和源码 GUI 验证后冻结 C，只构建一次最终待发布包；自动验证及人工验收通过后，通过一个普通合并 PR 保留 C，tag 指向 C，Release 使用同一份 ZIP 和校验文件，不追加发布状态文档 PR。
@@ -62,15 +69,15 @@
 ## 2026-10-10：Desktop alpha 11 公开发行
 
 - 已公开 [v0.1.0-alpha.11 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.11)，不标为稳定 latest。[功能 PR #20](https://github.com/yyyang20/arXivKaleid-Desktop/pull/20) 和 [验证修正 PR #21](https://github.com/yyyang20/arXivKaleid-Desktop/pull/21) 合并后，从干净 main 提交 `1e2285afb839e4029336b05d2eb9f359d23701ab` 重建；tag、BUILD_INFO 与该提交一致，用途为 `public-release`，第一阶段候选未上传。
-- 本版汇总两轮完整提示词、自主数量、独立全文判断和模型排序、自由评价与日报适配、中文界面及内置使用说明。默认黑洞阴影和 10／5 篇均可修改；原有 PDF、Token、上下文、费用与失败边界保持。
+- 本版汇总两轮完整提示词、自主数量、独立全文判断和模型排序、自由评价与日报适配、中文界面及内置使用说明。默认黑洞阴影和 10／5 篇均可修改；原有 PDF、Token、上下文、失败边界保持。
 - 仅上传 ZIP 和 `.sha256`：ZIP 为 118,663,986 字节，SHA-256 为 `d008c8e3bf38f49e02fc4a89955d32aafba065e1d18dfe3048ac4a5cbf06463b`。匿名下载两份资产与本地逐字节一致，110 个 tag 源码文件与发行 Git blob 一致；全部既有历史 tag、Release 正文及资产身份未变。
 - 冻结 PR 与正式 main 通过 260 项完整离线测试、零跳过、57 个 Python AST、八项资源哈希及差异检查。源码 GUI 修正后通过 45 个状态；最终 portable 通过原生 DPR 1.5 与模拟 100／125／150／200% 五组、每组 47 个状态，覆盖提示词、使用说明、模型顺序、跨进程恢复、DPAPI、普通重启、12 次窗口生命周期、DLL 来源、资源反例及隐私边界。470 个发行文件逐文件核验，自动合成数据只存在验证副本。
-- 本条和当前下载入口为发布后文档收口，不重建或替换已公开资产；技术候选、未发布构建及成功／失败审计证据按原始哈希保留，`release/` 仅留正式 ZIP 和校验文件。模型调用与费用为 0，未覆盖第二台干净 Windows 或所有第三方输入法；既有 Qt 弃用和测试退出 GC 告警保留，冻结生命周期及退出检查通过。
+- 本条和当前下载入口为发布后文档收口，不重建或替换已公开资产；技术候选、未发布构建及成功／失败审计证据按原始哈希保留，`release/` 仅留正式 ZIP 和校验文件。模型调用为 0，未覆盖第二台干净 Windows 或所有第三方输入法；既有 Qt 弃用和测试退出 GC 告警保留，冻结生命周期及退出检查通过。
 
 ## 2026-10-10：源码 GUI 验证合成等待修正
 
 - 为截图间受管容量核验保留有界的合成等待时间，避免历史材料扫描耗时触发验证线程自身超时；仍执行逐截图容量检查。
-- 只调整离线 GUI QA 的合成事件闸门，不改变应用网络、模型、费用或资源限制，使用说明正文无需修改。
+- 只调整离线 GUI QA 的合成事件闸门，不改变应用网络、模型或资源限制，使用说明正文无需修改。
 
 ## 2026-10-09：Desktop alpha11 内置使用说明
 
@@ -83,19 +90,19 @@
 
 - 第二轮入选数量由用户提示词决定，移除请求、配置、校验和日报中的 5 篇技术上限，检查全部合法唯一结果；模型数组顺序作为排名，日报从 Rank 1 连续显示。
 - 新增第二轮黑洞阴影默认示例，默认 5 篇、1—3 句话入选说明及阅读排序依据均可编辑；同步协议、策略、缓存和打包资源身份，GUI 中 Prompt 统一显示为“提示词”。
-- 第一轮研究逻辑与默认正文、PDF 60 页、Token、上下文、费用及失败边界保持；本阶段仅交付绑定本地冻结 commit 的技术候选，尚未公开发布。
+- 第一轮研究逻辑与默认正文、PDF 60 页、Token、上下文、失败边界保持；本阶段仅交付绑定本地冻结 commit 的技术候选，尚未公开发布。
 
 ## 2026-10-09：Desktop alpha11 第一轮数量与默认模板调整
 
 - 第一轮入选数量完全由用户 Prompt 决定，移除技术协议、请求、配置及校验中的 10 篇上限；身份编号仅用于识别，检查全部合法唯一结果，不要求研究排序。
 - 第一轮默认采用可编辑的黑洞阴影示例和 1—3 句话入选说明，日报改用“论文 N”；保存格式与历史原文保持，升级第一轮协议、策略及配置身份。
-- 第二轮协议、默认 Prompt、5 篇上限、PDF、Token、费用及失败机制保持不变；本阶段仅交付本地技术候选，未执行公开发布。
+- 第二轮协议、默认 Prompt、5 篇上限、PDF、Token、失败机制保持不变；本阶段仅交付本地技术候选，未执行公开发布。
 
 ## 2026-10-09：Desktop alpha11 完整研究 Prompt 本地技术候选
 
 - 两轮窗口升级为完整研究 Prompt 编辑器；研究方向、筛选、排除、评价和排序由用户定义，新增通用默认 Prompt 及可编辑的公式/PDF 提取格式提醒。
 - 固定层仅保留身份、顺序、结构、10/5 篇上限与安全门禁；可选自由评价不影响合法身份入选，取消领域标签、固定理由和阅读级别依赖。
-- 第二轮仅接收身份、标题、摘要及合格逐页全文，按身份排列，不继承第一轮评价或排名；Token 并列排除解除第一轮排名依赖，其他 PDF、Token、上下文、费用和失败边界保持。
+- 第二轮仅接收身份、标题、摘要及合格逐页全文，按身份排列，不继承第一轮评价或排名；Token 并列排除解除第一轮排名依赖，其他 PDF、Token、上下文和失败边界保持。
 - 同步保存格式、配置/策略/缓存身份、日报、历史、隐私说明与 portable 资源；不迁移 alpha10 数据，不增加分类多选。本阶段只冻结本地技术候选，公开下载仍为 alpha10，正式发布须另行授权并从合并后的 main 重建。
 
 ## 2026-10-08：发布后旧版本 dist 收口
@@ -118,9 +125,9 @@
 
 - 已公开 [v0.1.0-alpha.10 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.10)，不标为稳定 latest。[功能 PR #16](https://github.com/yyyang20/arXivKaleid-Desktop/pull/16) squash 合并后，从干净 main 提交 `89804e2895691d88f6ae62277e219de8f98ef0f9` 重新构建；tag 与 BUILD_INFO 一致，用途为 `public-release`，第一阶段技术候选未上传。
 - 仅上传 ZIP 与 `.sha256`：ZIP 为 118,661,452 字节，SHA-256 为 `162d2f7591793c3c4226cacd949a7cb781af95ad3d4a825007f6ba482bac9fbe`。匿名下载两份资产与本地逐字节一致，94 个 tag 源码文件与发行 Git blob 一致；全部既有历史 tag、Release 正文及资产身份未变。
-- PR 冻结提交与正式 main 文件树一致，均通过 192 项完整离线测试、零跳过、51 个 Python AST、四项资源哈希、治理和差异检查。正式 portable 通过原生 DPR 1.5 与模拟 100/125/150/200% 五组、每组 43 个 GUI 状态，覆盖真实 12/20 pt 字体、最小窗口、整卡点击/键盘、编辑保护、保存失败、分析禁改、跨进程恢复、请求哈希及费用边界、DPAPI、三次普通重启、12 次窗口生命周期和 DLL 来源；缺失/篡改资源及已用 runtime 安全拒绝。
+- PR 冻结提交与正式 main 文件树一致，均通过 192 项完整离线测试、零跳过、51 个 Python AST、四项资源哈希、治理和差异检查。正式 portable 通过原生 DPR 1.5 与模拟 100/125/150/200% 五组、每组 43 个 GUI 状态，覆盖真实 12/20 pt 字体、最小窗口、整卡点击/键盘、编辑保护、保存失败、分析禁改、跨进程恢复、请求哈希及 Token 边界、DPAPI、三次普通重启、12 次窗口生命周期和 DLL 来源；缺失/篡改资源及已用 runtime 安全拒绝。
 - 468 个发行文件逐文件核验，227 个第三方许可与对应源码文件与 alpha 9 一致；技术包与正式包仅 EXE、BUILD_INFO、用途化 README 和标准库 ZIP 成员顺序不同，154 个标准库成员内容一致。合成数据只存在验证副本，技术候选和历史审计原样保留，`release/` 仅留正式 alpha 10 ZIP/校验。
-- 本条及当前下载入口为发布后文档收口，不改变功能或已发布资产；最终 main 与发行 tag 分别核验。未安装依赖，未调用真实 arXiv、PDF 或 DeepSeek，模型调用与费用为 0。未覆盖第二台干净 Windows 或所有第三方 IME；既有 Qt 弃用/测试退出 GC 告警保留，冻结生命周期及退出检查通过，`gc.garbage` 为 0。
+- 本条及当前下载入口为发布后文档收口，不改变功能或已发布资产；最终 main 与发行 tag 分别核验。未安装依赖，未调用真实 arXiv、PDF 或 DeepSeek，模型调用为 0。未覆盖第二台干净 Windows 或所有第三方 IME；既有 Qt 弃用/测试退出 GC 告警保留，冻结生命周期及退出检查通过，`gc.garbage` 为 0。
 
 ## 2026-10-06：Desktop alpha 10 提示词入口调整
 
@@ -130,7 +137,7 @@
 ## 2026-10-05：Desktop alpha 10 本地开发
 
 - 新增两轮独立研究要求查看、编辑、保存、取消和确认恢复默认；未保存离开保护，分析期间只读。当前目录持久化、损坏记录阻止分析，不跨版本迁移。
-- 新增固定 `round1_v21` / `round2_v16` 与默认研究要求资源，历史 Prompt 保留；保存值冻结进入请求、哈希、缓存及原有 Token/费用预检，配置升级为 `desktop_config_v2`。
+- 新增固定 `round1_v21` / `round2_v16` 与默认研究要求资源，历史 Prompt 保留；保存值冻结进入请求、哈希、缓存及原有 Token预检，配置升级为 `desktop_config_v2`。
 - 历史详情在原日报生成完成时间前增加“生成时间”，原始正文、卡片抓取时间及 schema 不变。补充离线回归、源码/冻结 GUI 和 portable 技术验收入口；本阶段不公开发布。
 
 ## 2026-10-05：Desktop alpha 9 公开发行
@@ -138,7 +145,7 @@
 - 已公开 [v0.1.0-alpha.9 immutable prerelease](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.9)。[功能 PR #14](https://github.com/yyyang20/arXivKaleid-Desktop/pull/14) 合并后，从干净 main 提交 `8afcc98c8ebb321de2b46eccfdd4b89f3cc16bd1` 重建正式 Windows x64 portable；tag 与 BUILD_INFO 一致，用途为 public-release，未使用第一阶段技术候选发布。
 - 仅上传 ZIP 和 `.sha256`；ZIP 为 118,632,630 字节，SHA-256 为 `c48a8dba1ff58ba6bada8d2a5aea847beaefbe3ad164e59881c1430c9d4c487d`。匿名下载成品及校验文件与本地一致，86 个 tag 源码文件与发行 Git blob 逐字节一致；全部既有历史 tag、Release 正文及资产身份保持不变。
 - 验收提交与发行 main 文件树一致，两者均通过 173 项完整离线测试、零跳过及 48 个 Python 文件 AST、配置/Prompt 哈希和治理检查。正式冻结程序通过原生 DPR 1.5、模拟 100/125/150/200% 的每组 27 个状态，包含历史原文与日期、零推荐、确认删除、保存失败、跨进程恢复、三次普通重启、12 次窗口生命周期、DPAPI 和 DLL 来源检查。466 个发行文件及 227 个许可与源码文件已核验。
-- 更新下载入口与当前运行说明，不修改功能或已发布资产；技术候选、自动验证副本及历史审计材料保留，`release/` 仅保留正式 alpha 9 ZIP 和校验文件。模型调用与费用为 0，未覆盖第二台干净 Windows 或真实服务；既有单元测试 Qt GC 告警保留，冻结生命周期检查通过且 `gc.garbage` 为 0。
+- 更新下载入口与当前运行说明，不修改功能或已发布资产；技术候选、自动验证副本及历史审计材料保留，`release/` 仅保留正式 alpha 9 ZIP 和校验文件。模型调用为 0，未覆盖第二台干净 Windows 或真实服务；既有单元测试 Qt GC 告警保留，冻结生命周期检查通过且 `gc.garbage` 为 0。
 
 ## 2026-10-05：Desktop alpha 9 历史卡片日期调整
 
@@ -158,12 +165,12 @@
 - ZIP 为 118,603,647 字节，SHA-256 为 `fde47bc66d829f7c26afe7dde1f4018f6e96e79735958371f6b2002f06d9f286`；匿名下载成品、校验文件和 tag 源码通过，83 个源码文件与发行提交的 Git blob 逐字节一致，GitHub asset digest 与本地摘要一致。
 - 人工验收的开发冻结提交与正式 main 文件树一致，均通过 147 项完整离线测试、零跳过、45 个 Python 文件 AST、配置/Prompt 哈希、治理与差异检查；Windows GUI 和合成 DPAPI 实际执行。正式 portable 重建后完成原生 DPR 1.5、模拟 100/125/150/200% 的每组 19 个窗口状态，包含日历、最小窗口、较大字体、分轮停止、三次普通重启、12 次窗口生命周期及严格 DLL 来源检查。
 - 正式包与技术包的差异仅涉及 EXE、BUILD_INFO、用途化 README 和标准库 ZIP 的成员顺序，154 个标准库文件内容一致。227 个第三方许可及对应源码文件与 alpha 7.1 一致；许可收集仅在构建进程内映射已核验的项目内副本，不修改环境元数据、不安装依赖。
-- alpha 1～7.1 的历史 tag、Release 正文及资产身份与发布前基线一致；第一阶段技术包、人工验收副本和审计材料保留。本条为发布后文档收口，不重建或替换已发布资产；最终 main 与发行 tag 分别核验记录。未读取真实 Key，未调用真实 arXiv、PDF 或 DeepSeek，模型调用与费用均为 0；未覆盖第二台干净 Windows 或真实服务。
+- alpha 1～7.1 的历史 tag、Release 正文及资产身份与发布前基线一致；第一阶段技术包、人工验收副本和审计材料保留。本条为发布后文档收口，不重建或替换已发布资产；最终 main 与发行 tag 分别核验记录。未读取真实 Key，未调用真实 arXiv、PDF 或 DeepSeek，模型调用为 0；未覆盖第二台干净 Windows 或真实服务。
 
 ## 2026-10-04：Desktop alpha 8 本地功能
 
 - 首页可选择今天及此前 365 天的北京时间自然日；按首次提交 `published` 精确过滤，只查询所选日期，完整分页后按 ID/版本合并。无候选正常结束，可同日再次抓取，不回退或等待。
-- 取消 100 篇候选门控，全部去重候选进入同一次 Round 1；首页改为两个统计框。保留两轮输出、PDF 门控、Prompt、模型、Token/context、¥3 累计费用和零重试规则，安全预检使用分轮错误说明未发送的请求。
+- 取消 100 篇候选门控，全部去重候选进入同一次 Round 1；首页改为两个统计框。保留两轮输出、PDF 门控、Prompt、模型、Token/context、零重试规则，安全预检使用分轮错误说明未发送的请求。
 - 本地 portable 技术候选的 README 绑定冻结 commit，不生成未发布 tag 链接；保留 alpha 7.1 非空证据修复和诊断线程输入法隔离。公开下载入口仍指向 alpha 7.1。
 
 ## 2026-10-04：Desktop alpha 7.1 公开发行
@@ -173,7 +180,7 @@
 - 三项非空 evidence 回归在缺失导入时全部失败，补充导入后通过；[PR #10](https://github.com/yyyang20/arXivKaleid-Desktop/pull/10) 冻结提交及发行 main 均通过 133 项完整离线测试、零跳过、44 个 Python 文件 AST、Prompt 哈希和差异检查，Windows GUI 与合成 DPAPI 实际执行。
 - 技术与正式包分别通过原生 DPR 1.5、模拟 100/125/150/200% 的每组 13 状态 GUI、三次普通重启、合成 DPAPI 恢复、资源缺失拒绝及运行目录占用拒绝；冻结 EXE 执行非空证据校验，严格 DLL 来源检查未放宽。诊断仅隔离自身线程的输入法服务，不改变系统设置或普通 GUI，不覆盖真实输入法交互。
 - 依赖未安装或升级；许可收集仅在构建进程中映射项目内已核验的公开 alpha 7 许可副本，不修改环境元数据。227 个第三方许可与对应源码文件与 alpha 7 逐字节一致；资源 allowlist、八组固定源码及隐私扫描通过。
-- alpha 1～7 的历史 tag、Release 正文和资产身份与发布前基线一致；旧 alpha 7 ZIP 与校验文件匿名核验通过后，按授权仅删除 `release/` 中这两个本地旧文件，保留 alpha 7.1 成品及其他材料。本条为发布后文档收口，不重建或替换已发布资产；最终 main 与发行 tag 分别记录。仅完成本机 Windows 离线验收，未覆盖第二台干净 Windows 或真实服务；未读取真实 Key，未调用真实 arXiv、PDF 或 DeepSeek，模型调用与费用均为 0。
+- alpha 1～7 的历史 tag、Release 正文和资产身份与发布前基线一致；旧 alpha 7 ZIP 与校验文件匿名核验通过后，按授权仅删除 `release/` 中这两个本地旧文件，保留 alpha 7.1 成品及其他材料。本条为发布后文档收口，不重建或替换已发布资产；最终 main 与发行 tag 分别记录。仅完成本机 Windows 离线验收，未覆盖第二台干净 Windows 或真实服务；未读取真实 Key，未调用真实 arXiv、PDF 或 DeepSeek，模型调用为 0。
 
 ## 2026-10-04：Desktop alpha 7.1 非空证据校验修复
 
@@ -188,7 +195,7 @@
 - ZIP 为 118,590,285 字节，SHA-256 为 `bdaf603fe7018b6524fc9a3de5a56d71ba584420e9a8315fc0269a5b5d1c22be`；匿名下载成品、校验文件和 tag 源码通过，82 个源码文件与发行提交逐字节一致，GitHub asset digest 与本地摘要一致。
 - [PR #8](https://github.com/yyyang20/arXivKaleid-Desktop/pull/8) 冻结提交及发行 main 均通过 129 项完整离线测试、零跳过和 44 个 Python 文件 AST 检查；技术与正式包分别完成原生 DPR 1.5、模拟 100/125/150/200% 的 13 状态 GUI、三次重启、合成 DPAPI 恢复、资源缺失拒绝与运行目录占用验证。
 - A0 图标六个尺寸及透明角、Qt/EXE 资源核验通过；标题栏、资源管理器、任务栏与 Alt+Tab 已完成实际检查，正式包任务栏和 Alt+Tab 经用户人工确认。核验八组对应源码、许可、资源 allowlist 及隐私扫描；技术 ZIP 未上传。
-- alpha 1～6 的历史 tag、Release 正文及资产身份与发布前基线完全一致。本条仅为发布后文档收口，不重建或替换已发布资产；最终 main 与发行 tag 分别记录。同机隔离未覆盖第二台干净 Windows；未调用真实 arXiv、PDF 或 DeepSeek，模型调用与费用均为 0。
+- alpha 1～6 的历史 tag、Release 正文及资产身份与发布前基线完全一致。本条仅为发布后文档收口，不重建或替换已发布资产；最终 main 与发行 tag 分别记录。同机隔离未覆盖第二台干净 Windows；未调用真实 arXiv、PDF 或 DeepSeek，模型调用为 0。
 
 ## 2026-10-03：Desktop alpha.7 视觉统一与 A0 应用图标
 
@@ -213,7 +220,7 @@
 - [PR #4](https://github.com/yyyang20/arXivKaleid-Desktop/pull/4) 冻结提交及正式 main 均通过 123 项离线测试、零跳过，包含 Windows GUI 与合成 DPAPI；正式 main 重新构建并通过原生 DPR 1.5 和模拟 1.0/1.25/1.5/2.0、每组 13 个 GUI 状态、凭据恢复及三次独立重启验收。同机隔离未覆盖第二台干净 Windows。
 - 核验八项固定对应源码及 216 项原许可文本；Fluent 1.11.3 原始 LICENSE 与包声明已核对，商业措辞歧义记录在 NOTICE，未发现当前材料无法解决的具体发行权利缺口，自有 GPL-3.0-only 不变。
 - alpha 1～5 历史 tag、Release 正文及资产身份与基线一致；alpha 4 的原私人源码构建身份按其原 Release 正文核验，alpha 4/5 正式成品公开下载和校验通过。按新收口规则，发布任务在全部核验通过及已获授权后仅清理 release/ 的旧 ZIP/校验文件，其他材料保留。
-- 本条为发布后文档收口，不重建或替换已发布资产；最终 main 与发行 tag 分别记录。未访问真实业务 arXiv/PDF/DeepSeek，模型调用与费用均为 0。
+- 本条为发布后文档收口，不重建或替换已发布资产；最终 main 与发行 tag 分别记录。未访问真实业务 arXiv/PDF/DeepSeek，模型调用为 0。
 
 ## 2026-10-02：正式构建身份与本地历史 portable 收口规则
 
@@ -234,8 +241,8 @@
 
 - 统一版本升级为 `0.1.0-alpha.6`，使用基础版 PySide6-Fluent-Widgets，拆出首页、历史占位页、设置页及可复用任务区域；版本显示动态读取，API Key 移入设置页并保留 DPAPI、自动保存与分析期间禁用行为。
 - 首页保留两个独立按钮和常驻抓取信息；抓取采用不定进度，分析显示真实五阶段状态，成功后收缩为可展开摘要，失败保留诊断和日志入口，日报继续占主要空间。
-- 候选冻结与一次性分析、模型次数、零自动重试、PDF/全文门控、费用、SQLite、Prompt 和日报业务契约保持不变；新增依赖固定版本，更新 portable 资源与许可收集准备。
-- 完整离线测试 115 项、零跳过，包含 Windows GUI 与 DPAPI 假值；隔离 mock 视觉 QA 覆盖 13 个状态及 DPR 1.25/2.25 两组缩放。未访问真实 arXiv/DeepSeek、未产生模型费用，尚未构建或发布 alpha.6 portable；Fluent 许可确认及第三方对应源码清单补全留作正式发行前置条件。
+- 候选冻结与一次性分析、模型次数、零自动重试、PDF/全文门控、SQLite、Prompt 和日报业务契约保持不变；新增依赖固定版本，更新 portable 资源与许可收集准备。
+- 完整离线测试 115 项、零跳过，包含 Windows GUI 与 DPAPI 假值；隔离 mock 视觉 QA 覆盖 13 个状态及 DPR 1.25/2.25 两组缩放。未访问真实 arXiv/DeepSeek，尚未构建或发布 alpha.6 portable；Fluent 许可确认及第三方对应源码清单补全留作正式发行前置条件。
 
 ## 2026-10-01：Desktop alpha.5 公开发行
 
@@ -243,13 +250,13 @@
 - 发行 tag 与最终 portable 构建提交均为 `b06321bd8b8e7b3d4dc3f61016ced09b1eeafce7`；ZIP SHA-256 为 `8cad5043e92741345a40caae800df90f2e24f9a1a0b0a8b4531e33c48795b40c`，仅上传 ZIP 与 `.sha256`。
 - 冻结 [PR #2](https://github.com/yyyang20/arXivKaleid-Desktop/pull/2) 和合并后 main 均通过完整离线测试 108 项、零跳过，包含真实 Windows GUI 与 DPAPI 假值；两次 portable 构建及零模型验证通过。
 - 未登录下载验证公开 ZIP、校验文件、BUILD_INFO、许可证及第三方源码哈希；[tag 源码归档](https://github.com/yyyang20/arXivKaleid-Desktop/archive/refs/tags/v0.1.0-alpha.5.zip)的 72 个文件逐一与发行提交字节一致。alpha.1 至 alpha.4 的 tag、Release 正文、资产及摘要与任务开始基线完全一致。
-- 本条为发布后文档收口，不重建或替换已发布资产；发行/tag 提交与后续 main 文档提交分别记录。没有真实模型、付费调用或真实 arXiv 验证，未引入 Fluent Widgets。
+- 本条为发布后文档收口，不重建或替换已发布资产；发行/tag 提交与后续 main 文档提交分别记录。没有真实模型、模型调用或真实 arXiv 验证，未引入 Fluent Widgets。
 
 ## 2026-10-01：Desktop alpha.5 GPL 开源发行准备
 
 - 应用版本升级为 `0.1.0-alpha.5`，自有源码、测试、构建脚本、配置、Prompt 和项目文档采用 GPL-3.0-only；新增标准 LICENSE，EULA 改为许可说明与使用告知。
 - portable 增加应用 LICENSE 与精确版本 tag 的源码入口，保留第三方许可与 Qt/PySide 对应源码，补充 pypdf 固定源码归档及 gzip/xz 收集和发行校验。
-- 保留筛选、GUI、模型次数、费用、配置和 Prompt 字节；未引入 Fluent Widgets。实际公开发行记录在发布验收后补记，alpha.1 至 alpha.4 历史发行保持原状。
+- 保留筛选、GUI、模型次数、配置和 Prompt 字节；未引入 Fluent Widgets。实际公开发行记录在发布验收后补记，alpha.1 至 alpha.4 历史发行保持原状。
 
 ## 2026-10-01：Desktop 根协作规则收尾
 
@@ -281,19 +288,19 @@
 ## 2026-10-01：Desktop 代码解耦
 
 - 引入 Desktop 独立配置与预算校验，裁剪核心模块中的 Online 专属入口、策略和 Profile 文件依赖，对齐当前工作库 schema v1 与 portable 资源集合。
-- 保留 alpha.4 的两轮筛选、PDF 门控、模型次数、费用和日报行为，新增合成行为基线、配置与独立源码运行测试；应用版本仍为 `0.1.0-alpha.4`，未发布成品。
+- 保留 alpha.4 的两轮筛选、PDF 门控、模型次数、日报行为，新增合成行为基线、配置与独立源码运行测试；应用版本仍为 `0.1.0-alpha.4`，未发布成品。
 
 ## 2026-09-30：Desktop 两层错误诊断
 
 - Desktop GUI 新增阶段、类别级稳定错误代码、影响范围、操作建议及 session/operation/snapshot/fetch/run 关联，正常无候选、零入围、长论文/Token 排除、无合格全文和零推荐继续作为业务 outcome。
 - 新增源码 `.desktop-runtime/logs/` 与 portable `runtime/logs/` 脱敏 JSONL，记录阶段生命周期、耗时、计数和既有安全结构诊断；写盘失败降级到 512 条内存 ring，不改变原业务结果。
 - PDF/全文失败改按实际影响范围判定：已确认单篇且共享状态完整时继续，SQLite、共享组件、runtime 存储或无法确认范围时整批失败关闭；未枚举异常不自动升级。
-- 日报已生成而 GUI Markdown 渲染失败时保持分析成功；发行扫描新增 JSONL 排除，版本升级为 `0.1.0-alpha.4`，筛选、模型次数、自动重试和费用规则不变。
+- 日报已生成而 GUI Markdown 渲染失败时保持分析成功；发行扫描新增 JSONL 排除，版本升级为 `0.1.0-alpha.4`，筛选、模型次数、自动重试规则不变。
 
 ## 2026-09-29：Desktop Release 版本更新说明治理
 
 - 明确每个新的 Desktop GitHub Release 都必须包含面向用户的非空“本次更新”：首个公开版本概括首次能力，后续版本依据冻结提交、Git 差异和变更记录概括相对上版的 1～5 条主要变化。
-- 公开发布检查清单新增发布前非空检查和发布后公开回读；平台、下载、SmartScreen、DeepSeek、费用和 SHA-256 等通用说明不能代替版本更新说明。
+- 公开发布检查清单新增发布前非空检查和发布后公开回读；平台、下载、SmartScreen、DeepSeek和 SHA-256 等通用说明不能代替版本更新说明。
 - 依据三个实际公开 ZIP 的构建提交与版本间差异，补齐 alpha.1 首发能力、alpha.2 运行进度反馈和 alpha.3 自包含 Prompt 收敛的公开版本更新说明；Tag 和 Release assets 保持不变。
 
 ## 2026-09-28：Windows Desktop alpha.3 公开发行
@@ -304,14 +311,14 @@
 
 ## 2026-09-28：两份自包含 Prompt 收敛
 
-- 正常请求改用自包含的 `round1_v20 + round2_v15`，两份 Prompt 吸收相同的普适研究边界，不改变四类标签、Top 10/Top 5、顺序、不补位、模型、费用或 PDF 门控；请求不再注入独立 Research Profile 内容，仅保留 `profile_v2` 兼容身份。
+- 正常请求改用自包含的 `round1_v20 + round2_v15`，两份 Prompt 吸收相同的普适研究边界，不改变四类标签、Top 10/Top 5、顺序、不补位、模型或 PDF 门控；请求不再注入独立 Research Profile 内容，仅保留 `profile_v2` 兼容身份。
 - Desktop 源码版本升级为 `0.1.0-alpha.3`，承载本次 Prompt/Profile 收敛；当时的 portable 仍包含策略资源，当前资源集合以构建配置为准。
 
 ## 2026-09-27：Windows Desktop alpha.2 公开发行
 
 - `v0.1.0-alpha.2` 当时作为 immutable prerelease 发布到公开下载仓库 [`yyyang20/arXivKaleid-Desktop`](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.2)。
 - Release 只包含版本化 Windows x64 portable ZIP 和对应 `.sha256`；成品从当时已验收的干净 `main` 重建，通过完整离线测试、portable 零模型验证、本地与 GitHub asset digest 及未登录下载核验。
-- 既有 `v0.1.0-alpha.1` immutable Release 保持不变，本次 DeepSeek 调用和模型费用均为 0。
+- 既有 `v0.1.0-alpha.1` immutable Release 保持不变，本次 DeepSeek 调用为 0。
 
 ## 2026-09-27：Desktop 真实运行进度反馈
 
@@ -339,8 +346,8 @@
 ## 2026-09-26：Windows Desktop 公开发布准备
 
 - 新增 portable 使用所需的 README、EULA、隐私、安全说明和发布检查清单；ZIP 留在被忽略的 `release/`。
-- Desktop 每次启动后首次分析前显示 DeepSeek 数据发送、费用、DPAPI 凭据与本地数据告知；默认拒绝，拒绝时不消费快照或调用模型，冻结 EXE 的零模型诊断直接覆盖该拒绝路径。
-- portable 构建按 allowlist 将应用 README、EULA、隐私和安全说明放入 ZIP 根目录，保留第三方声明、许可和对应源码归档；筛选、prompt、profile、PDF 门控和费用规则不变。
+- Desktop 每次启动后首次分析前显示 DeepSeek 数据发送、DPAPI 凭据与本地数据告知；默认拒绝，拒绝时不消费快照或调用模型，冻结 EXE 的零模型诊断直接覆盖该拒绝路径。
+- portable 构建按 allowlist 将应用 README、EULA、隐私和安全说明放入 ZIP 根目录，保留第三方声明、许可和对应源码归档；筛选、prompt、profile、PDF 门控规则不变。
 
 ## 2026-09-25：Windows Desktop portable 打包
 
@@ -350,7 +357,7 @@
 
 ## 2026-09-25：Windows Desktop 第二阶段
 
-- 分析按钮直接消费一次冻结候选快照，复用 Round 1、PDF、60 页全文门控、Round 2 和 usage 审计；Key 显式注入，不额外 self check，每轮最多一次 HTTP attempt，累计预算上限 ¥3.00。
+- 分析按钮直接消费一次冻结候选快照，复用 Round 1、PDF、60 页全文门控、Round 2 和 usage 审计；Key 显式注入，不额外 self check，每轮最多一次 HTTP attempt。
 - 当前工作 SQLite 与 PDF 隔离在 `.desktop-runtime/`，只重置已知工作库及 sidecar；文件锁保护并发，失败不重试、不补位、不查询历史候选。
 - 新增 Desktop Markdown 外壳与 QTextBrowser 渲染，后台阶段信号、消费后按钮状态及对应离线集成测试。
 
@@ -374,9 +381,9 @@
 - 电脑安全边界新增唯一、受控的项目专用 Conda 环境例外：仅在用户明确授权后，允许维护指定环境及当前任务明确需要的 Python 依赖；`base`、其他环境、系统 Python、PATH、Windows 设置、全局软件和其他项目继续禁止修改。
 - 当时治理测试同步核验默认项目外只读、授权范围、依赖范围、越界重新授权及绝对禁止项，其他项目安全边界保持不变。
 
-## 2026-09-21：V4.1 Flash 模型与价格快照
+## 2026-09-21：V4.1 Flash 模型
 
-- Round 1 / Round 2 模型更新为 `deepseek-flash`（DeepSeek-V4.1-Flash），同步当时确认的人民币峰谷价格快照。
+- Round 1 / Round 2 模型更新为 `deepseek-flash`（DeepSeek-V4.1-Flash）。
 
 ## 2026-09-20：arXiv 元数据 curl 传输层修复
 
@@ -385,7 +392,7 @@
 ## 2026-09-18：按需阅读与必要授权治理调整
 
 - `AGENTS.md` 改为按任务影响范围读取文档，取消项目级“最终执行计划”和固定授权口令机制。
-- 保留付费调用、外部状态变更、破坏性操作、技术栈变化及业务规范要求的必要授权和绝对安全边界。
+- 保留模型调用、外部状态变更、破坏性操作、技术栈变化及业务规范要求的必要授权和绝对安全边界。
 - 当时治理测试校验文档、身份、安全和授权契约，不再锁定 `AGENTS.md` 的批准哈希。
 
 ## 2026-09-11：DeepSeek 思考模式工具兼容修复

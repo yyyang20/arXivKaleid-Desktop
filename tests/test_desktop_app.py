@@ -689,7 +689,7 @@ class DesktopAppTests(IsolatedDesktopTest):
         question.assert_called_once()
         self.assertIn("论文标题、摘要", app.ANALYSIS_NOTICE)
         self.assertIn("已保存的完整研究提示词", app.ANALYSIS_NOTICE)
-        self.assertIn("可能产生费用", app.ANALYSIS_NOTICE)
+        self.assertIn("发送到你自己的 DeepSeek API", app.ANALYSIS_NOTICE)
         self.assertIn("Windows DPAPI", app.ANALYSIS_NOTICE)
         self.assertIn("PDF、SQLite 和缓存", app.ANALYSIS_NOTICE)
         self.assertIn("没有维护者服务器中转或遥测", app.ANALYSIS_NOTICE)
@@ -781,7 +781,7 @@ class DesktopAppTests(IsolatedDesktopTest):
             for stage in ("round1", "pdf", "fulltext"):
                 progress(ProgressEvent(task_type="analysis", stage=stage,
                                        state="completed", message=f"{stage} 已完成"))
-            raise app.AnalysisError(make_issue("AKD-R2-COST_LIMIT"))
+            raise app.AnalysisError(make_issue("AKD-R2-CONTEXT_LIMIT"))
 
         with patch.object(app.AnalysisAttempt, "run", stopped):
             self.window.start_analysis()
@@ -789,7 +789,7 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.assertTrue(self.window.analysis_steps["round1"].text().startswith("✓"))
         self.assertTrue(self.window.analysis_steps["round2"].text().startswith("✕"))
         self.assertIn("未调用本轮模型", self.window.status.text())
-        self.assertIn("Round 1 已发生的结果与费用仍保留", self.window.diagnostic_text.text())
+        self.assertIn("Round 1 已发生的结果与 Token 记录仍保留", self.window.diagnostic_text.text())
         self.assertEqual(self.window.report.toPlainText(), "")
         self.assertFalse(self.window.analyze_button.isEnabled())
 

@@ -25,7 +25,7 @@ portable 模式的数据位于 `arXivKaleid.exe` 同级 `runtime/` 目录，包�
 - 两轮独立 UTF-8 明文完整研究 Prompt 记录 `runtime/config/round1_research_prompt.json` 和 `round2_research_prompt.json`；不加密、不跨目录迁移，确认恢复默认替换对应覆盖记录；
 - 候选请求间隔缓存；独立 `runtime/metadata/arxiv_versions.sqlite` 以明文保存成功候选的完整版本元数据、内容 SHA-256、查询日期/分类/策略/时间/状态/计数及关联，不保存模型凭据、Prompt 或其他日期辅助版本；不建立全站索引、不后台同步；
 - 当前分析使用的 SQLite 工作库；
-- 独立 `runtime/history/history.sqlite` 中以明文保存的成功日报原始 Markdown、日报完成时间、实际抓取完成时间、论文日期及候选/推荐数量；正文可能包含论文标题、作者、摘要、可选自由评价、费用与本地 PDF 相对路径，但不保存 API Key 或模型原始响应；
+- 独立 `runtime/history/history.sqlite` 中以明文保存的成功日报原始 Markdown、日报完成时间、实际抓取完成时间、论文日期及候选/推荐数量；正文可能包含论文标题、作者、摘要、可选自由评价、本地 PDF 相对路径，但不保存 API Key 或模型原始响应；
 - 已下载的论文 PDF、绑定明确版本来源和 SHA-256 的本地证据文件，以及提取后的全文工作数据；旧 PDF 保留。
 - `runtime/logs/` 下按应用会话生成的脱敏 JSONL 诊断，包括阶段、稳定代码、耗时、计数、关联 ID 和安全网络字段。
 

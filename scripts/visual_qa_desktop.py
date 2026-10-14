@@ -31,7 +31,7 @@ from desktop.paths import checked_path
 from desktop.progress import ProgressEvent
 from scripts.local_artifacts import ArtifactRun, inventory, temporary_environment
 from desktop.history import HistoryStore
-from portable_visual import synthetic_snapshot as report_snapshot, synthetic_analysis_result, exercise_history, exercise_requirements, exercise_user_guide, exercise_categories
+from portable_visual import synthetic_snapshot as report_snapshot, synthetic_analysis_result, exercise_history, exercise_requirements, exercise_user_guide, exercise_categories, validation_screen
 
 # 截图后的受管容量核验会扫描已留存材料；合成线程需等主线程完成多张截图。
 # 该期限仅用于离线 QA 的事件闸门，不改变真实网络、模型或资源门禁。
@@ -105,8 +105,9 @@ def visual_qa(run):
     diagnostics = DesktopDiagnostics(output)
     window = app.DesktopWindow(MemorySecretStore(), diagnostics, history_store=HistoryStore(output), requirements_store=RequirementsStore(output))
     window.winId()
-    window.windowHandle().setScreen(application.primaryScreen())
-    origin = application.primaryScreen().availableGeometry().topLeft()
+    screen = validation_screen(application)
+    window.windowHandle().setScreen(screen)
+    origin = screen.availableGeometry().topLeft()
     window.move(origin.x() + 40, origin.y() + 40)
     captures = []
     gate = threading.Event()
@@ -127,7 +128,7 @@ def visual_qa(run):
             raise RuntimeError("qa_capture_failed")
         captures.append({"state": name, "logical_size": [window.width(), window.height()],
                          "pixel_size": [pixmap.width(), pixmap.height()],
-                         "device_pixel_ratio": pixmap.devicePixelRatio(),
+                         "device_pixel_ratio": pixmap.devicePixelRatio(), "screen": window.screen().name(),
                          "report_height": window.home_page.report_stack.height(),
                          "task_height": window.task_panel.height(),
                          "detail_height": window.task_panel.details_scroll.height()})

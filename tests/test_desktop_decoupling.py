@@ -43,14 +43,11 @@ BASELINE = {
 
 class DesktopDecouplingTests(unittest.TestCase):
     def test_technical_baselines_preserve_attempts_pdf_gates_usage_and_zero_results(self):
-        price = model_usage.price_snapshot_from_config
         for scenario, expected in BASELINE.items():
             with self.subTest(scenario=scenario), ExitStack() as stack:
                 case = fixtures.DesktopAnalysisTests()
                 case.setUp()
                 stack.callback(case.doCleanups)
-                stack.enter_context(patch('model_usage.price_snapshot_from_config',
-                    side_effect=lambda *a, **kw: price(*a, **{**kw, 'at': datetime(2026, 9, 25, tzinfo=timezone.utc)})))
                 count = 4
                 if scenario == 'round1_zero':
                     case.selected_indices = []
@@ -76,7 +73,7 @@ class DesktopDecouplingTests(unittest.TestCase):
                 if usage:
                     self.assertEqual(usage.api_attempt_count, expected[0])
                     self.assertEqual(usage.known_total_tokens, 350 if expected[0] == 2 else 120)
-                    self.assertTrue(usage.cost_complete)
+                    self.assertTrue(usage.token_complete)
                 for stage, payload in case.requests:
                     task = json.loads(payload['messages' if stage == 'round1' else 'input'][1]['content'])
                     self.assertIn('research_prompt', task)
@@ -94,7 +91,7 @@ class DesktopDecouplingTests(unittest.TestCase):
                 'screening_completion', 'pdf_downloads', 'model_calls', 'model_call_attempts',
                 'run_stage_timings',
             })
-            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0], 1)
+            self.assertEqual(conn.execute('PRAGMA user_version').fetchone()[0], 2)
             main.initialize_database_schema(conn)
             conn.execute('PRAGMA user_version = 999')
             with self.assertRaisesRegex(RuntimeError, 'schema_version'):
@@ -140,12 +137,12 @@ class DesktopDecouplingTests(unittest.TestCase):
         finally:
             case.doCleanups()
 
-    def test_desktop_configured_budget_blocks_before_any_model_request(self):
+    def test_desktop_configured_token_limit_blocks_before_any_model_request(self):
         case = fixtures.DesktopAnalysisTests()
         case.setUp()
         try:
             config = main.load_config(case.root / 'config.json')
-            config['budget']['max_batch_cost_cny'] = '0.00001'
+            config['limits']['max_round1_request_tokens'] = 1
             with patch('main.load_config', return_value=config):
                 with self.assertRaises(fixtures.analysis.AnalysisError):
                     case.run_snapshot(case.snapshot(4))

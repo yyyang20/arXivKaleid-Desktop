@@ -186,7 +186,7 @@ class SettingsPage(ScrollArea):
         about.addWidget(self.version_label)
         about.addWidget(wrapping_label("按用户两轮完整研究提示词筛选 arXiv 论文的工具。"))
         about.addWidget(wrapping_label(
-            "两轮分析使用你自己的 DeepSeek API，可能产生费用。\n"
+            "两轮分析使用你自己的 DeepSeek API。\n"
             "没有维护者服务器中转或遥测；本地运行数据与凭据由你管理。\n"
             "自有应用：GPL-3.0-only。使用与数据说明见随附 EULA.txt / PRIVACY.md。"
         ))

@@ -41,8 +41,8 @@ Windows portable 的打包 README、用户协议、隐私和安全说明集中�
 | Codex 协作、安全、授权或完成规则 | 根目录 `AGENTS.md`；局部规则受影响时检查 `desktop/AGENTS.md` |
 | 文档职责、阅读路线或更新路由 | 本文档；下级文档入口受影响时检查 `desktop/README.md` |
 | 用户可见能力或核心说明 | 根目录 `README.md` |
-| 用户可见功能的操作入口与步骤、提示词、结果展示、资源限制、费用或数据处理 | `desktop/USER_GUIDE.md`；每个功能任务主动检查，受影响时更新；无影响时在完成报告说明，不强制改写 |
-| 候选、筛选、PDF、标签、日报、数据库或费用规则 | `PROJECT_SPEC.md` |
+| 用户可见功能的操作入口与步骤、提示词、结果展示、资源限制或数据处理 | `desktop/USER_GUIDE.md`；每个功能任务主动检查，受影响时更新；无影响时在完成报告说明，不强制改写 |
+| 候选、筛选、PDF、标签、日报、数据库规则 | `PROJECT_SPEC.md` |
 | 开发、验证与公开发布流程 | `OPERATIONS.md`；公开发布检查对应 `public_release/RELEASE_CHECKLIST.md` |
 | 文件新增、删除、移动或职责改变 | `PROJECT_STRUCTURE.md` |
 | Desktop GUI、凭据或候选快照行为 | `desktop/DESKTOP_SPEC.md`；核心筛选规则变动才更新 `PROJECT_SPEC.md` |

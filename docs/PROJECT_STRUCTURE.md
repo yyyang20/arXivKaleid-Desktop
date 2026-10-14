@@ -11,7 +11,7 @@
 | `LICENSE` | 标准 GPLv3 全文唯一维护源；自有应用采用 GPL-3.0-only，构建时直接复制到 portable 根目录 |
 | `EULA.txt`、`PRIVACY.md`、`SECURITY.md` | 仓库用户可见的应用许可、隐私与安全说明；与 `docs/public_release/` 维护源保持字节一致 |
 | `THIRD_PARTY_NOTICES.txt` | 仓库用户可见的第三方声明；源文本位于 `packaging/windows/` |
-| `config.json` | Desktop 配置身份、模型、Prompt、筛选策略、Token、费用和资源哈希；不包含 API Key |
+| `config.json` | Desktop 配置身份、模型、Prompt、筛选策略、Token 和资源哈希；不包含 API Key |
 | `requirements.txt` | 固定 pypdf 核心运行依赖 |
 | `requirements-desktop.txt` | 核心 PDF、PySide6、基础 Fluent 与 Windows 必要依赖固定版本，不使用 full |
 | `requirements-build.txt` | 固定 PyInstaller 及仅构建阶段依赖 |
@@ -25,7 +25,7 @@
 | `round2_fulltext_state.py` | 全文库、物理页数门控、逐页全文、Token 预检和进度回调 |
 | `build_round2_inputs.py` | 当前工作库 Round 1 结果、全文资格与只读 SQLite 输入辅助函数 |
 | `run_round2.py` | 当前协议 Round 2 输入、命名结果工具契约、显式 Key 注入、缓存和事务保存 |
-| `model_usage.py` | 模型 attempt、成功调用模型、Token、价格快照、费用和阶段耗时 |
+| `model_usage.py` | 模型 attempt、成功调用模型、Token 和阶段耗时 |
 | `rebuild_daily_report.py` | 当前 run 的 Round 1 论文和全文门控事实读取辅助函数 |
 | `generate_round2_report.py` | 当前 Round 2 结果验证、页数与推荐区块渲染辅助函数 |
 | `packaging/windows/` | one-folder spec、冻结入口、portable 自检和 vendor/许可证元数据 |
@@ -70,7 +70,7 @@ docs/
 
 | 路径 | 职责 |
 |---|---|
-| `desktop/config.py` | `desktop_config_v6` 只读契约、抓取策略、预算边界和四份资源文本哈希校验 |
+| `desktop/config.py` | `desktop_config_v7` 只读契约、抓取策略、Token 预算边界和四份资源文本哈希校验 |
 | `desktop/categories.py` | Physics 51 个 canonical Category、官方名称与 Archive 归属、默认选择和共享校验 |
 | `desktop/category_selection.py` | 运行根的分类选择原子保存、重启读取和坏配置保留 |
 | `desktop/category_dialog.py` | Fluent 分组选择窗口、1–3 类边界及保存失败草稿 |
@@ -93,12 +93,12 @@ docs/
 
 | 测试 | 当前覆盖 |
 |---|---|
-| `test_desktop_config.py` | 当前配置、预算、模型协议、Prompt 路径及哈希，拒绝旧 Online 配置字段 |
-| `test_desktop_decoupling.py` | 合成场景技术门禁基线、主库 schema v1、缓存、预算、导入边界和隔离源码运行 |
+| `test_desktop_config.py` | 当前配置、Token 预算、模型协议、Prompt 路径及哈希，拒绝旧 Online 配置字段 |
+| `test_desktop_decoupling.py` | 合成场景技术门禁基线、主库 schema v2 与 v1 兼容、缓存、Token 预算、导入边界和隔离源码运行 |
 | `test_desktop_pipeline.py` | 假 HTML/Atom、最新版与历史关联补查、日期边界、分页、分类迁移、快照及元数据库事务 |
 | `test_desktop_categories.py` | Physics 51 类身份与查询、选择原子保存、重启、非法输入及动态组合、V1/V2/V3 和历史分类边界 |
 | `test_arxiv_transport.py` | 网络期限与外层等待、单次尝试、超时部分证据、响应头隐私及性能验收用例 |
-| `test_desktop_analysis.py` | mock HTTP 两轮集成、可选自由评价、门控、预算、单次 attempt、工作数据隔离和日报事实 |
+| `test_desktop_analysis.py` | mock HTTP 两轮集成、可选自由评价、门控、Token 预算、单次 attempt、工作数据隔离和日报事实 |
 | `test_research_prompt_protocol.py` | 最小身份协议、跨领域自由评价、第二轮交接独立性、Token 并列裁决、缓存及安全日报 |
 | `test_desktop_secrets.py` | 密文落盘、错误、路径和 Windows DPAPI 假值往返 |
 | `test_desktop_app.py` | offscreen GUI、告知拒绝、线程、凭据交互和日报展示失败 |
@@ -107,6 +107,7 @@ docs/
 | `test_desktop_build.py` | checksum、x64、资源 allowlist、固定依赖、LICENSE/文档复制、源码版本/许可/归档校验及发行数据排除 |
 | `test_portable_diagnostic.py` | 独立进程完整诊断路径、Windows 合成 DPAPI、后置失败与已用 runtime 拒绝 |
 | `test_desktop_governance.py` | 文档入口、安全与授权、阅读和更新路由、身份表、链接、发行资料副本及发布检查要求；内存反例验证 |
+| `test_model_usage.py` | Token usage、新调用表、旧表兼容、缓存与阶段耗时 |
 | `test_desktop_artifacts.py` | 成功、失败、中断、超时、锁、容量、清理安全、许可 manifest 和 mock 发布核验 |
 
 治理测试只读检查维护文件，不启动应用或读取运行数据；构建测试验证打包复制和发行扫描，两者职责不同。发布清单的静态检查不能代替实际成品或 GitHub 发布核验。新增功能必须新增或更新对应测试，文档不以固定测试数量描述当前状态。

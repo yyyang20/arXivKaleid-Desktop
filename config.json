@@ -15,91 +15,7 @@
     "round1_reasoning_effort": "high",
     "round2_thinking_mode": "enabled",
     "round2_reasoning_effort": "high",
-    "round2_output_transport": "responses_named_tool_auto_v2",
-    "round1_pricing": {
-      "model_name": "deepseek-flash",
-      "official_model_version": "DeepSeek-V4.1-Flash",
-      "currency": "CNY",
-      "unit": "per_million_tokens",
-      "rate_schedule": {
-        "timezone": "Asia/Shanghai",
-        "peak_iso_weekdays": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
-        "peak_windows": [
-          {
-            "start": "09:00",
-            "end": "12:00"
-          },
-          {
-            "start": "14:00",
-            "end": "18:00"
-          }
-        ],
-        "peak_rates": {
-          "cache_hit_input_price_per_million": "0.04",
-          "cache_miss_input_price_per_million": "2.0",
-          "output_price_per_million": "8.0"
-        },
-        "off_peak_rates": {
-          "cache_hit_input_price_per_million": "0.02",
-          "cache_miss_input_price_per_million": "1.0",
-          "output_price_per_million": "4.0"
-        }
-      },
-      "source_url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
-      "source_title": "模型与价格 - DeepSeek API Docs",
-      "effective_at": "2026-09-10T12:00:00+08:00",
-      "effective_at_basis": "project_snapshot_activation_after_official_live_page_confirmation",
-      "confirmed_at": "2026-09-10T12:00:00+08:00",
-      "calculation_formula_version": "deepseek_cny_time_window_usage_cost_v2"
-    },
-    "round2_pricing": {
-      "model_name": "deepseek-flash",
-      "official_model_version": "DeepSeek-V4.1-Flash",
-      "currency": "CNY",
-      "unit": "per_million_tokens",
-      "rate_schedule": {
-        "timezone": "Asia/Shanghai",
-        "peak_iso_weekdays": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
-        "peak_windows": [
-          {
-            "start": "09:00",
-            "end": "12:00"
-          },
-          {
-            "start": "14:00",
-            "end": "18:00"
-          }
-        ],
-        "peak_rates": {
-          "cache_hit_input_price_per_million": "0.04",
-          "cache_miss_input_price_per_million": "2.0",
-          "output_price_per_million": "8.0"
-        },
-        "off_peak_rates": {
-          "cache_hit_input_price_per_million": "0.02",
-          "cache_miss_input_price_per_million": "1.0",
-          "output_price_per_million": "4.0"
-        }
-      },
-      "source_url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
-      "source_title": "模型与价格 - DeepSeek API Docs",
-      "effective_at": "2026-09-10T12:00:00+08:00",
-      "effective_at_basis": "project_snapshot_activation_after_official_live_page_confirmation",
-      "confirmed_at": "2026-09-10T12:00:00+08:00",
-      "calculation_formula_version": "deepseek_cny_time_window_usage_cost_v2"
-    }
+    "round2_output_transport": "responses_named_tool_auto_v2"
   },
   "versions": {
     "research_profile_version": "profile_v2",
@@ -120,11 +36,8 @@
     "round1_research_prompt": "prompts/research_prompt_round1_v2.txt",
     "round2_research_prompt": "prompts/research_prompt_round2_v2.txt"
   },
-  "config_version": "desktop_config_v6",
+  "config_version": "desktop_config_v7",
   "fetch_policy": "beijing_first_latest_history_v1",
-  "budget": {
-    "max_batch_cost_cny": "3.00"
-  },
   "resource_integrity": {
     "prompts/relevance_round1_v23.txt": "a197d2e256431e6934114e192e3be42b13da63c1e4563485069780365dc13ca3",
     "prompts/relevance_round2_v18.txt": "1f49bc0a35a6e51d4167189410d33fb761d34b4fccf7aac8694fd7c3677d3820",

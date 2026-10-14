@@ -53,7 +53,7 @@ def build_desktop_report(
         recommendations.append(item)
     round2 = replace(round2, recommendations=tuple(recommendations))
     usage = model_usage.load_run_usage_summary(connection, run_id)
-    if usage and (not usage.token_complete or not usage.cost_complete):
+    if usage and not usage.token_complete:
         raise RuntimeError("desktop_report_usage_incomplete")
     models = model_usage.load_run_model_names(connection, run_id)
     completed = connection.execute(
@@ -71,7 +71,7 @@ def build_desktop_report(
         f"- Round 2 最终推荐数量：{len(round2.recommendations)}",
         f"- 实际模型名称：{' / '.join(models) if models else '未调用'}",
         f"- Token 使用量：输入 {usage.known_input_tokens if usage else 0} / 输出 {usage.known_output_tokens if usage else 0} / 合计 {usage.known_total_tokens if usage else 0}",
-        f"- 实际费用：¥{format(usage.known_cost, 'f') if usage else '0'}", "",
+        "",
     ]
     if not eligible:
         lines.extend(["## Round 2 最终推荐", "", "没有合格全文输入，未调用 Round 2。", ""])

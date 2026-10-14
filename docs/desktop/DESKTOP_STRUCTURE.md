@@ -6,7 +6,7 @@
 |---|---|
 | `desktop/AGENTS.md` | Desktop 局部协作规则 |
 | `desktop/__init__.py` | 包入口和 Desktop 版本 |
-| `desktop/config.py` | Desktop 只读配置契约、预算和 Prompt 资源哈希校验 |
+| `desktop/config.py` | Desktop 只读配置契约、Token 预算和 Prompt 资源哈希校验 |
 | `desktop/categories.py`、`desktop/category_selection.py`、`desktop/category_dialog.py` | Physics canonical 目录、运行根选择保存与分组选择窗口；不改变 bundled 配置 |
 | `desktop/research_requirements.py` | 无 Qt 的两轮保存记录、文本校验、原子替换、默认资源及不可变分析快照 |
 | `desktop/prompt_page.py` | 两轮统一详情、只读 Markdown 渲染与源文本编辑切换、保存/取消/恢复默认和未保存保护 |
@@ -22,7 +22,7 @@
 | `desktop/date_picker.py` | 首页 Qt 月历弹层、365 天范围、月份导航限制、今天标记和屏幕内定位 |
 | `desktop/style.py` | 共享灰蓝调色板、输入框样式与低对比度卡片绘制 |
 | `desktop/task_panel.py` | 可复用任务状态组件；运行展开、成功收缩、失败诊断、真实事件与快照/结果详情 |
-| `desktop/analysis.py` | 一次性快照分析、工作库重置和锁、两轮/PDF/全文编排、累计费用预检、结构化进度与安全结果 |
+| `desktop/analysis.py` | 一次性快照分析、工作库重置和锁、两轮/PDF/全文编排、Token 与上下文预检、结构化进度与安全结果 |
 | `desktop/progress.py` | 抓取与分析共用的不可变结构化进度事件及不影响业务流程的安全派发 |
 | `desktop/report.py` | 当前 run 的 SQLite 事实与 Desktop Markdown 外壳，复用 Round 2 推荐区块 |
 | `desktop/pipeline.py` | 分类级版本抓取编排、原子保存、真实日期/分页/复用进度和只读内存快照 |
@@ -51,14 +51,14 @@
 | `tests/test_desktop_pipeline.py` | 假 Atom 集成、日期边界、计数、排序、冻结及禁止分析入口 |
 | `tests/test_desktop_secrets.py` | 密文落盘、错误、路径和 Windows DPAPI 假值往返 |
 | `tests/test_desktop_app.py` | 可选 offscreen GUI 状态、首次分析告知拒绝边界、线程及凭据交互 |
-| `tests/test_desktop_analysis.py` | mock HTTP 两轮集成、门控、预算、一次性分析、工作数据隔离和日报事实 |
+| `tests/test_desktop_analysis.py` | mock HTTP 两轮集成、门控、Token 预算、一次性分析、工作数据隔离和日报事实 |
 | `tests/test_desktop_history.py` | 原始正文、跨进程、同日多次、游标排序、事务故障、锁、schema 与路径边界 |
 | `tests/test_desktop_diagnostics.py` | JSONL schema、关联身份、作用域、线程安全、内存降级和隐私 canary |
-| `tests/test_desktop_config.py` | 当前配置、预算、协议和 Prompt 哈希契约 |
+| `tests/test_desktop_config.py` | 当前配置、Token 预算、协议和 Prompt 哈希契约 |
 | `tests/test_research_requirements.py` | 独立保存、坏配置、冻结取值、哈希/缓存/Token、隐私和历史默认语义 |
 | `docs/desktop/PROMPT_SPLIT.md` | 完整研究 Prompt 与最小技术协议边界核对 |
 | `tests/test_research_prompt_protocol.py` | 两轮身份协议、任意评价、无评价、交接与 Token 裁决独立性 |
-| `tests/test_desktop_decoupling.py` | 技术门禁基线、schema v1、缓存、预算和独立源码运行 |
+| `tests/test_desktop_decoupling.py` | 技术门禁基线、主库 schema v2 与 v1 兼容、缓存、Token 预算和独立源码运行 |
 | `tests/test_desktop_governance.py` | 根与局部治理、文档路由、当前身份、链接、发行资料副本与发布清单的只读检查 |
 
 portable 根目录包含直接来自仓库根的 GPLv3 `LICENSE`。最终待发布包首次构建即绑定 `BUILD_INFO.json` 的 C 和同提交版本 tag，原包人工通过后正式上传；实际构建分支保持原样。旧技术包的本地冻结 commit 说明兼容读取，不修改历史包。第三方源码归档位于 `licenses/sources/`，身份和 SHA-256 由 `packaging/windows/source-manifest.json` 固定，原许可不改写。

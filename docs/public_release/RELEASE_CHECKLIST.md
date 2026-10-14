@@ -8,7 +8,7 @@
 - [ ] Desktop 版本号、README、Desktop 文档和 CHANGELOG 一致。
 - [ ] 完整离线测试、Desktop 测试、Python AST 检查和 `git diff --check` 通过。
 - [ ] 已核对测试跳过原因和未覆盖范围；GUI、Windows DPAPI 测试在具备依赖的 Windows 环境实际执行，治理静态检查不代替成品验证。
-- [ ] 本次构建不读取真实 Secret、不调用 DeepSeek、不产生模型费用。
+- [ ] 本次构建不读取真实 Secret、不调用 DeepSeek。
 
 ## 构建与验证
 
@@ -54,7 +54,7 @@
 - [ ] 只上传带版本号的 ZIP 和对应 `.zip.sha256`，不上传使用过的 portable 目录。
 - [ ] 发布前核对 GitHub 返回的 asset 文件名、字节数和 SHA-256 digest。
 - [ ] Release notes 包含非空的 `## 本次更新`：首个公开版本概括首次提供的主要功能，后续版本依据冻结提交、Git 差异和 `CHANGELOG` 用 1～5 条概括相对上一公开版本的主要新增、修改或修复。
-- [ ] Release notes 另行保留平台、下载、未签名/SmartScreen 限制、DeepSeek 数据发送与费用、SHA-256 等适用的通用说明；这些说明不能代替“本次更新”。
+- [ ] Release notes 另行保留平台、下载、未签名/SmartScreen 限制、DeepSeek 数据发送、SHA-256 等适用的通用说明；这些说明不能代替“本次更新”。
 - [ ] Release notes 包含 GPL-3.0-only 及精确 tag 对应源码下载入口；免费源码包含应用、配置、Prompt、测试、构建脚本及说明。
 - [ ] 发布 Draft 前重新读取其 Release notes，确认“本次更新”存在且非空，再发布。
 - [ ] 发布后重新读取公开 Release，从未登录视角核对正文、“本次更新”、公开可见性、下载链接、Tag 和资产摘要。

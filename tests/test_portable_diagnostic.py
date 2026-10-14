@@ -20,6 +20,7 @@ from pathlib import Path
 from unittest.mock import patch
 root, copy, failure = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3] == 'failure'
 sys.path.insert(0, str(root))
+sys.path.insert(0, str(root / 'packaging/windows'))
 from desktop import app, paths
 from desktop.diagnostics import DesktopDiagnostics
 internal = copy / '_internal'
@@ -70,6 +71,19 @@ print('RESULT:' + json.dumps({'code': code, 'ok': report['ok'], 'injected': bool
 @unittest.skipUnless(sys.platform == 'win32' and importlib.util.find_spec('qfluentwidgets'),
                      'requires Windows DPAPI and installed Fluent GUI')
 class PortableDiagnosticTests(unittest.TestCase):
+    def test_visual_screen_selection_uses_physical_resolution(self):
+        from types import SimpleNamespace
+        spec = importlib.util.spec_from_file_location('portable_visual_screen_test',
+                    ROOT / 'packaging/windows/portable_visual.py')
+        visual = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(visual)
+        from PySide6.QtCore import QSize
+        # 高 DPI 的 4K 屏逻辑尺寸更小，仍应选择物理 2560×1440 的另一屏。
+        high = SimpleNamespace(size=lambda: QSize(1920, 1080), devicePixelRatio=lambda: 2)
+        low = SimpleNamespace(size=lambda: QSize(2048, 1152), devicePixelRatio=lambda: 1.25)
+        application = SimpleNamespace(screens=lambda: [high, low])
+        self.assertIs(visual.validation_screen(application), low)
+
     def exercise(self, mode):
         from scripts.local_artifacts import test_scratch
         scratch = test_scratch(ROOT)
