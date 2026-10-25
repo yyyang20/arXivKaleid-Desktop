@@ -71,6 +71,7 @@ docs/
 | 路径 | 职责 |
 |---|---|
 | `desktop/config.py` | `desktop_config_v7` 只读契约、抓取策略、Token 预算边界和四份资源文本哈希校验 |
+| `desktop/date_policy.py` | 无 Qt 的固定日期下限、北京时间和范围校验；日历、应用、抓取与诊断共用 |
 | `desktop/categories.py` | Physics 51 个 canonical Category、官方名称与 Archive 归属、默认选择和共享校验 |
 | `desktop/category_selection.py` | 运行根的分类选择原子保存、重启读取和坏配置保留 |
 | `desktop/category_dialog.py` | Fluent 分组选择窗口、1–3 类边界及保存失败草稿 |

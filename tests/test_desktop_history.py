@@ -65,10 +65,62 @@ class DesktopHistoryTests(unittest.TestCase):
         self.assertEqual(rows[0].fetch_time_text, "2026-10-04 05:11:20")
 
     def test_empty_read_and_delete_do_not_create_database(self):
+        self.assertEqual(self.store.calendar_states(), {})
         self.assertEqual(self.store.list_records(), ())
         self.assertIsNone(self.store.read("missing"))
         self.assertFalse(self.store.delete("missing"))
         self.assertFalse(self.store.database.exists())
+
+    def test_calendar_full_history_priority_delete_and_original_dates(self):
+        self.store.save(self.result('positive', count=1))
+        for i in range(55):
+            self.store.save(self.result(str(i), count=0))
+        outside = date(2024, 12, 31)
+        self.store.save(replace(self.result('outside'), candidate_date=outside))
+        self.assertEqual(self.store.calendar_states(), {PAPER_DATE: True, outside: True})
+        self.store.delete('positive')
+        self.assertEqual(self.store.calendar_states()[PAPER_DATE], False)
+        for i in range(55):
+            self.store.delete(str(i))
+        self.assertEqual(self.store.calendar_states(), {outside: True})
+        self.assertIsNotNone(self.store.read('outside'))
+        with closing(sqlite3.connect(self.store.database)) as connection:
+            self.assertEqual(connection.execute('PRAGMA user_version').fetchone()[0], 2)
+
+    def test_calendar_metadata_query_does_not_read_body_and_rejects_bad_fields(self):
+        self.store.save(self.result())
+        original = sqlite3.connect
+        statements = []
+
+        def traced(*args, **kwargs):
+            connection = original(*args, **kwargs)
+            connection.set_trace_callback(statements.append)
+            return connection
+
+        with patch('desktop.history.sqlite3.connect', side_effect=traced):
+            self.store.calendar_states()
+        self.assertIn('SELECT candidate_date, recommendation_count FROM history', statements)
+        self.assertFalse(any('markdown' in sql.lower() for sql in statements))
+        for field, value in [('candidate_date', '2026-02-30'), ('candidate_date', '20261001'),
+                             ('recommendation_count', 'invalid'), ('recommendation_count', 1.5)]:
+            with closing(original(self.store.database)) as connection, connection:
+                connection.execute(f'UPDATE history SET {field}=?', (value,))
+            with self.assertRaises(HistoryError):
+                self.store.calendar_states()
+            with closing(original(self.store.database)) as connection, connection:
+                connection.execute('UPDATE history SET candidate_date=?, recommendation_count=3', (PAPER_DATE.isoformat(),))
+
+    def test_calendar_locked_read_reports_failure_without_changing_database(self):
+        self.store.save(self.result())
+        original = sqlite3.connect
+        with closing(original(self.store.database)) as lock:
+            lock.execute('BEGIN EXCLUSIVE')
+            with patch('desktop.history.sqlite3.connect', side_effect=lambda *a, **kw: original(*a, **dict(kw, timeout=0.01))):
+                with self.assertRaises(HistoryError) as caught:
+                    self.store.calendar_states()
+            self.assertEqual(caught.exception.issue.code, 'AKD-HISTORY-READ_FAILED')
+            lock.rollback()
+        self.assertEqual(self.store.calendar_states(), {PAPER_DATE: True})
 
     def test_same_day_duplicates_ties_and_cursor_pagination(self):
         for index in range(123):
@@ -126,7 +178,10 @@ class DesktopHistoryTests(unittest.TestCase):
             with self.subTest(field=field, value=value):
                 with closing(sqlite3.connect(self.store.database)) as connection, connection:
                     connection.execute(f"UPDATE history SET {field}=?", (value,))
-                for operation in (self.store.list_records, lambda: self.store.read("one")):
+                operations = (self.store.list_records, lambda: self.store.read("one"))
+                if field == "candidate_date":
+                    operations += (self.store.calendar_states,)
+                for operation in operations:
                     with self.assertRaises(HistoryError):
                         operation()
                 with closing(sqlite3.connect(self.store.database)) as connection, connection:
@@ -140,7 +195,7 @@ class DesktopHistoryTests(unittest.TestCase):
             connection.execute("INSERT INTO history VALUES ('old', 'preserve old synthetic report')")
             connection.execute("PRAGMA user_version=1")
         before = self.store.database.read_bytes()
-        for operation in (self.store.list_records, lambda: self.store.read("old"),
+        for operation in (self.store.calendar_states, self.store.list_records, lambda: self.store.read("old"),
                           lambda: self.store.delete("old"), lambda: self.store.save(self.result())):
             with self.assertRaises(HistoryError) as caught:
                 operation()
@@ -192,7 +247,7 @@ class DesktopHistoryTests(unittest.TestCase):
             else:
                 self.store.database.write_bytes(b"synthetic corrupt SQLite")
             before = self.store.database.read_bytes()
-            for operation in (self.store.list_records, lambda: self.store.read("one"),
+            for operation in (self.store.calendar_states, self.store.list_records, lambda: self.store.read("one"),
                               lambda: self.store.delete("one"), lambda: self.store.save(self.result())):
                 with self.assertRaises(HistoryError):
                     operation()

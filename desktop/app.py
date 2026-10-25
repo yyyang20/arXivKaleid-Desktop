@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
@@ -37,6 +37,7 @@ from desktop.research_requirements import RequirementsError, RequirementsStore
 from desktop.categories import DEFAULT_CATEGORIES, validate_categories
 from desktop.category_selection import CategorySelectionError, CategorySelectionStore
 from desktop.category_dialog import CategoryDialog
+from desktop.date_policy import selectable_date
 
 
 ANALYSIS_NOTICE = (
@@ -151,6 +152,8 @@ class HistoryWorker(QThread):
                 self.result = self.store.read(self.argument)
             elif self.action == "delete":
                 self.result = self.store.delete(self.argument)
+            elif self.action == "calendar":
+                self.result = self.store.calendar_states()
         except HistoryError as exc:
             self.issue = exc.issue
         except Exception:
@@ -178,6 +181,7 @@ class DesktopWindow(QWidget):
         self.history_worker: HistoryWorker | None = None
         self._history_jobs = []
         self._history_generation = 0
+        self._calendar_generation = 0
         self.snapshot: CandidateSnapshot | None = None
         self.worker: FetchWorker | AnalysisWorker | None = None
         self.analysis_notice_accepted = False
@@ -274,6 +278,7 @@ class DesktopWindow(QWidget):
         self.fetch_button.clicked.connect(self.start_fetch)
         self.calendar_button.clicked.connect(self.open_date_picker)
         self.date_picker.date_chosen.connect(self.select_date)
+        self.date_picker.refresh_requested.connect(self.refresh_calendar_date)
         self.analyze_button.clicked.connect(self.start_analysis)
         self.home_page.modify_categories_button.clicked.connect(self.modify_categories)
         self.home_page.restore_categories_button.clicked.connect(self.restore_categories)
@@ -355,15 +360,31 @@ class DesktopWindow(QWidget):
     def refresh_history(self):
         self._history_generation += 1
         # 旧读请求可以丢弃，已经确认的删除仍要完成。
-        self._history_jobs = [job for job in self._history_jobs if job[0] == "delete"]
+        self._history_jobs = [job for job in self._history_jobs if job[0] in {"delete", "calendar"}]
         self.history_page.show_list()
         self.history_page.model.reset()
         self.history_page.message.setText("正在读取历史…")
         self.queue_history("list", None)
 
     def queue_history(self, action, argument):
-        self._history_jobs.append((action, argument, self._history_generation))
+        generation = self._calendar_generation if action == "calendar" else self._history_generation
+        self._history_jobs.append((action, argument, generation))
         self.dispatch_history()
+
+    def refresh_calendar_states(self):
+        # 每次打开都读本地库；只保留一个最新待执行请求，不共享历史页的代次。
+        self._calendar_generation += 1
+        self._history_jobs = [job for job in self._history_jobs if job[0] != "calendar"]
+        self.date_picker.begin_history()
+        self.queue_history("calendar", None)
+
+    def invalidate_calendar_states(self):
+        # 提交完成后先使旧读结果失效；切页不会吞掉此通知。
+        self._calendar_generation += 1
+        self._history_jobs = [job for job in self._history_jobs if job[0] != "calendar"]
+        self.date_picker.calendar.set_states({})
+        if self.date_picker.isVisible():
+            self.refresh_calendar_states()
 
     def dispatch_history(self):
         if self.history_worker is not None or not self._history_jobs:
@@ -413,7 +434,12 @@ class DesktopWindow(QWidget):
             return
         if worker.issue is not None and self.diagnostics:
             self.diagnostics.issue(operation_id=self.diagnostics.operation_id(), operation_type="history", issue=worker.issue)
-        if worker.generation == self._history_generation and self.pages.currentWidget() is self.history_page:
+        if worker.action == "calendar" and worker.generation == self._calendar_generation:
+            self.date_picker.finish_history(worker.result, worker.issue)
+        elif worker.action == "delete" and worker.issue is None:
+            self.invalidate_calendar_states()
+        if (worker.action != "calendar" and worker.generation == self._history_generation
+                and self.pages.currentWidget() is self.history_page):
             page = self.history_page
             if worker.issue is not None:
                 message = f"{worker.issue.reason}\n{worker.issue.impact}"
@@ -452,7 +478,7 @@ class DesktopWindow(QWidget):
     def event(self, event):
         if (event.type() == QEvent.Type.WindowActivate and hasattr(self, "calendar_button")
                 and self.calendar_button.isEnabled()):
-            self.refresh_target_date()
+            self.refresh_calendar_date()
         if event.type() == QEvent.Type.ScreenChangeInternal and hasattr(self, "date_picker"):
             self.date_picker.hide()
         return super().event(event)
@@ -475,10 +501,10 @@ class DesktopWindow(QWidget):
         self.fetch_progress.setRange(0, 1)
         self.fetch_progress.setValue(0)
 
-    def refresh_target_date(self) -> date:
-        today = self.beijing_today()
+    def refresh_target_date(self, today: date | None = None) -> date:
+        today = today if today is not None else self.beijing_today()
         if self.worker is None:
-            if self.selected_date is not None and not today - timedelta(days=365) <= self.selected_date <= today:
+            if self.selected_date is not None and not selectable_date(self.selected_date, today):
                 self.selected_date = None
             target = self.selected_date or today
             if self._display_target is not None and self._display_target != target:
@@ -489,11 +515,20 @@ class DesktopWindow(QWidget):
         return self._display_target or today
 
     @Slot()
+    def refresh_calendar_date(self):
+        today = self.beijing_today()
+        target = self.refresh_target_date(today)
+        if self.date_picker.isVisible():
+            self.date_picker.refresh_range(today, target)
+
+    @Slot()
     def open_date_picker(self):
         if self.worker is not None or not self.calendar_button.isEnabled():
             return
-        target = self.refresh_target_date()
-        self.date_picker.prepare(self.beijing_today(), target)
+        today = self.beijing_today()
+        target = self.refresh_target_date(today)
+        self.date_picker.prepare(today, target)
+        self.refresh_calendar_states()
         self.date_picker.show_at(self.calendar_button)
 
     @Slot(object)
@@ -501,14 +536,14 @@ class DesktopWindow(QWidget):
         if self.worker is not None:
             return
         today = self.beijing_today()
-        if not today - timedelta(days=365) <= selected <= today:
+        if not selectable_date(selected, today):
             return
         previous = self.selected_date or today
         self.selected_date = None if selected == today else selected
         if selected != previous:
             self.clear_candidate_display()
         self._display_target = selected
-        self.refresh_target_date()
+        self.refresh_target_date(today)
         self.date_picker.hide()
 
     def reset_analysis_progress(self) -> None:
@@ -619,7 +654,11 @@ class DesktopWindow(QWidget):
         if self.selected_categories is None:
             return
         selected_categories = tuple(self.selected_categories)
-        target_date = self.refresh_target_date()
+        today = self.beijing_today()
+        target_date = self.refresh_target_date(today)
+        if not selectable_date(target_date, today):
+            self.show_issue(make_issue("AKD-FETCH-DATE_INVALID"))
+            return
         self.date_picker.hide()
         # 先使旧快照失效，再启动网络工作；API Key 不参与候选管线。
         self.snapshot = None
@@ -833,6 +872,8 @@ class DesktopWindow(QWidget):
                 self.status.setText("分析失败，已停止。")
             self.task_panel.finish(failed=True)
         if worker.result is not None:
+            if worker.history_saved:
+                self.invalidate_calendar_states()
             if worker.history_issue is not None:
                 self.status.setText(self.status.text() + "\n分析成功，历史保存失败；关闭后该日报不会保留。")
                 self.diagnostic_text.setText(self.diagnostic_text.text() + f"\n{worker.history_issue.code}：{worker.history_issue.reason}")

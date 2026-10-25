@@ -468,6 +468,8 @@ class ArtifactTests(ArtifactFixture):
                         'round2_user_count_and_model_ranking': True,
                         'user_guide_loaded': True,
                         'visual_qa': {'user_guide': {'keyboard_link': True},
+                                      'history': {'calendar_states': True, 'calendar_delete_refresh': True,
+                                                  'calendar_read_error_visible': True},
                                       'categories': {'count': 51, 'snapshot_frozen': True},
                                       'screen': 'primary', 'captures': [{'screen': 'primary', 'dpr': dpr}]}}).encode())
                     code = 0

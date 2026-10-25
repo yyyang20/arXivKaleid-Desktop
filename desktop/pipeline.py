@@ -15,6 +15,7 @@ from typing import Mapping
 from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 from desktop import paths
+from desktop.date_policy import beijing_today, selectable_date
 from desktop.diagnostics import DesktopDiagnostics, StageTimer, new_id
 from desktop.errors import (
     DesktopOperationError,
@@ -158,6 +159,13 @@ def fetch_candidates_for_date(
         categories = validate_categories(categories if categories is not None else CATEGORIES)
     except ValueError:
         raise CandidateError(make_issue("AKD-FETCH-CATEGORIES_INVALID")) from None
+    # 所有 Desktop 调用入口统一校验；非法日期不访问库、不创建缓存或联网。
+    try:
+        today = beijing_today()
+    except Exception as exc:
+        raise CandidateError(_fetch_issue(exc)) from None
+    if not selectable_date(target_date, today):
+        raise CandidateError(make_issue("AKD-FETCH-DATE_INVALID"))
     import main
 
     # 独立且不向根 logger 传播；Desktop 不创建日志文件。

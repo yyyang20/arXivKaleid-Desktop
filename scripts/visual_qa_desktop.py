@@ -31,6 +31,7 @@ from desktop.paths import checked_path
 from desktop.progress import ProgressEvent
 from scripts.local_artifacts import ArtifactRun, inventory, temporary_environment
 from desktop.history import HistoryStore
+from desktop.date_policy import MIN_SELECTABLE_DATE
 from portable_visual import synthetic_snapshot as report_snapshot, synthetic_analysis_result, exercise_history, exercise_requirements, exercise_user_guide, exercise_categories, validation_screen
 
 # 截图后的受管容量核验会扫描已留存材料；合成线程需等主线程完成多张截图。
@@ -195,7 +196,7 @@ def visual_qa(run):
             from datetime import timedelta
             from desktop.date_picker import qt_date
             today = window.beijing_today()
-            earliest = today - timedelta(days=365)
+            earliest = MIN_SELECTABLE_DATE
             window.date_picker.prepare(today, earliest)
             assert not window.date_picker.previous.isEnabled()
             capture("01c-calendar-earliest")

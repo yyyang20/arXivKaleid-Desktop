@@ -169,6 +169,21 @@ class HistoryStore:
                 ORDER BY completed_at_us DESC, sequence DESC LIMIT ?""", (*values, PAGE_SIZE)).fetchall()
             return tuple(self._summary(row) for row in rows)
 
+    def calendar_states(self) -> dict[date, bool]:
+        """流式汇总全部成功历史；缺键无日报，True 蓝点，False 灰点。"""
+        with self._connection(create=False, operation="READ") as connection:
+            states = {}
+            if connection is None:
+                return states
+            # 不读正文、不使用列表分页，也不让 SQL 排序产生临时文件。
+            for row in connection.execute("SELECT candidate_date, recommendation_count FROM history"):
+                day = date.fromisoformat(row["candidate_date"])
+                count = row["recommendation_count"]
+                if day.isoformat() != row["candidate_date"] or type(count) is not int or count < 0:
+                    raise ValueError("history_calendar_metadata_invalid")
+                states[day] = states.get(day, False) or count > 0
+            return states
+
     def read(self, record_id: str) -> HistoryRecord | None:
         with self._connection(create=False, operation="READ") as connection:
             if connection is None:

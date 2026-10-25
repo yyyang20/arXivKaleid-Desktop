@@ -19,7 +19,8 @@
 | `desktop/pages.py` | 首页、设置页与历史页入口；抓取信息卡、密码框、About 和 Markdown/空态布局 |
 | `desktop/history.py` | 无 Qt 的独立历史 schema v2、双时间及论文日期、事务保存、元数据游标分页、原始正文读取和删除 |
 | `desktop/history_page.py` | 历史列表模型与卡片委托、主体/删除命中区、列表/详情切换与 Markdown 展示 |
-| `desktop/date_picker.py` | 首页 Qt 月历弹层、365 天范围、月份导航限制、今天标记和屏幕内定位 |
+| `desktop/date_policy.py` | 无 Qt 的固定日期下限、北京时间今天、范围校验及零点间隔 |
+| `desktop/date_picker.py` | 首页 Qt 月历弹层、固定下限、零点刷新、历史圆点与选中细环、月份限制和屏幕内定位 |
 | `desktop/style.py` | 共享灰蓝调色板、输入框样式与低对比度卡片绘制 |
 | `desktop/task_panel.py` | 可复用任务状态组件；运行展开、成功收缩、失败诊断、真实事件与快照/结果详情 |
 | `desktop/analysis.py` | 一次性快照分析、工作库重置和锁、两轮/PDF/全文编排、Token 与上下文预检、结构化进度与安全结果 |

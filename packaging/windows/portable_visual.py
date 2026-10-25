@@ -16,12 +16,13 @@ from contextlib import closing
 
 from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QPointF, QRect, Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QEnterEvent, QFont, QFontMetrics, QInputMethodEvent, QKeyEvent, QMouseEvent, QTextCursor, QTextFormat
-from PySide6.QtWidgets import QMessageBox, QStyleOptionViewItem
+from PySide6.QtWidgets import QMessageBox, QStyleOptionViewItem, QWidget
 from desktop import app
 from desktop.errors import make_issue
 from desktop.progress import ProgressEvent
 from desktop.secrets import SecretError
 from desktop.date_picker import qt_date
+from desktop.date_policy import MIN_SELECTABLE_DATE
 from desktop import paths, pipeline
 from desktop.history import HistoryError, timestamp_us
 from desktop.report import build_desktop_report
@@ -107,6 +108,22 @@ def synthetic_analysis_result(attempt, source_root=None, *, recommendation_count
                               report_completed_at=datetime.now(timezone.utc),
                               fetch_completed_at=attempt.snapshot.completed_at,
                               candidate_date=attempt.snapshot.candidate_date)
+
+
+def exercise_calendar_font(window, capture):
+    """显式放大实际月历及内部视图，避免只修改父控件却未覆盖大字体。"""
+    calendar = window.date_picker.calendar
+    widgets = [calendar, *calendar.findChildren(QWidget)]
+    fonts = [widget.font() for widget in widgets]
+    before = calendar.fontMetrics().height()
+    try:
+        for widget in widgets:
+            widget.setFont(QFont(window.font().family(), 14))
+        assert calendar.fontMetrics().height() > before, 'calendar_font_not_enlarged'
+        capture('10l-calendar-large-font')
+    finally:
+        for widget, font in zip(widgets, fonts):
+            widget.setFont(font)
 
 
 def exercise_history(application, window, capture, wait, source_root=None):
@@ -222,7 +239,40 @@ def exercise_history(application, window, capture, wait, source_root=None):
         capture("10h-history-save-failed")
         records = window.history_store.list_records()
         assert len(records) == 2
+        # 实际历史库和 QThread 驱动圆点；临时合成记录最后通过删除入口移除。
+        window.switch_page(window.home_page)
+        blue_day = next(row.candidate_date for row in records if row.recommendation_count > 0)
+        gray_day = next(row.candidate_date for row in records if row.recommendation_count == 0)
+        window.select_date(blue_day)
+        window.open_date_picker()
+        wait(lambda: window.history_worker is None and not window._history_jobs)
+        assert window.date_picker.calendar.states[blue_day] is True
+        assert window.date_picker.calendar.states[gray_day] is False
+        capture('10i-calendar-blue')
+        window.select_date(gray_day)
+        window.open_date_picker()
+        wait(lambda: window.history_worker is None and not window._history_jobs)
+        capture('10j-calendar-gray')
+        positive = app.AnalysisResult(1, '# 合成日历状态验证', 1,
+            operation_id='synthetic-calendar-positive', candidate_count=1,
+            report_completed_at=datetime.now(timezone.utc), fetch_completed_at=datetime.now(timezone.utc),
+            candidate_date=gray_day)
+        original_save(positive)
+        window.invalidate_calendar_states()
+        wait(lambda: window.history_worker is None and not window._history_jobs)
+        assert window.date_picker.calendar.states[gray_day] is True
+        window.queue_history('delete', positive.operation_id)
+        wait(lambda: window.history_worker is None and not window._history_jobs)
+        assert window.date_picker.calendar.states[gray_day] is False
+        window.date_picker.finish_history({}, make_issue('AKD-HISTORY-READ_FAILED'))
+        assert '暂不可用' in window.date_picker.history_status.text()
+        capture('10k-calendar-read-failed')
+        window.open_date_picker()
+        wait(lambda: window.history_worker is None and not window._history_jobs)
+        exercise_calendar_font(window, capture)
+        window.date_picker.hide()
         return {"exact_generated_reports": True, "dates_from_snapshot": True,
+                "calendar_states": True, "calendar_delete_refresh": True, "calendar_read_error_visible": True,
                 "normal_zero_saved": True, "delete_default_cancel": True,
                 "delete_committed": True, "save_failure_keeps_success": True, "deleted_id": deleted_id,
                 "records": [{"id": row.record_id, "recommendation_count": row.recommendation_count,
@@ -745,7 +795,7 @@ def exercise(application, window, root, synthetic_key):
         window.open_date_picker()
         capture('01b-calendar')
         today = window.beijing_today()
-        earliest = qt_date(today).addDays(-365).toPython()
+        earliest = MIN_SELECTABLE_DATE
         window.date_picker.prepare(today, earliest)
         assert not window.date_picker.previous.isEnabled()
         window.date_picker.calendar.showPreviousMonth()

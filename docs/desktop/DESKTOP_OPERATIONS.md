@@ -1,6 +1,6 @@
 # Desktop 运行与验证
 
-当前开发版本为 `0.1.0-alpha.14`，尚未公开发布，按单次构建流程准备人工验收。已公开下载为 alpha 13 Windows x64 portable，下载与运行方式见下文。
+当前开发版本为 `0.1.0-alpha.15`，尚未公开发布，按单次构建流程准备人工验收。已公开下载为 alpha 13 Windows x64 portable，下载与运行方式见下文。
 
 本文档维护源码启动、依赖、本机构建、portable 验证及运行排错细节。开发与公开发布流程见根 [运行手册](../OPERATIONS.md)，安全、授权和完成要求以根 [AGENTS.md](../../AGENTS.md) 为准，阅读与更新路由见 [文档索引](../README.md)。
 
@@ -88,7 +88,7 @@ alpha 13 源码冻结前，还须运行 `scripts/validate_physics_categories.py`
 & $desktopPython -X utf8 -B scripts/validate_windows_portable.py
 # 仅在获准真实 arXiv 请求后执行；不会调用模型。
 & $desktopPython -X utf8 -B scripts/validate_windows_portable.py --arxiv
-# 历史日期须在 GUI 365 天范围内；诊断仍硬禁止模型，额外核验精确版本 PDF。
+# 历史日期须在 2025-01-01 至北京时间今天范围内；诊断仍硬禁止模型，额外核验精确版本 PDF。
 & $desktopPython -X utf8 -B scripts/validate_windows_portable.py --arxiv --arxiv-date '2026-08-03'
 # 冻结前：真实 GUI/QThread 验证首次／最新提交日、历史补查及每次 120 秒性能门槛。
 & $desktopPython -X utf8 -B scripts/validate_arxiv_history.py
@@ -153,6 +153,8 @@ alpha 9 历史库独立位于 `history/history.sqlite`，以明文保存当次�
 分析失败后不会重试，也不能再次消费旧快照。缺少 Key 或保存失败时不启动分析；Token 预检失败或 usage 无法确认时安全停止。不要通过展示 Secret、prompt、模型原始响应或 PDF 全文排错。新分析需要重新抓取并按根规则获得相应模型授权。
 
 ## 离线验证
+
+日历须验证固定起点的完整月份、范围外禁选且无圆点、合法旧日期保留、跨北京时间零点时“今天”更新且浏览月份不跳转。源码和冻结 GUI 使用隔离历史验证蓝／灰／无点、同日蓝点优先、保存与删除后的异步刷新、读取错误提示及选中白环；检查原生和模拟 DPI、大字体与最小窗口。圆点只读取当前运行根的历史，不访问旧版本目录，不触发网络或模型，也不改变 schema。
 
 使用说明需实际验证五页导航、只读 Markdown、四个蓝色链接的鼠标与键盘跳转、未保存保护、最小窗口、大字体、正文滚动及分析期间查看。冻结程序增加指南加载、缺失、篡改和重启检查；仍禁止真实网络与模型调用，证据按受管生命周期留存。
 

@@ -4,7 +4,7 @@ arXivKaleid Desktop 是按用户两轮完整研究 Prompt 筛选 arXiv 论文的
 
 本仓库包含 Desktop 应用源码、测试、构建配置和项目文档；Windows portable 成品通过 GitHub Releases 提供。
 
-当前开发版本为 `0.1.0-alpha.14`（尚未公开发布，按单次构建流程准备人工验收）；公开下载仍为 alpha 13：支持从 Physics 的 51 个 canonical 分类中保存选择 1–3 类，默认仍为 `gr-qc`、`astro-ph.HE`、`astro-ph.GA`；日期发现、历史补查、最新版刷新保持 alpha 12 规则；两轮保留原有 Token 和上下文限制。下载 [alpha 13 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.13)。alpha 13 正式成品从合并后的干净 main 重建并验证，本地技术候选未用于其正式 Release。
+当前开发版本为 `0.1.0-alpha.15`（尚未公开发布，按单次构建流程准备人工验收）；日历从 2025-01-01 固定开放至北京时间今天，并显示本地日报状态圆点。公开下载仍为 alpha 13：支持从 Physics 的 51 个 canonical 分类中保存选择 1–3 类，默认仍为 `gr-qc`、`astro-ph.HE`、`astro-ph.GA`；日期发现、历史补查、最新版刷新保持 alpha 12 规则；两轮保留原有 Token 和上下文限制。下载 [alpha 13 Windows x64 portable](https://github.com/yyyang20/arXivKaleid-Desktop/releases/tag/v0.1.0-alpha.13)。alpha 13 正式成品从合并后的干净 main 重建并验证，本地技术候选未用于其正式 Release。
 
 ## 开发方式
 
@@ -37,7 +37,7 @@ Get-FileHash -Algorithm SHA256 .\arXivKaleid-<version>-windows-x64.zip
 
 ## 数据处理
 
-候选抓取不需要 API Key。首页默认“抓取今天”，日历可选择今天及此前 365 天；选择后点击主按钮才联网。alpha 12 合并首次提交日、当前最新版提交日和本地已保存的该日期候选关联，联网取得最新版后冻结版本；不执行 OAI 历史回溯。未保存的中间更新日、分类迁移和索引延迟可能导致漏项；已有版本记录、快照和日报不被改写。Key 位于设置页，开始两轮分析是独立入口，使用你自己的 DeepSeek API Key；只有同意数据发送告知后才调用模型。
+候选抓取不需要 API Key。首页默认“抓取今天”，日历可选择 2025-01-01 至北京时间今天；选择后点击主按钮才联网。蓝点表示当日有已保存且推荐数大于零的日报，灰点表示已保存日报全部为零推荐；按论文日期汇总，同日蓝点优先。打开日历只读本地历史，保存或删除后刷新，范围外不画点但保留历史。alpha 12 合并首次提交日、当前最新版提交日和本地已保存的该日期候选关联，联网取得最新版后冻结版本；不执行 OAI 历史回溯。未保存的中间更新日、分类迁移和索引延迟可能导致漏项；已有版本记录、快照和日报不被改写。Key 位于设置页，开始两轮分析是独立入口，使用你自己的 DeepSeek API Key；只有同意数据发送告知后才调用模型。
 
 API Key 使用 Windows DPAPI 在本机加密保存。PDF、SQLite、缓存和脱敏诊断日志位于 EXE 同级 `runtime/` 目录。GUI 会显示失败阶段、稳定错误代码、影响、建议和日志关联；日志不上传，应用没有维护者服务器中转或遥测。不要转发已使用过的 portable 目录。
 

@@ -73,6 +73,22 @@ class IsolatedDesktopTest(unittest.TestCase):
 
 
 class DesktopPipelineTests(IsolatedDesktopTest):
+    def test_fixed_date_policy_and_rejection_before_storage_or_network(self):
+        from desktop.date_policy import MIN_SELECTABLE_DATE, selectable_date
+        self.assertEqual(MIN_SELECTABLE_DATE, date(2025, 1, 1))
+        for good in (MIN_SELECTABLE_DATE, DAY):
+            self.assertTrue(selectable_date(good, DAY))
+        with patch.object(pipeline, 'beijing_today', return_value=DAY), \
+                patch.object(pipeline, 'VersionStore') as store, \
+                patch.object(main, 'fetch_arxiv_metadata') as network:
+            for bad in (date(2024, 12, 31), DAY + timedelta(days=1), None, '2025-01-01', datetime.now()):
+                with self.assertRaises(pipeline.CandidateError) as caught:
+                    pipeline.fetch_candidates_for_date(bad)
+                self.assertEqual(caught.exception.issue.code, 'AKD-FETCH-DATE_INVALID')
+            store.assert_not_called()
+            network.assert_not_called()
+        self.assertFalse((self.root / '.desktop-runtime').exists())
+
     def install(self, metadata, *, overrides=None):
         self.calls = []
         self.metadata = metadata
