@@ -71,6 +71,7 @@ class DatePickerPopup(SurfaceCard):
         self.setWindowFlags(Qt.WindowType.Popup)
         self.setObjectName("datePickerPopup")
         self._range_updating = False
+        self._anchor = None
         self.range_ready = False
         self.midnight_timer = QTimer(self)
         self.midnight_timer.setSingleShot(True)
@@ -158,7 +159,15 @@ class DatePickerPopup(SurfaceCard):
 
     def hideEvent(self, event):
         self.midnight_timer.stop()
+        self._anchor = None
         super().hideEvent(event)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # 字体或提示文字可能在显示后增高弹层；用新尺寸重新约束位置。
+        anchor = getattr(self, "_anchor", None)
+        if self.isVisible() and anchor is not None:
+            self._position_at(anchor)
 
     def begin_history(self):
         self.calendar.set_states({})
@@ -197,17 +206,23 @@ class DatePickerPopup(SurfaceCard):
             self.date_chosen.emit(chosen.toPython())
 
     def show_at(self, anchor):
+        self._anchor = anchor
+        self.adjustSize()
+        self._position_at(anchor)
+        self.show()
+        self.calendar.setFocus()
+
+    def _position_at(self, anchor):
         # 所有尺寸为逻辑像素；限制到客户区与当前屏幕的交集，避免高 DPI 溢出。
         window = anchor.window()
         available = window.screen().availableGeometry().intersected(
             window.rect().translated(window.mapToGlobal(QPoint(0, 0)))
         )
-        self.adjustSize()
+        if available.isEmpty():
+            return
         below = anchor.mapToGlobal(QPoint(0, anchor.height() + 4))
         above = anchor.mapToGlobal(QPoint(0, -self.height() - 4))
         x = max(available.left(), min(below.x() - self.width() // 2, available.right() - self.width() + 1))
         y = below.y() if below.y() + self.height() <= available.bottom() + 1 else above.y()
         y = max(available.top(), min(y, available.bottom() - self.height() + 1))
         self.move(x, y)
-        self.show()
-        self.calendar.setFocus()

@@ -699,6 +699,32 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.window.open_date_picker()
         self.assertFalse(popup.isVisible())
 
+    def test_calendar_growth_repositions_without_reopening_or_changing_selection(self):
+        from PySide6.QtCore import QPoint
+        self.window.show()
+        self.window.open_date_picker()
+        self.wait_until(lambda: self.window.history_worker is None and not self.window._history_jobs)
+        popup = self.window.date_picker
+        selected = popup.calendar.selectedDate()
+        page = popup.calendar.yearShown(), popup.calendar.monthShown()
+        client = self.window.rect().translated(self.window.mapToGlobal(QPoint(0, 0)))
+        real_screen = self.window.screen()
+        bounded = client.intersected(real_screen.availableGeometry())
+        screen = Mock(availableGeometry=Mock(return_value=bounded))
+        with patch.object(self.window, "screen", return_value=screen):
+            popup.show_at(self.window.calendar_button)
+            popup.move(popup.x(), bounded.bottom() - popup.height() + 1)
+            before = popup.height()
+            bottom_y = popup.y()
+            # 模拟字体或状态文字使弹层增高；不重新打开、不手动调用定位函数。
+            popup.resize(popup.width(), before + 18)
+            self.application.processEvents()
+            self.assertGreater(popup.height(), before)
+            self.assertTrue(bounded.contains(popup.geometry()))
+            self.assertLess(popup.y(), bottom_y)
+            self.assertEqual(popup.calendar.selectedDate(), selected)
+            self.assertEqual((popup.calendar.yearShown(), popup.calendar.monthShown()), page)
+
     def test_selected_history_fetch_empty_is_normal_and_does_not_enable_analysis(self):
         selected = date(2026, 10, 1)
         result = app.CandidateFetchResult(outcome=app.DesktopOutcome(
