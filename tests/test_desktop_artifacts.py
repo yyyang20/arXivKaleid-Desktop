@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,6 +37,96 @@ class ArtifactFixture(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
         return path
+
+
+@unittest.skipUnless(os.name == 'nt', 'Windows 进程身份测试')
+class WindowsProcessTests(ArtifactFixture):
+    def setUp(self):
+        super().setUp()
+        import ctypes
+        from ctypes import wintypes
+
+        # 只使用合成运行和 Win32 返回值，不触碰实际发行物或其他进程。
+        with artifacts.ArtifactRun('tests', root=self.root) as run:
+            pass
+        self.run = run
+        self.marker = self.write(run.work / 'partial')
+        run.record.update(state='finishing', pid=101, children=[202],
+                          created_utc='2020-01-01T00:00:00+00:00',
+                          completed_utc='2020-01-02T00:00:00+00:00')
+        run.save()
+        self.plan = artifacts.cleanup_plan(self.root, run.record['id'])
+        self.kernel = Mock()
+        self.kernel.OpenProcess.side_effect = lambda access, inherit, pid: pid
+        self.kernel.WaitForSingleObject.return_value = 0x102
+        # FILETIME 使用 1601 年起的 100 ns 单位；两个时间分别位于记录之前和之后。
+        self.old_time = 132222240000000000  # 2019-12-31 UTC
+        self.new_time = 132224832000000000  # 2020-01-03 UTC
+        self.creation = {101: self.new_time, 202: self.new_time}
+
+        def get_times(handle, creation, exit_time, kernel_time, user_time):
+            value = ctypes.cast(creation, ctypes.POINTER(wintypes.FILETIME)).contents
+            value.dwHighDateTime = self.creation[handle] >> 32
+            value.dwLowDateTime = self.creation[handle] & 0xffffffff
+            return True
+
+        self.kernel.GetProcessTimes.side_effect = get_times
+        self.loader = patch('ctypes.WinDLL', return_value=self.kernel)
+        self.loader.start()
+        self.addCleanup(self.loader.stop)
+
+    def apply(self):
+        artifacts.apply_plan(self.root, self.run.record['id'], self.plan['plan_sha256'], stopped=True)
+
+    def test_reused_windows_pids_allow_cleanup(self):
+        self.apply()
+        self.assertFalse(self.marker.exists())
+        self.assertEqual([call.args[2] for call in self.kernel.OpenProcess.call_args_list], [101, 202])
+        self.assertEqual([call.args[0] for call in self.kernel.CloseHandle.call_args_list], [101, 202])
+
+    def test_live_windows_process_blocks_cleanup(self):
+        for pid in (101, 202):
+            with self.subTest(pid=pid):
+                # 子进程可在运行创建后启动；它的上限必须使用完成时间。
+                live_time = self.old_time if pid == 101 else 132223536000000000  # 2020-01-01 12:00 UTC
+                self.creation = {101: self.new_time, 202: self.new_time, pid: live_time}
+                with self.assertRaisesRegex(RuntimeError, 'artifact_resources_still_active'):
+                    self.apply()
+                self.assertTrue(self.marker.exists())
+                self.assertEqual(self.read(self.run)['state'], 'finishing')
+                self.assertEqual(self.kernel.OpenProcess.call_count, self.kernel.CloseHandle.call_count)
+        # 旧记录没有子进程时间上限时，不凭 PID 推定其已经退出。
+        self.creation = {101: self.new_time, 202: self.new_time}
+        self.run.record['completed_utc'] = None
+        self.run.save()
+        with self.assertRaisesRegex(RuntimeError, 'artifact_resources_still_active'):
+            self.apply()
+        self.assertTrue(self.marker.exists())
+
+    def test_unknown_windows_process_status_blocks_cleanup(self):
+        cases = [
+            ('open_denied', 'OpenProcess', 0),
+            ('wait_failed', 'WaitForSingleObject', 0xffffffff),
+            ('wait_unexpected', 'WaitForSingleObject', 1),
+            ('times_failed', 'GetProcessTimes', False),
+        ]
+        for name, function, value in cases:
+            with self.subTest(status=name), patch.object(self.kernel, function, Mock(return_value=value)), \
+                    patch('ctypes.get_last_error', return_value=5):
+                self.kernel.OpenProcess.reset_mock()
+                self.kernel.CloseHandle.reset_mock()
+                with self.assertRaisesRegex(RuntimeError, 'artifact_process_status_unknown'):
+                    self.apply()
+                self.assertTrue(self.marker.exists())
+                self.assertEqual(self.read(self.run)['state'], 'finishing')
+                self.assertEqual(self.kernel.CloseHandle.call_count, 0 if name == 'open_denied' else 1)
+        for stamp in ('invalid', '2020-01-01T00:00:00'):
+            with self.subTest(timestamp=stamp):
+                self.run.record['created_utc'] = stamp
+                self.run.save()
+                with self.assertRaisesRegex(RuntimeError, 'artifact_process_status_unknown'):
+                    self.apply()
+                self.assertTrue(self.marker.exists())
 
 
 class ArtifactTests(ArtifactFixture):

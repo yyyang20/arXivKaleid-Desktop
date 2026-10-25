@@ -370,7 +370,8 @@ def accept_portable_validation(root, record):
     digest = verify_candidate_archive(root, directory, archive, checksum, output['inventory'])
     if digest != output['sha256']:
         raise RuntimeError('portable_review_current_zip_changed')
-    if any(process_alive(pid) for pid in record['children']) or candidate_process_active(directory):
+    if (any(process_alive(pid, recorded_before=record.get('completed_utc')) for pid in record['children'])
+            or candidate_process_active(directory)):
         raise RuntimeError('artifact_resources_still_active')
     build['candidate_validation'] = dict(run_id=record['id'], binding=record['portable_build'],
         report_sha256=record['portable_report_sha256'], completed_utc=record['completed_utc'])
@@ -412,7 +413,7 @@ def sweep_candidate_copies(root, *, finishing_id=None):
                     or approval['report_sha256'] != review['portable_report_sha256']
                     or approval['completed_utc'] != review['completed_utc']):
                 raise RuntimeError('candidate_review_binding_changed')
-            if any(process_alive(pid) for pid in review['children']):
+            if any(process_alive(pid, recorded_before=review.get('completed_utc')) for pid in review['children']):
                 raise RuntimeError('artifact_resources_still_active')
             directory = checked_path(root, REGISTRY, build['id'], 'preserved', 'previous-dist')
             if copy.get('directory') != directory.relative_to(root).as_posix():
@@ -466,7 +467,8 @@ def close_review(root, run_id):
             raise RuntimeError('portable_review_current_zip_changed')
         if output.get('checksum_sha256') and file_hash(checksum) != output['checksum_sha256']:
             raise RuntimeError('portable_review_current_checksum_changed')
-        if any(process_alive(pid) for pid in record['children']) or candidate_process_active(checked_path(root, output['dist'])):
+        if (any(process_alive(pid, recorded_before=record.get('completed_utc')) for pid in record['children'])
+                or candidate_process_active(checked_path(root, output['dist']))):
             raise RuntimeError('artifact_resources_still_active')
         now = datetime.now(timezone.utc).isoformat()
         record.update(state='released', review_pending=False, review_closed_utc=now,
@@ -491,7 +493,8 @@ def approved_portable(root, run_id, commit, archive, checksum):
     digest = verify_candidate_archive(root, directory, archive, checksum, build['outputs']['inventory'])
     if digest != review['portable_build']['zip_sha256']:
         raise RuntimeError('release_review_artifact_mismatch')
-    if any(process_alive(pid) for pid in review['children']) or candidate_process_active(directory):
+    if (any(process_alive(pid, recorded_before=review.get('completed_utc')) for pid in review['children'])
+            or candidate_process_active(directory)):
         raise RuntimeError('artifact_resources_still_active')
     return dict(review_run_id=run_id, **review['portable_build'], checksum_sha256=file_hash(checksum))
 
@@ -813,7 +816,7 @@ def temporary_environment(run):
                 os.environ[key] = value
 
 
-def process_alive(pid):
+def process_alive(pid, *, recorded_before=None):
     if os.name == 'nt':
         import ctypes
         from ctypes import wintypes
@@ -821,14 +824,39 @@ def process_alive(pid):
         kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
         kernel.OpenProcess.restype = wintypes.HANDLE
         kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
-        handle = kernel.OpenProcess(0x100000, False, pid)
+        # 同一句柄同时查询状态与创建时间，避免两次按 PID 打开之间发生复用。
+        handle = kernel.OpenProcess(0x100000 | 0x1000, False, pid)
         if not handle:
             if ctypes.get_last_error() == 87:
                 return False
             raise RuntimeError('artifact_process_status_unknown')
         try:
             kernel.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
-            return kernel.WaitForSingleObject(handle, 0) != 0
+            kernel.WaitForSingleObject.restype = wintypes.DWORD
+            status = kernel.WaitForSingleObject(handle, 0)
+            if status == 0:
+                return False
+            if status != 0x102:
+                raise RuntimeError('artifact_process_status_unknown')
+            if recorded_before is not None:
+                try:
+                    bound = datetime.fromisoformat(recorded_before)
+                    if bound.tzinfo is None:
+                        raise ValueError('timezone_required')
+                except (TypeError, ValueError) as error:
+                    raise RuntimeError('artifact_process_status_unknown') from error
+                times = [wintypes.FILETIME() for _ in range(4)]
+                kernel.GetProcessTimes.argtypes = (wintypes.HANDLE, *(ctypes.POINTER(wintypes.FILETIME),) * 4)
+                kernel.GetProcessTimes.restype = wintypes.BOOL
+                if not kernel.GetProcessTimes(handle, *(ctypes.byref(value) for value in times)):
+                    raise RuntimeError('artifact_process_status_unknown')
+                created = (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime
+                delta = bound - datetime(1601, 1, 1, tzinfo=timezone.utc)
+                cutoff = ((delta.days * 86400 + delta.seconds) * 1000000 + delta.microseconds) * 10
+                # 创建于记录时间上限之后的进程只能是复用 PID；缺失上限时保守阻断。
+                if created > cutoff:
+                    return False
+            return True
         finally:
             kernel.CloseHandle(handle)
     try:
@@ -865,7 +893,9 @@ def apply_plan(root, run_id, digest, *, review_complete=False, stopped=False):
             raise RuntimeError('portable_use_close_review_to_preserve_evidence')
         if record['state'] in OPEN_STATES and not stopped:
             raise RuntimeError('explicit_stopped_confirmation_required')
-        if record['state'] in OPEN_STATES and any(process_alive(pid) for pid in [record['pid'], *record['children']]):
+        if record['state'] in OPEN_STATES and (
+                process_alive(record['pid'], recorded_before=record.get('created_utc'))
+                or any(process_alive(pid, recorded_before=record.get('completed_utc')) for pid in record['children'])):
             raise RuntimeError('artifact_resources_still_active')
         plan = cleanup_plan(root, run_id, review_complete=review_complete)
         if plan['plan_sha256'] != digest:
