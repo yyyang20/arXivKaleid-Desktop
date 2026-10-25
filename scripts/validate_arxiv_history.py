@@ -20,6 +20,7 @@ import main
 from desktop import app, arxiv_versions, pipeline
 from desktop.diagnostics import DesktopDiagnostics
 from desktop.history import HistoryStore
+from desktop.date_policy import selectable_date
 from desktop.research_requirements import RequirementsStore
 from desktop.version_metadata import VersionStore, encode_paper
 from scripts.local_artifacts import ArtifactRun, checked_path, inventory, temporary_environment
@@ -42,7 +43,7 @@ def validation_cases(current, today):
     days = [today, date(2026, 10, 8), date(2026, 8, 3), date(2026, 7, 10)]
     if latest_day not in days:
         days.append(latest_day)
-    if any(not today-timedelta(days=365) <= d <= today for d in days):
+    if any(not selectable_date(d, today) for d in days):
         raise RuntimeError('historical_fixture_outside_gui_range')
     return [(d, current['version'] if d == latest_day else None) for d in days]
 
@@ -170,8 +171,8 @@ def validate(run):
                 if day == date(2026, 10, 8):
                     recent = result
             # 真实公开论文验证首次提交日；v1 在 GUI 范围外的固定论文不强行扩展日历。
-            eligible = [p for p in recent.papers if today-timedelta(days=365) <=
-                        arxiv_versions.timestamp(p['published']).astimezone(ZoneInfo('Asia/Shanghai')).date() <= today] if recent else []
+            eligible = [p for p in recent.papers if selectable_date(
+                         arxiv_versions.timestamp(p['published']).astimezone(ZoneInfo('Asia/Shanghai')).date(), today)] if recent else []
             assert eligible, 'first_submission_fixture_missing'
             first_fixture = sorted(eligible, key=lambda p: (-p['version'], p['arxiv_id']))[0]
             first_day = arxiv_versions.timestamp(first_fixture['published']).astimezone(ZoneInfo('Asia/Shanghai')).date()

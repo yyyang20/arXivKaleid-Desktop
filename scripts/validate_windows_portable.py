@@ -143,6 +143,9 @@ def validate_portable(run, source, identity, args):
         assert report.get('round2_user_count_and_model_ranking') is True
         assert report.get('user_guide_loaded') is True and report['visual_qa']['user_guide']['keyboard_link']
         assert report['visual_qa']['categories']['count'] == 51 and report['visual_qa']['categories']['snapshot_frozen']
+        assert report['visual_qa']['history']['calendar_states']
+        assert report['visual_qa']['history']['calendar_delete_refresh']
+        assert report['visual_qa']['history']['calendar_read_error_visible']
         # 各模式及全部截图必须来自同一低分辨率屏，不能将跨屏变化误当作模拟倍率。
         actual_screen, actual_dpr = verify_capture_display(
             report['visual_qa'], native_screen=None if native_dpr is None else native_screen,

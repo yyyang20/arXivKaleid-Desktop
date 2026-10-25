@@ -18,6 +18,7 @@ import sys
 import time
 
 from desktop import paths, pipeline
+from desktop.date_policy import selectable_date
 
 
 SYNTHETIC_KEY = 'synthetic-portable-check-not-an-api-key'
@@ -355,9 +356,8 @@ def run(*, network=False, visual=False, target_date=None):
         if network:
             # 使用真正 GUI/QThread 候选入口；分析按钮不会被点击。
             if target_date is not None:
-                from datetime import timedelta
                 today = datetime.now(ZoneInfo('Asia/Shanghai')).date()
-                assert today - timedelta(days=365) <= target_date <= today
+                assert selectable_date(target_date, today)
                 window.select_date(target_date)
             fetch_started = None
 

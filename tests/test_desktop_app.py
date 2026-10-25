@@ -485,13 +485,13 @@ class DesktopAppTests(IsolatedDesktopTest):
 
     def test_calendar_full_month_bounds_leap_year_and_navigation(self):
         from desktop.date_picker import qt_date
-        for today in (date(2026, 10, 4), date(2024, 3, 1)):
+        for today in (date(2026, 10, 4), date(2028, 3, 1)):
             popup = self.window.date_picker
             popup.prepare(today, today)
             calendar = popup.calendar
             for weekday in (Qt.DayOfWeek.Saturday, Qt.DayOfWeek.Sunday):
                 self.assertEqual(calendar.weekdayTextFormat(weekday).foreground().color().name(), "#5f6f82")
-            earliest = today - timedelta(days=365)
+            earliest = date(2025, 1, 1)
             self.assertEqual(calendar.minimumDate().toPython(), earliest)
             self.assertEqual(calendar.maximumDate().toPython(), today)
             calendar.setCurrentPage(earliest.year, earliest.month)
@@ -510,7 +510,7 @@ class DesktopAppTests(IsolatedDesktopTest):
             self.assertEqual(chosen[-1], earliest)
             popup.date_chosen.disconnect(chosen.append)
 
-    def test_today_intent_tracks_midnight_and_expired_history_resets(self):
+    def test_today_intent_tracks_midnight_and_fixed_history_remains(self):
         with patch.object(self.window, "beijing_today", return_value=date(2026, 10, 4)):
             self.window.refresh_target_date()
             self.window.snapshot = self.result
@@ -519,8 +519,169 @@ class DesktopAppTests(IsolatedDesktopTest):
             self.assertIsNone(self.window.snapshot)
             self.window.selected_date = date(2025, 10, 4)
             self.window.refresh_target_date()
+            self.assertEqual(self.window.selected_date, date(2025, 10, 4))
+            self.assertEqual(self.window.fetch_button.text(), "抓取 2025-10-04")
+            self.window.selected_date = date(2024, 12, 31)
+            self.window.refresh_target_date()
             self.assertIsNone(self.window.selected_date)
             self.assertEqual(self.window.fetch_button.text(), "抓取今天")
+
+    def test_calendar_midnight_preserves_browsed_month_and_follows_today(self):
+        from desktop.date_picker import qt_date
+        clock = Mock(return_value=date(2026, 10, 31))
+        with patch.object(self.window, "beijing_today", clock):
+            self.window.show()
+            self.window.open_date_picker()
+            popup = self.window.date_picker
+            popup.calendar.setCurrentPage(2025, 1)
+            clock.return_value = date(2026, 11, 1)
+            popup.midnight_timer.timeout.emit()
+            self.assertEqual(popup.calendar.maximumDate(), qt_date(clock.return_value))
+            self.assertEqual(popup.calendar.selectedDate(), qt_date(clock.return_value))
+            self.assertEqual((popup.calendar.yearShown(), popup.calendar.monthShown()), (2025, 1))
+            self.assertFalse(popup.previous.isEnabled())
+            self.assertTrue(popup.midnight_timer.isActive())
+            self.window.selected_date = date(2025, 1, 1)
+            clock.return_value = date(2026, 11, 2)
+            popup.refresh_live_date()
+            self.assertEqual(popup.calendar.selectedDate(), qt_date(date(2025, 1, 1)))
+            popup.hide()
+            self.assertFalse(popup.midnight_timer.isActive())
+            self.window.open_date_picker()
+            self.assertEqual(popup.calendar.minimumDate(), qt_date(date(2025, 1, 1)))
+
+    def test_calendar_direct_invalid_selection_and_clock_before_lower_bound(self):
+        with patch.object(self.window, "beijing_today", return_value=date(2026, 10, 4)):
+            self.window.select_date(date(2025, 1, 1))
+            self.assertEqual(self.window.selected_date, date(2025, 1, 1))
+            for invalid in (date(2024, 12, 31), date(2026, 10, 5), None, "2025-01-01"):
+                self.window.select_date(invalid)
+                self.assertEqual(self.window.selected_date, date(2025, 1, 1))
+        with patch.object(self.window, "beijing_today", return_value=date(2024, 12, 31)), \
+                patch.object(app, "fetch_candidates_for_date") as fetch:
+            self.window.show()
+            self.window.open_date_picker()
+            self.assertFalse(self.window.date_picker.calendar.isEnabled())
+            self.assertIn("日期异常", self.window.date_picker.hint.text())
+            self.window.start_fetch()
+            fetch.assert_not_called()
+
+    def test_calendar_date_refresh_keeps_keyboard_selection_and_month(self):
+        from desktop.date_picker import qt_date
+        with patch.object(self.window, "beijing_today", return_value=date(2026, 10, 4)):
+            self.window.show()
+            self.window.open_date_picker()
+            popup = self.window.date_picker
+            popup.calendar.setSelectedDate(qt_date(date(2025, 1, 15)))
+            QTest.keyClick(popup.calendar, Qt.Key.Key_Right)
+            selected = popup.calendar.selectedDate()
+            popup.refresh_live_date()
+            self.assertEqual(popup.calendar.selectedDate(), selected)
+            self.assertEqual((popup.calendar.yearShown(), popup.calendar.monthShown()), (2025, 1))
+
+    def test_calendar_history_colors_all_pages_and_delete_after_leaving_history(self):
+        day = date(2026, 10, 1)
+        self.window.history_store.save(self.history_result("blue", count=2))
+        for i in range(55):
+            self.window.history_store.save(self.history_result(f"zero-{i}"))
+        with patch.object(self.window, "beijing_today", return_value=date(2026, 10, 4)), \
+                patch.object(app, "fetch_candidates_for_date") as fetch, \
+                patch.object(app.AnalysisAttempt, "run") as analyze:
+            self.window.show()
+            self.window.open_date_picker()
+            self.wait_until(lambda: self.window.history_worker is None and not self.window._history_jobs)
+            self.assertEqual(self.window.date_picker.calendar.states, {day: True})
+            # 队列中的删除发生在离开历史页之后，仍须使圆点失效。
+            self.window.queue_history("delete", "blue")
+            self.window.switch_page(self.window.settings_page)
+            self.wait_until(lambda: self.window.history_worker is None and not self.window._history_jobs)
+            self.window.open_date_picker()
+            self.wait_until(lambda: self.window.history_worker is None and not self.window._history_jobs)
+            self.assertEqual(self.window.date_picker.calendar.states, {day: False})
+            self.window.queue_history("delete", "zero-0")
+            self.wait_until(lambda: self.window.history_worker is None and not self.window._history_jobs)
+            self.assertEqual(self.window.date_picker.calendar.states, {day: False})
+            fetch.assert_not_called()
+            analyze.assert_not_called()
+
+    def test_calendar_old_read_cannot_override_save_refresh_and_queue_is_coalesced(self):
+        day = date(2026, 10, 1)
+        gate = threading.Event()
+        self.addCleanup(gate.set)
+        started = threading.Event()
+        calls = []
+        original = self.window.history_store.calendar_states
+
+        def read():
+            calls.append(QThread.currentThread())
+            if len(calls) == 1:
+                started.set()
+                gate.wait(3)
+                return {day: False}
+            return original()
+
+        with patch.object(self.window.history_store, "calendar_states", side_effect=read):
+            self.window.show()
+            self.window.open_date_picker()
+            self.wait_until(started.is_set)
+            self.assertNotEqual(calls[0], self.application.thread())
+            self.assertFalse(self.window.close())
+            self.window.history_store.save(self.history_result("saved-while-reading", count=1))
+            self.window.invalidate_calendar_states()
+            for _ in range(3):
+                self.window.refresh_calendar_states()
+            self.window.refresh_history()
+            self.assertEqual(sum(job[0] == "calendar" for job in self.window._history_jobs), 1)
+            gate.set()
+            self.wait_until(lambda: self.window.history_worker is None and not self.window._history_jobs)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(self.window.date_picker.calendar.states, {day: True})
+
+    def test_calendar_read_error_is_explicit_and_recovers_on_reopen(self):
+        self.window.history_store.save(self.history_result(count=3))
+        self.window.show()
+        with patch.object(self.window.history_store, "calendar_states", side_effect=RuntimeError("private body")):
+            self.window.open_date_picker()
+            self.wait_until(lambda: self.window.history_worker is None)
+        popup = self.window.date_picker
+        self.assertEqual(popup.calendar.states, {})
+        self.assertIn("暂不可用", popup.history_status.text())
+        self.assertNotIn("private", popup.history_status.text())
+        self.assertTrue(popup.calendar.isEnabled())
+        self.window.open_date_picker()
+        self.wait_until(lambda: self.window.history_worker is None)
+        self.assertEqual(popup.calendar.states, {date(2026, 10, 1): True})
+
+    def test_calendar_paint_retains_color_ring_and_hides_outside_range(self):
+        from PySide6.QtCore import QRect
+        from PySide6.QtGui import QColor, QImage, QPainter
+        from desktop.date_picker import qt_date
+        calendar = self.window.date_picker.calendar
+        self.window.date_picker.prepare(date(2026, 10, 4), date(2026, 10, 1))
+
+        def render(day, states):
+            calendar.set_states(states)
+            image = QImage(48, 48, QImage.Format.Format_ARGB32)
+            image.fill(QColor("#f8fbff"))
+            painter = QPainter(image)
+            calendar.paintCell(painter, QRect(0, 0, 48, 48), qt_date(day))
+            painter.end()
+            return image
+
+        day = date(2026, 10, 1)
+        empty = render(day, {})
+        for state, color in ((True, "#1677ff"), (False, "#8796a8")):
+            image = render(day, {day: state})
+            # 选中底色下，新增细白环和原色圆心；检查数字下方区域。
+            pixels = [image.pixelColor(x, y).name() for y in range(28, 43) for x in range(17, 31)]
+            # 细环在分数逻辑坐标上抗锯齿，允许边缘与蓝底混色。
+            self.assertTrue(any(min(QColor(value).getRgb()[:3]) >= 235 for value in pixels))
+            self.assertIn(color, pixels)
+            self.assertNotEqual(image, empty)
+        outside = date(2024, 12, 31)
+        self.assertEqual(render(outside, {outside: True}), render(outside, {}))
+        future = date(2026, 10, 5)
+        self.assertEqual(render(future, {future: False}), render(future, {}))
 
     def test_calendar_busy_and_startup_disabled_and_popup_fits_minimum_window(self):
         self.window.show()
@@ -537,6 +698,32 @@ class DesktopAppTests(IsolatedDesktopTest):
         self.window.calendar_button.setEnabled(False)
         self.window.open_date_picker()
         self.assertFalse(popup.isVisible())
+
+    def test_calendar_growth_repositions_without_reopening_or_changing_selection(self):
+        from PySide6.QtCore import QPoint
+        self.window.show()
+        self.window.open_date_picker()
+        self.wait_until(lambda: self.window.history_worker is None and not self.window._history_jobs)
+        popup = self.window.date_picker
+        selected = popup.calendar.selectedDate()
+        page = popup.calendar.yearShown(), popup.calendar.monthShown()
+        client = self.window.rect().translated(self.window.mapToGlobal(QPoint(0, 0)))
+        real_screen = self.window.screen()
+        bounded = client.intersected(real_screen.availableGeometry())
+        screen = Mock(availableGeometry=Mock(return_value=bounded))
+        with patch.object(self.window, "screen", return_value=screen):
+            popup.show_at(self.window.calendar_button)
+            popup.move(popup.x(), bounded.bottom() - popup.height() + 1)
+            before = popup.height()
+            bottom_y = popup.y()
+            # 模拟字体或状态文字使弹层增高；不重新打开、不手动调用定位函数。
+            popup.resize(popup.width(), before + 18)
+            self.application.processEvents()
+            self.assertGreater(popup.height(), before)
+            self.assertTrue(bounded.contains(popup.geometry()))
+            self.assertLess(popup.y(), bottom_y)
+            self.assertEqual(popup.calendar.selectedDate(), selected)
+            self.assertEqual((popup.calendar.yearShown(), popup.calendar.monthShown()), page)
 
     def test_selected_history_fetch_empty_is_normal_and_does_not_enable_analysis(self):
         selected = date(2026, 10, 1)

@@ -25,6 +25,7 @@ from desktop import app, pipeline, arxiv_versions
 from desktop.categories import PHYSICS_CATEGORIES, PHYSICS_IDS, TAXONOMY_SOURCE, DEFAULT_CATEGORIES
 from desktop.diagnostics import DesktopDiagnostics
 from desktop.history import HistoryStore
+from desktop.date_policy import selectable_date
 from desktop.research_requirements import RequirementsStore
 from desktop.version_metadata import VersionStore, encode_paper
 from scripts.local_artifacts import ArtifactRun, temporary_environment, inventory, checked_path
@@ -156,8 +157,9 @@ def validate(run, prior=None):
                 proof['probes'].append(dict(category=category.id, count=len(papers), classification_match=True,
                     identities=[(p['arxiv_id'],p['version']) for p in papers]))
                 if category.id in REPRESENTATIVES:
-                    eligible = [p for p in papers if p['version']>1 and today-timedelta(days=365) <=
-                        arxiv_versions.timestamp(p['updated']).astimezone(ZoneInfo('Asia/Shanghai')).date() < today]
+                    eligible = [p for p in papers if p['version']>1 and selectable_date(
+                         arxiv_versions.timestamp(p['updated']).astimezone(ZoneInfo('Asia/Shanghai')).date(), today)
+                         and arxiv_versions.timestamp(p['updated']).astimezone(ZoneInfo('Asia/Shanghai')).date() < today]
                     assert eligible, 'historical_updated_fixture_missing'
                     fixtures[category.id] = eligible[0]
                 save()
@@ -229,7 +231,7 @@ def validate(run, prior=None):
             current = lookup(dict(id_list='2506.15886',max_results=1))[0]
             older = lookup(dict(id_list='2506.15886v5',max_results=1))[0]
             old_day = arxiv_versions.timestamp(older['updated']).astimezone(ZoneInfo('Asia/Shanghai')).date()
-            assert current['version']>older['version'] and today-timedelta(days=365)<=old_day<=today
+            assert current['version']>older['version'] and selectable_date(old_day,today)
             VersionStore(run.work).save('explicit-old-version-category-fixture',old_day,('gr-qc',),[older],1)
             proof['historical_fixture'] = dict(synthetic_association=True,source='explicit_version_atom',
                 arxiv_id=older['arxiv_id'],version=older['version'],date=old_day.isoformat(),sha256=encode_paper(older)[1])

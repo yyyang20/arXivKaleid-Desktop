@@ -14,7 +14,7 @@
 
 | 项目 | 当前值 |
 |---|---|
-| Desktop 版本 | `0.1.0-alpha.14` |
+| Desktop 版本 | `0.1.0-alpha.15` |
 | Desktop 配置 | `desktop_config_v7` |
 | 候选抓取策略 | `beijing_first_latest_history_v1` |
 | Desktop 版本元数据 SQLite | schema v1 |
